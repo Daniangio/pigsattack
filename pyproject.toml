@@ -1,0 +1,30 @@
+# pyproject.toml
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pigsattack"
+dynamic = ["version"]
+description = "Wild Pigs Will Attack!"
+authors = [
+    {name = "Daniele Angioletti"},
+]
+requires-python = ">=3.8"
+readme = "README.md"
+dependencies = [
+    "numpy",
+]
+
+[project.urls]
+"Repository" = "https://github.com/Daniangio/pigsattack"
+
+[project.scripts]
+# pigsattack-play = "pigsattack.game:main"
+
+[tool.setuptools.dynamic]
+version = {attr = "pigsattack._version.__version__"}
+
+[tool.setuptools.packages.find]
+include = ["pigsattack", "pigsattack.*"]
