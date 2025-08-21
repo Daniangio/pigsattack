@@ -21,7 +21,7 @@ dependencies = [
 "Repository" = "https://github.com/Daniangio/pigsattack"
 
 [project.scripts]
-# pigsattack-play = "pigsattack.game:main"
+pigsattack-play = "pigsattack.game:main"
 
 [tool.setuptools.dynamic]
 version = {attr = "pigsattack._version.__version__"}

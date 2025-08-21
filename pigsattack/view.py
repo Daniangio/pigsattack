@@ -6,27 +6,64 @@ from pigsattack.player import Player
 from pigsattack.gamestate import GameState, CardStatus
 from typing import List, Optional, Tuple
 
-# --- View Abstraction ---
-
 class GameView(ABC):
+    """Abstract base class for displaying game information."""
     @abstractmethod
-    def display_game_state(self, game_state: GameState): pass
+    def display_game_state(self, game_state: GameState):
+        pass
+
     @abstractmethod
-    def display_turn_start(self, player: Player): pass
+    def display_turn_start(self, player: Player):
+        pass
+
     @abstractmethod
-    def display_event(self, event_card: Card, event_name: str): pass
+    def display_event(self, event_card: Card, event_name: str):
+        pass
+
     @abstractmethod
-    def display_player_hand(self, player: Player): pass
+    def display_player_hand(self, player: Player):
+        pass
+    
     @abstractmethod
-    def announce_winner(self, player: Player): pass
+    def announce_winner(self, player: Optional[Player]):
+        pass
+
     @abstractmethod
-    def show_drawn_card(self, card: Card, action: str): pass
+    def show_drawn_card(self, card: Card, action: str):
+        pass
+
     @abstractmethod
-    def show_discard_pile(self, discard_pile: List[Card]): pass
+    def show_discard_pile(self, discard_pile: List[Card]):
+        pass
+
     @abstractmethod
-    def display_attack(self, strength: int): pass
+    def display_attack(self, original_strength: int, final_strength: int, barricade_active: bool):
+        pass
+
     @abstractmethod
-    def display_defense_result(self, success: bool, total_defense: int, attack_strength: int): pass
+    def display_defense_result(self, success: bool, total_defense: int, attack_strength: int):
+        pass
+
+    @abstractmethod
+    def display_action_result(self, message: str):
+        pass
+        
+    @abstractmethod
+    def display_event_result(self, message: str):
+        pass
+
+    @abstractmethod
+    def announce_nightfall(self):
+        pass
+
+    @abstractmethod
+    def display_scout_ahead_result(self, success: bool, revealed_card: Card):
+        pass
+        
+    @abstractmethod
+    def display_forage_result(self, success: bool, initiator: Player, contributors: List[Player]):
+        pass
+
 
 class TextView(GameView):
     """A concrete view that prints game information to the console."""
@@ -66,7 +103,7 @@ class TextView(GameView):
         print(f"\nEVENT CARD DRAWN: {event_card}")
         print(f"EVENT: {event_name}!")
         
-    def announce_winner(self, player: Player):
+    def announce_winner(self, player: Optional[Player]):
         winner_name = player.name if player else "NO ONE"
         print(f"\n{'*'*40}\nTHE GAME IS OVER! The sole survivor is {winner_name}!\n{'*'*40}")
 
@@ -81,13 +118,41 @@ class TextView(GameView):
             for card in reversed(discard_pile[-10:]):
                 print(f"  {card}")
         print("----------------------------------------")
-
-    def display_attack(self, strength: int):
-        print(f"\nA Wild Pig ATTACKS with Strength {strength}!")
-
+        
     def display_defense_result(self, success: bool, total_defense: int, attack_strength: int):
         print(f"Your total defense is {total_defense} against the pig's {attack_strength}.")
         if success:
             print("SUCCESS! You survived the attack.")
         else:
             print("FAILURE! You have been eliminated by the wild pigs.")
+            
+    def display_attack(self, original_strength: int, final_strength: int, barricade_active: bool):
+        print(f"\nA Wild Pig ATTACKS with base Strength {original_strength}!")
+        if barricade_active:
+            print(f"Your Barricade reduces the strength by 3! The final attack strength is {final_strength}.")
+
+    def display_action_result(self, message: str):
+        print(f"ACTION RESULT: {message}")
+
+    def display_event_result(self, message: str):
+        print(f"EVENT RESULT: {message}")
+
+    def announce_nightfall(self):
+        print("\n" + "#"*40)
+        print("## The sun sets. A chill runs down your spine. ##")
+        print("## NIGHTFALL has begun! The pigs are stronger now. ##")
+        print("#"*40)
+
+    def display_scout_ahead_result(self, success: bool, revealed_card: Card):
+        print(f"You scout ahead and reveal: {revealed_card}")
+        if success:
+            print("ACTION RESULT: Success! You take the card and draw a bonus card.")
+        else:
+            print("ACTION RESULT: Failure! The card is discarded and you get nothing.")
+            
+    def display_forage_result(self, success: bool, initiator: Player, contributors: List[Player]):
+        if success:
+            contributor_names = ", ".join([p.name for p in contributors])
+            print(f"ACTION RESULT: Forage successful! {contributor_names} each draw two cards.")
+        else:
+            print(f"ACTION RESULT: Forage failed! {initiator.name} lost their contributed card.")
