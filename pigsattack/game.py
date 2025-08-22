@@ -206,9 +206,6 @@ class Game:
         defense_cards = attacker.controller.choose_defense_cards(attacker, self.game_state)
         
         used_ace = any(c.rank == "Ace" for c in defense_cards)
-        if used_ace:
-            self._trigger_nightfall()
-
         total_defense = sum(c.value for c in defense_cards)
         if helper_card: total_defense += helper_card.value
 
@@ -346,6 +343,7 @@ class Game:
         player.has_barricade = True
         self._deck.discard(card_to_play)
         self.view.display_action_result(f"{player.name} built a permanent Barricade!")
+        self._trigger_nightfall() # Building a barricade is a strategic choice to bring on the night
 
     def _execute_sabotage(self, player: Player):
         card_to_play = self._get_card_to_play(player, "Queen", "Sabotage")
