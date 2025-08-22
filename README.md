@@ -29,7 +29,7 @@ Run the game from your terminal:
 pigsattack-play
 ```
 
-Currently supports **4 human players** sharing the same terminal. Follow on-screen prompts to play.
+Currently supports **2-8 human players** sharing the same terminal. Follow on-screen prompts to play.
 
 ---
 
@@ -56,10 +56,10 @@ You must:
 | Card Type  | Value      | Role / Ability                                              |
 | ---------- | ---------- | ----------------------------------------------------------- |
 | 2–10       | Face value | **Basic Tools & Defenses**                                  |
-| Jack (11)  | 11         | **Barricade** (−3 Strength vs pigs)                         |
+| Jack (11)  | 11         | **Barricade** (−3 Strength vs pigs, triggers Nightfall)     |
 | Queen (12) | 12         | **Sabotage** (steal a card)                                 |
 | King (13)  | 13         | **King’s Feast** (everyone draws)                           |
-| Ace (14)   | 14         | **Tranquilizer Dart** (auto-success, may trigger Nightfall) |
+| Ace (14)   | 14         | **Tranquilizer Dart** (auto-success)                        |
 
 ---
 
@@ -112,8 +112,8 @@ You must:
 
 After the Event, you must choose **one**:
 
-* **Scrounge** 🪓 → draw top card.
-* **Scout Ahead** 🔭 → peek top card:
+* **Scrounge** 👀 → draw top card.
+* **Scout Ahead** 🦅 → peek top card:
 
   * If 2–7 → keep it + bonus card
   * If 8–Ace → discard it, gain nothing
@@ -121,11 +121,16 @@ After the Event, you must choose **one**:
 
 ---
 
-### 💎 Special Gear Abilities
+### 🛡️ Special Gear Abilities
 
-* **Jack (Barricade):** Play face-up. Permanently −3 Strength vs pigs attacking you.
-* **Queen (Sabotage):** Peek at a player’s hand, steal 1 card.
-* **King (Feast):** Draw 3 cards; all others draw 1.
+* **Jack (Value 11): Barricade.**
+  Play the Jack face-up in front of you, where it stays for the rest of the game.
+  * Every pig that attacks you has its Strength reduced by 3.
+  * **But beware:** the hammering and clatter draw attention… **playing a Barricade immediately triggers Nightfall** if it hasn’t already begun.
+* **Queen (Value 12): Sabotage.**
+  Peek at a player’s hand, steal 1 card.
+* **King (Value 13): Feast.**
+  Draw 3 cards; all others draw 1.
 
 ---
 
@@ -146,6 +151,25 @@ Piglets strike swiftly, and you must face them alone.
 
   * Standard Attack → you keep the pig card
   * Stampede → you draw 1 card immediately
+
+---
+
+### 🌒 The Nightfall Mechanic
+
+The wilderness does not stay quiet forever. At some point, darkness falls — and when it does, the pigs grow bolder, stronger, and stranger.
+
+Nightfall is triggered the very first time **any** of the following happens:
+
+> ⚠️ **Nightfall Triggers**
+>
+> * 🂡 An **Ace** is revealed as an Event Card (**Alpha Pig Attack!**)
+> * 👑 A **King** is revealed as an Event Card (**The Stampede!**)
+> * ☠️ The **first player is eliminated**
+> * 🔄 The **Draw Pile runs out** for the first time, forcing a reshuffle
+> * 🏰 A player **plays a Jack (Barricade)** as an Action — the noise carries, and the pigs descend...
+
+Once **Night** falls, it is **permanent**.
+From then on: pigs are stronger, ambushes more dangerous, and survival far more desperate.
 
 ---
 
@@ -174,7 +198,7 @@ The game starts in **Daylight**. When Nightfall triggers, the rules shift dramat
                  │
                  ▼
         🌒 Nightfall Triggered!
-    (Ace Event, King Event, Ace Defense,
+    (Ace Event, King Event, First Barricade,
      First Elimination, or Deck Exhausted)
 
                  │
