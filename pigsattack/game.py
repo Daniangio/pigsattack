@@ -1,4 +1,5 @@
 # game.py
+import random
 from typing import List, Optional, Tuple
 from pigsattack.controller import HumanTerminalController, PlayerController
 from pigsattack.deck import Deck
@@ -75,7 +76,6 @@ class Game:
         self.game_state.event_card = card
         self.game_state.sync_from_sources()
         
-        event_name = "Unknown Event"
         # --- EVENT LOGIC ROUTER ---
         if 2 <= card.value <= 7:
             event_name = "Wild Pig Attack!"
@@ -83,15 +83,27 @@ class Game:
             self._handle_pig_attack(player, card)
         
         elif 8 <= card.value <= 10:
-            event_name = "Rustling Leaves"
-            self.view.display_event(card, event_name)
-            self._handle_rustling_leaves(player)
+            if self.game_state.is_nightfall:
+                event_name = "Stray Piglet Attack!"
+                self.view.display_event(card, event_name)
+                # Create a dummy card for the attack, the original 8-10 is just the trigger
+                piglet_card = Card("Wilderness", "Piglet", 5, -1)
+                self._handle_pig_attack(player, piglet_card)
+            else:
+                event_name = "Rustling Leaves"
+                self.view.display_event(card, event_name)
+                self._handle_rustling_leaves(player)
             self._deck.discard(card)
         
         elif card.rank in ["Jack", "Queen"]:
-            event_name = "Wilderness Find"
-            self.view.display_event(card, event_name)
-            self._handle_wilderness_find(player)
+            if self.game_state.is_nightfall:
+                event_name = "Ambush!"
+                self.view.display_event(card, event_name)
+                self._handle_ambush(player)
+            else:
+                event_name = "Wilderness Find"
+                self.view.display_event(card, event_name)
+                self._handle_wilderness_find(player)
             self._deck.discard(card)
 
         elif card.rank == "Ace":
@@ -107,6 +119,18 @@ class Game:
             self._handle_stampede(player, card)
         
         self.game_state.event_card = None
+
+    def _handle_ambush(self, player: Player):
+        """Handles the Ambush event at night."""
+        if not player.hand:
+            self.view.display_event_result("You were ambushed, but your hand is empty and you lose nothing.")
+            return
+        
+        card_to_discard = random.choice(player.hand)
+        player.hand.remove(card_to_discard)
+        self._deck.discard(card_to_discard)
+        self.view.display_event_result(f"You were ambushed and randomly discarded the {card_to_discard}!")
+
 
     def _handle_stampede(self, starting_player: Player, stampede_card: Card):
         print("\nA massive STAMPEDE thunders through the camp!")
@@ -147,7 +171,7 @@ class Game:
 
     def _handle_pig_attack(self, attacker: Player, attack_card: Card, is_stampede: bool = False, possible_helpers: Optional[List[Player]] = None):
         original_strength = attack_card.value
-        if self.game_state.is_nightfall and attack_card.rank not in ["King", "Ace"]:
+        if self.game_state.is_nightfall and attack_card.rank not in ["King", "Ace", "Piglet"]:
             original_strength += 2
         
         final_strength = original_strength
@@ -157,7 +181,14 @@ class Game:
         self.view.display_attack(original_strength, final_strength, attacker.has_barricade)
 
         helper_card, helper = None, None
-        ask_for_help = attacker.controller.choose_to_ask_for_help(attacker, self.game_state)
+        
+        # Players cannot ask for help against a stray piglet
+        if attack_card.rank == "Piglet":
+            print("You must face the stray piglet alone!")
+            ask_for_help = False
+        else:
+            ask_for_help = attacker.controller.choose_to_ask_for_help(attacker, self.game_state)
+
         if ask_for_help:
             if possible_helpers is None:
                 possible_helpers = [p for p in self._players if p is not attacker and not p.is_eliminated]
@@ -195,11 +226,11 @@ class Game:
                     print(f"{helper.name} helped and draws a card as a reward.")
                     new_card = self._draw_card_with_reshuffle()
                     if new_card: helper.hand.append(new_card)
-                else:
+                elif attack_card.rank != "Piglet": # No spoil for a piglet
                     print(f"{helper.name} claims the spoil: {attack_card}")
                     helper.hand.append(attack_card)
             
-            if not is_stampede:
+            if not is_stampede and attack_card.rank != "Piglet":
                 self._deck.discard(attack_card)
         else:
             num_eliminated_before = sum(1 for p in self._players if p.is_eliminated)
@@ -209,21 +240,11 @@ class Game:
 
             for card in attacker.hand: self._deck.discard(card)
             attacker.hand = []
-            if not is_stampede:
+            if not is_stampede and attack_card.rank != "Piglet":
                 self._deck.discard(attack_card)
 
     def _handle_rustling_leaves(self, player: Player):
-        if self.game_state.is_nightfall:
-            self.view.display_event_result("The sounds in the dark are unnerving. You must discard a card.")
-            card_to_discard = player.controller.choose_card_to_discard(player, self.game_state, "Forced to discard by Rustling Leaves")
-            if card_to_discard:
-                player.hand.remove(card_to_discard)
-                self._deck.discard(card_to_discard)
-                self.view.display_event_result(f"You discarded the {card_to_discard.rank}.")
-            else:
-                self.view.display_event_result("Your hand is empty, so you are safe.")
-        else:
-            self.view.display_event_result("It was just the wind. You are safe.")
+        self.view.display_event_result("It was just the wind. You are safe.")
 
     def _handle_wilderness_find(self, player: Player):
         if not player.hand:
@@ -383,8 +404,24 @@ class Game:
         active_players = [p for p in self._players if not p.is_eliminated]
         return active_players[0] if active_players else None
 
-if __name__ == "__main__":
-    controllers = [HumanTerminalController() for _ in range(4)]
+def main():
+    """Sets up and runs a new game, asking for the number of players."""
+    print("--- Welcome to Wild Pigs Will Attack! ---")
+    
+    num_players = 0
+    while not (2 <= num_players <= 8):
+        try:
+            num_str = input("How many players? (2-8): ")
+            num_players = int(num_str)
+            if not (2 <= num_players <= 8):
+                print("Invalid number. Please enter a number between 4 and 8.")
+        except ValueError:
+            print("Invalid input. Please enter a number.")
+
+    controllers = [HumanTerminalController() for _ in range(num_players)]
     view = TextView()
     game = Game(controllers, view)
     game.run_game()
+
+if __name__ == "__main__":
+    main()
