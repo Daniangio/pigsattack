@@ -1,6 +1,7 @@
 # game.py
 import random
 from typing import List, Optional, Tuple
+from pigsattack.bot_controller import NaiveBotController
 from pigsattack.controller import HumanTerminalController, PlayerController
 from pigsattack.deck import Deck
 from pigsattack.player import Player
@@ -405,20 +406,35 @@ class Game:
 def main():
     """Sets up and runs a new game, asking for the number of players."""
     print("--- Welcome to Wild Pigs Will Attack! ---")
-    
-    num_players = 0
-    while not (2 <= num_players <= 8):
+
+    while True:
         try:
-            num_str = input("How many players? (2-8): ")
-            num_players = int(num_str)
-            if not (2 <= num_players <= 8):
-                print("Invalid number. Please enter a number between 4 and 8.")
+            num_humans = int(input("How many human players? (0-8): "))
+            if not (0 <= num_humans <= 8):
+                print("Please enter a number between 0 and 8.")
+                continue
+
+            num_bots = int(input(f"How many computer players? (0-{8-num_humans}): "))
+            if not (0 <= num_bots <= 8):
+                print("Please enter a number between 0 and 8.")
+                continue
+
+            total_players = num_humans + num_bots
+            if 2 <= total_players <= 8:
+                break
+            else:
+                print(f"Invalid total number of players ({total_players}). The total must be between 2 and 8.")
         except ValueError:
             print("Invalid input. Please enter a number.")
 
-    controllers = [HumanTerminalController() for _ in range(num_players)]
+    controllers = []
+    for i in range(num_humans):
+        controllers.append(HumanTerminalController())
+    for i in range(num_bots):
+        controllers.append(NaiveBotController())
+
     view = TextView()
-    game = Game(controllers, view)
+    game = Game(controllers, view) # The game will name players "Player 1", "Player 2", etc.
     game.run_game()
 
 if __name__ == "__main__":

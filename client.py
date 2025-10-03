@@ -6,8 +6,8 @@ import time
 from typing import List, Dict, Any
 
 # --- Configuration ---
-SERVER_HOST = '127.0.0.1'
-SERVER_PORT = 12346
+SERVER_HOST = 'localhost'
+SERVER_PORT = 8080
 WINDOW_WIDTH = 1280
 WINDOW_HEIGHT = 720
 CARD_WIDTH = 110
@@ -28,6 +28,7 @@ my_player_id = -1
 input_prompt: Dict[str, Any] = {}
 action_buttons: List['Button'] = []
 selected_cards: List[int] = []
+num_ai_players = 0
 lock = threading.Lock()
 
 class Button:
@@ -158,6 +159,7 @@ def get_card_rects(hand: List[Dict]) -> List[pygame.Rect]:
 
 def main():
     global client_socket, log_panel
+    global num_ai_players # Allow modification
     pygame.init()
     screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
     pygame.display.set_caption("Pigs Will Attack - Client")
@@ -173,7 +175,7 @@ def main():
 
     running = True
     while running and not stop_event.is_set():
-        with lock:
+        with lock: # Make local copies for rendering to avoid race conditions
             current_state, prompt = game_state.copy(), input_prompt.copy()
             buttons = action_buttons.copy()
             my_hand = []
@@ -182,9 +184,27 @@ def main():
                 if 0 <= my_player_id < len(players): my_hand = players[my_player_id].get("hand", [])
         
         card_rects = get_card_rects(my_hand)
+        
+        # --- Event Handling ---
+        is_host = current_state.get("is_host", False)
+        state_type = current_state.get("type")
+        num_human_players = current_state.get("num_players", 0)
+        max_players = current_state.get("max_players", 8)
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT: running = False
+            # Host controls for lobby
+            if state_type == "lobby_update" and is_host and event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_s:
+                    send_to_server({"command": "start_game", "num_ai": num_ai_players})
+                    time.sleep(0.2)
+                if event.key == pygame.K_UP:
+                    if num_human_players + num_ai_players < max_players:
+                        num_ai_players += 1
+                if event.key == pygame.K_DOWN:
+                    if num_ai_players > 0:
+                        num_ai_players -= 1
+
             log_panel.handle_event(event)
 
             if prompt:
@@ -209,19 +229,22 @@ def main():
                         with lock: input_prompt.clear()
                         break
         
+        # --- Drawing ---
         screen.fill(BG_COLOR)
-        state_type = current_state.get("type")
 
         if state_type == "lobby_update":
-            draw_text(screen, "Lobby", (WINDOW_WIDTH / 2, 50), fonts['l'], center=True)
-            draw_text(screen, f"{current_state.get('num_players', 0)} players.", (WINDOW_WIDTH / 2, 120), fonts['m'], center=True)
-            if current_state.get("is_host"):
-                draw_text(screen, "You are the host. Press 'S' to start.", (WINDOW_WIDTH / 2, 200), fonts['m'], center=True)
-                if pygame.key.get_pressed()[pygame.K_s]: send_to_server({"command": "start_game"}); time.sleep(0.2)
-            else: draw_text(screen, f"Waiting for host... (You are Player {my_player_id + 1})", (WINDOW_WIDTH / 2, 200), fonts['m'], center=True)
+            lobby_center_x = (WINDOW_WIDTH - LOG_PANEL_WIDTH) / 2
+            draw_text(screen, "Lobby", (lobby_center_x, 50), fonts['l'], center=True)
+            draw_text(screen, f"{num_human_players} Human Players Connected", (lobby_center_x, 120), fonts['m'], center=True)
+            if is_host:
+                draw_text(screen, f"Computer Players: {num_ai_players}", (lobby_center_x, 200), fonts['m'], center=True)
+                draw_text(screen, "Use UP/DOWN arrows to change bot count", (lobby_center_x, 240), fonts['s'], center=True)
+                draw_text(screen, "You are the host. Press 'S' to start.", (lobby_center_x, 300), fonts['m'], center=True)
+            else: 
+                draw_text(screen, f"Waiting for host... (You are Player {my_player_id + 1})", (lobby_center_x, 200), fonts['m'], center=True)
         
         elif state_type == "game_state":
-            players = current_state.get("players", [])
+            players = current_state.get("players", []) # Already defined above, but safe
             draw_text(screen, f"You are Player {my_player_id + 1}", (20, 20), fonts['m'])
             for i, p in enumerate(players):
                 status = "ELIMINATED" if p["is_eliminated"] else f"{len(p['hand'])} cards"
@@ -257,4 +280,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

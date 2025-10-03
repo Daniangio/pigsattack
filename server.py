@@ -7,15 +7,17 @@ from typing import List, Dict, Any, Optional, Tuple
 # We assume the user's game files are in a package named 'pigsattack'
 from pigsattack.game import Game
 from pigsattack.card import Card
-from pigsattack.player import Player
+from pigsattack.player import Player # This now correctly uses the forward declaration
 from pigsattack.view import GameView
 from pigsattack.controller import PlayerController
 from pigsattack.gamestate import GameState
 
 # --- Server Configuration ---
-HOST = '127.0.0.1'
-PORT = 12346
+# myipaddress = 158.47.246.62
+HOST = '0.0.0.0'
+PORT = 8080
 MIN_PLAYERS = 2
+MIN_TOTAL_PLAYERS = 2 # Min players including bots
 MAX_PLAYERS = 8
 
 # --- Global State ---
@@ -24,6 +26,9 @@ game_instance: Optional[Game] = None
 game_started = False
 lock = threading.Lock()
 client_inputs: Dict[int, str] = {}
+
+# Import bot controller
+from pigsattack.bot_controller import NaiveBotController
 server_view = None # Will hold the ServerView instance
 
 def reset_server_state():
@@ -244,21 +249,28 @@ def handle_client_message(player_id: int, message: Dict):
             current_host_id = min(data['player_id'] for data in clients.values())
 
         if command == "start_game" and not game_started and player_id == current_host_id:
-            num_players = len(clients)
-            if MIN_PLAYERS <= num_players <= MAX_PLAYERS:
-                print(f"Host (Player {player_id + 1}) starting game with {num_players} players.")
+            num_human_players = len(clients)
+            num_ai_players = message.get("num_ai", 0)
+            total_players = num_human_players + num_ai_players
+
+            if MIN_TOTAL_PLAYERS <= total_players <= MAX_PLAYERS:
+                print(f"Host (Player {player_id + 1}) starting game with {num_human_players} humans and {num_ai_players} bots.")
                 game_started = True
                 
-                # Important: Use sorted list of player IDs to create controllers
+                # Create controllers for human players
                 player_ids = sorted([data['player_id'] for data in clients.values()])
                 controllers = [NetworkController(pid, server_view) for pid in player_ids]
+
+                # Add bot controllers
+                for _ in range(num_ai_players):
+                    controllers.append(NaiveBotController())
                 
                 game_instance = Game(controllers, server_view)
                 
                 game_thread = threading.Thread(target=game_instance.run_game, daemon=True)
                 game_thread.start()
             else:
-                print(f"Start failed: {num_players} players, need {MIN_PLAYERS}-{MAX_PLAYERS}.")
+                print(f"Start failed: {total_players} total players, need {MIN_TOTAL_PLAYERS}-{MAX_PLAYERS}.")
 
         elif command == "input" and game_started:
             client_inputs[player_id] = message.get("value")
@@ -267,7 +279,12 @@ def broadcast_lobby_update():
     with lock:
         if not game_started and clients:
             current_host_id = min(data['player_id'] for data in clients.values())
-            status = {"type": "lobby_update", "num_players": len(clients), "min_players": MIN_PLAYERS}
+            status = {
+                "type": "lobby_update", 
+                "num_players": len(clients), 
+                "min_players": MIN_PLAYERS,
+                "max_players": MAX_PLAYERS
+            }
             for sock, data in clients.items():
                 payload = status.copy()
                 payload["is_host"] = (data['player_id'] == current_host_id)

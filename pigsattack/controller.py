@@ -1,11 +1,12 @@
 # controller.py
 from abc import ABC, abstractmethod
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, TYPE_CHECKING
 
 # Forward declarations for type hinting
-class Player: pass
-class GameState: pass
-class Card: pass
+if TYPE_CHECKING:
+    from pigsattack.player import Player
+    from pigsattack.gamestate import GameState
+    from pigsattack.card import Card
 
 class PlayerController(ABC):
     """Abstract Base Class for player decision-making."""
