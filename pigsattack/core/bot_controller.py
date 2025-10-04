@@ -2,8 +2,8 @@
 import random
 from typing import List, Optional, Tuple
 
-from pigsattack.controller import PlayerController
-from pigsattack.card import Card
+from .controller import PlayerController
+from .card import Card
 
 # Forward declarations for type hinting
 class Player: pass

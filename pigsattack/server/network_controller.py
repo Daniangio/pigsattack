@@ -1,10 +1,10 @@
 import time
 from typing import List, Dict, Any, Optional, Tuple, TYPE_CHECKING
 
-from pigsattack.card import Card
-from pigsattack.player import Player
-from pigsattack.controller import PlayerController
-from pigsattack.gamestate import GameState
+from pigsattack.core.card import Card
+from pigsattack.core.player import Player
+from pigsattack.core.controller import PlayerController
+from pigsattack.core.gamestate import GameState
 
 if TYPE_CHECKING:
     from .server_view import ServerView

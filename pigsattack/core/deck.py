@@ -1,10 +1,11 @@
 # deck.py
 import random
 from typing import List, Optional
-from pigsattack.card import Card
+from .card import Card
 
 class Deck:
     """Represents the deck of 52 cards, handling shuffling and dealing."""
+
     def __init__(self):
         self.cards: List[Card] = []
         self.discard_pile: List[Card] = []

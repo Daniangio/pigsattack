@@ -1,12 +1,13 @@
 # player.py
 from typing import List
-from pigsattack.card import Card
+from .card import Card
 
 # Forward declaration for type hinting
 class PlayerController: pass
 
 class Player:
     """Represents a player's state within the game."""
+
     def __init__(self, name: str, controller: 'PlayerController'):
         self.name = name
         self.controller = controller

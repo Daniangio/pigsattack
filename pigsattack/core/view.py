@@ -1,13 +1,14 @@
 # view.py
 import numpy as np
 from abc import ABC, abstractmethod
-from pigsattack.card import Card
-from pigsattack.player import Player
-from pigsattack.gamestate import GameState, CardStatus
+from .card import Card
+from .player import Player
+from .gamestate import GameState, CardStatus
 from typing import List, Optional, Tuple
 
 class GameView(ABC):
     """Abstract base class for displaying game information."""
+
     @abstractmethod
     def display_game_state(self, game_state: GameState):
         pass

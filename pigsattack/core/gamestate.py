@@ -1,7 +1,7 @@
 # gamestate.py
 import numpy as np
 from typing import List, Optional
-
+from .card import Card
 # Forward declarations to avoid circular imports
 class Player: pass
 class Deck: pass

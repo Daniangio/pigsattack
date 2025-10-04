@@ -1,16 +1,17 @@
 # game.py
 import random
 from typing import List, Optional, Tuple
-from pigsattack.bot_controller import NaiveBotController
-from pigsattack.controller import HumanTerminalController, PlayerController
-from pigsattack.deck import Deck
-from pigsattack.player import Player
-from pigsattack.view import GameView, TextView
-from pigsattack.gamestate import GameState
-from pigsattack.card import Card
+from .bot_controller import NaiveBotController
+from .controller import HumanTerminalController, PlayerController
+from .deck import Deck
+from .player import Player
+from .view import GameView, TextView
+from .gamestate import GameState
+from .card import Card
 
 class Game:
     """The main game engine, orchestrating the flow and rules."""
+
     def __init__(self, player_controllers: List[PlayerController], view: GameView, room=None):
         self.view = view
         self._players = [Player(f"Player {i+1}", ctrl) for i, ctrl in enumerate(player_controllers)]

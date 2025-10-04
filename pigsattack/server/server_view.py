@@ -2,10 +2,7 @@ import json
 import socket
 from typing import Dict, Any, Optional, List
 
-from pigsattack.view import GameView
-from pigsattack.gamestate import GameState
-from pigsattack.card import Card
-from pigsattack.player import Player
+from pigsattack.core import GameView, GameState, Card, Player
 from .client_manager import Client, ClientManager
 from .game_room import GameRoom
 

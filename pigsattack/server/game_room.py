@@ -1,10 +1,9 @@
 from __future__ import annotations
 import threading
-import uuid
 from typing import TYPE_CHECKING, Dict, Any, List
 
-from pigsattack.game import Game
-from pigsattack.bot_controller import NaiveBotController
+from pigsattack.core.game import Game
+from pigsattack.core.bot_controller import NaiveBotController
 from .network_controller import NetworkController
 
 if TYPE_CHECKING:

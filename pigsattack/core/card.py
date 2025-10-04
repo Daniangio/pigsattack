@@ -1,6 +1,7 @@
 # card.py
 class Card:
     """Represents a single playing card with a suit, rank, value, and unique ID."""
+
     def __init__(self, suit: str, rank: str, value: int, card_id: int):
         self.suit = suit
         self.rank = rank

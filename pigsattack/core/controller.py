@@ -4,12 +4,13 @@ from typing import List, Optional, Tuple, TYPE_CHECKING
 
 # Forward declarations for type hinting
 if TYPE_CHECKING:
-    from pigsattack.player import Player
-    from pigsattack.gamestate import GameState
-    from pigsattack.card import Card
+    from .player import Player
+    from .gamestate import GameState
+    from .card import Card
 
 class PlayerController(ABC):
     """Abstract Base Class for player decision-making."""
+
     @abstractmethod
     def choose_action(self, player: 'Player', game_state: 'GameState', available_actions: List[str]) -> str: pass
     @abstractmethod
@@ -34,6 +35,7 @@ class PlayerController(ABC):
 
 class HumanTerminalController(PlayerController):
     """A concrete controller that gets decisions from a human via the terminal."""
+
     def choose_action(self, player: 'Player', game_state: 'GameState', available_actions: List[str]) -> str:
         # ... (implementation remains the same) ...
         print("\n" + "-"*20)
