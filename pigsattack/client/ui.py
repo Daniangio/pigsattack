@@ -97,7 +97,9 @@ class LogCanvas:
         self.messages: List[str] = []
         self.scroll_y = 0
         self.is_visible = True
-        self.toggle_button = self._create_toggle_button()
+        self.is_resizing = False
+        self.resize_handle_rect = pygame.Rect(0,0,0,0) # Will be set by resize()
+        self.resize(rect) # Call resize to set up initial geometry correctly
 
     def _create_toggle_button(self) -> Button:
         text = ">" if self.is_visible else "<"
@@ -111,11 +113,17 @@ class LogCanvas:
 
     def add_message(self, message: str):
         self.messages.append(message)
+
         # Auto-scroll to the bottom
-        self.scroll_y = max(0, len(self.messages) * self.font.get_height() - self.rect.height)
+        #TODO self.scroll_y = max(0, len(self.messages) * self.font.get_height() - self.rect.height)
+
+        # To auto-scroll, set scroll_y to a very large number.
+        # The draw() method will clamp it to the correct maximum value.
+        self.scroll_y = 9999999
 
     def resize(self, new_rect: pygame.Rect):
         self.rect = new_rect
+        self.resize_handle_rect = pygame.Rect(self.rect.left - 5, self.rect.top, 10, self.rect.height)
         self.toggle_button = self._create_toggle_button()
 
     def clear(self):
@@ -123,39 +131,88 @@ class LogCanvas:
         self.scroll_y = 0
 
     def handle_event(self, event: pygame.event.Event):
+        # Handle toggling visibility
         if self.toggle_button.handle_event(event):
             self.is_visible = not self.is_visible
             self.toggle_button = self._create_toggle_button()
             self.client.on_layout_change() # Notify client to resize other elements
+            return
 
-        if self.is_visible and event.type == pygame.MOUSEWHEEL and self.rect.collidepoint(pygame.mouse.get_pos()):
+        if not self.is_visible:
+            return
+
+        # Handle resizing logic
+        if event.type == pygame.MOUSEBUTTONDOWN and self.resize_handle_rect.collidepoint(event.pos):
+            self.is_resizing = True
+        elif event.type == pygame.MOUSEBUTTONUP:
+            self.is_resizing = False
+        elif event.type == pygame.MOUSEMOTION and self.is_resizing:
+            min_width = 150
+            max_width = self.client.width * 0.6
+            new_width = self.client.width - event.pos[0]
+            self.rect.width = max(min_width, min(new_width, max_width))
+            self.rect.left = self.client.width - self.rect.width
+            self.client.on_layout_change()
+
+        # Handle scrolling
+        if event.type == pygame.MOUSEWHEEL and self.rect.collidepoint(pygame.mouse.get_pos()):
+            # The max_scroll value is now calculated dynamically in draw()
             self.scroll_y -= event.y * 20
-            max_scroll = max(0, len(self.messages) * self.font.get_height() - self.rect.height)
-            self.scroll_y = max(0, min(self.scroll_y, max_scroll))
+            self.scroll_y = max(0, self.scroll_y) # Lower bound check here, upper bound in draw()
 
     def draw(self, surface: pygame.Surface):
         if self.is_visible:
+            mouse_pos = pygame.mouse.get_pos()
+            is_hovering_handle = self.resize_handle_rect.collidepoint(mouse_pos)
+
+            # Change cursor if hovering over resize handle
+            if is_hovering_handle or self.is_resizing:
+                pygame.mouse.set_cursor(pygame.SYSTEM_CURSOR_SIZEWE)
+            else:
+                pygame.mouse.set_cursor(pygame.SYSTEM_CURSOR_ARROW)
+
             pygame.draw.rect(surface, (10, 20, 15), self.rect)
+            
+            # Draw messages with proper wrapping
             y_pos = self.rect.top - self.scroll_y
+            total_text_height = 0
             for msg in self.messages:
-                if y_pos + self.font.get_height() > self.rect.top and y_pos < self.rect.bottom:
-                     draw_text(surface, msg, (self.rect.left + 10, y_pos), self.font, max_width=self.rect.width - 20)
-                y_pos += self.font.get_height()
+                # Calculate how many lines this message will take up
+                lines = get_wrapped_lines(msg, self.font, self.rect.width - 20)
+                line_height = self.font.get_height()
+                for line in lines:
+                    if y_pos + line_height > self.rect.top and y_pos < self.rect.bottom:
+                        draw_text(surface, line, (self.rect.left + 10, y_pos), self.font)
+                    y_pos += line_height
+                total_text_height += len(lines) * line_height
+
+            # Dynamically calculate max scroll (with padding) and clamp current scroll
+            padding = 10 # Add some space at the bottom
+            max_scroll = max(0, total_text_height - self.rect.height + padding)
+            self.scroll_y = min(self.scroll_y, max_scroll)
+
             pygame.draw.rect(surface, TEXT_COLOR, self.rect, 2) # Border
         self.toggle_button.draw(surface, self.font)
 
-def draw_text(surface, text, pos, font, color=TEXT_COLOR, center=False, max_width=None):
+def get_wrapped_lines(text: str, font: pygame.font.Font, max_width: int) -> List[str]:
+    """Splits a string into a list of lines for word wrapping."""
     words = text.split(' ')
     lines = []
     current_line = ""
     for word in words:
         test_line = f"{current_line} {word}".strip()
-        if max_width and font.size(test_line)[0] > max_width:
+        if font.size(test_line)[0] > max_width:
             lines.append(current_line)
             current_line = word
         else:
             current_line = test_line
     lines.append(current_line)
+    return lines
+
+def draw_text(surface, text, pos, font, color=TEXT_COLOR, center=False, max_width=None):
+    lines = [text]
+    if max_width:
+        lines = get_wrapped_lines(text, font, max_width)
     
     y = pos[1]
     if center:

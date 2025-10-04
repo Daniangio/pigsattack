@@ -75,17 +75,28 @@ class ServerView(GameView):
             "current_player_index": game_state.current_player_index,
             "is_nightfall": game_state.is_nightfall,
             "is_game_over": game_state.is_game_over,
+            "deck_size": len(game_state._deck.cards),
+            "event_card": {"repr": str(c), "id": c.card_id, "value": c.value} if (c := game_state.event_card) else None,
             "players": [
                 {
                     "name": p.name,
                     "is_eliminated": p.is_eliminated,
                     "has_barricade": p.has_barricade,
-                    "hand": [{"repr": str(c), "id": c.card_id} for c in p.hand]
+                    "hand": [{"repr": str(c), "id": c.card_id, "value": c.value} for c in p.hand]
                 } for p in game_state._players
             ],
             "discard_pile_top": str(game_state._deck.discard_pile[-1]) if game_state._deck.discard_pile else "Empty"
         }
         self._broadcast(room.clients, state_dict)
+
+    def display_defense_result(self, success: bool, total_defense: int, attack_strength: int, attacker_name: str, cards_played: List[str], room: GameRoom):
+        cards_str = ", ".join(cards_played) if cards_played else "no cards"
+        message = f"{attacker_name} defended with {total_defense} (using {cards_str}) against Strength {attack_strength}. "
+        if success:
+            message += "SUCCESS!"
+        else:
+            message += "FAILURE! They are eliminated."
+        self._broadcast(room.clients, {"type": "event", "message": message})
 
     def display_event(self, event_card, event_name, room): self._broadcast(room.clients, {"type": "event", "message": f"EVENT: {event_name} ({event_card})"})
     def display_action_result(self, message: str, room): self._broadcast(room.clients, {"type": "event", "message": f"ACTION: {message}"})
@@ -98,7 +109,6 @@ class ServerView(GameView):
     def display_player_hand(self, player: Player): pass
     def show_drawn_card(self, card: Card, action: str): pass
     def show_discard_pile(self, discard_pile: list): pass
-    def display_attack(self, o, f, b): pass
-    def display_defense_result(self, s, t, a): pass
+    def display_attack(self, o, f, b, room): pass
     def display_scout_ahead_result(self, s, r): pass
     def display_forage_result(self, s, i, c): pass

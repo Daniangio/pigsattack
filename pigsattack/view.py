@@ -41,7 +41,7 @@ class GameView(ABC):
         pass
 
     @abstractmethod
-    def display_defense_result(self, success: bool, total_defense: int, attack_strength: int):
+    def display_defense_result(self, success: bool, total_defense: int, attack_strength: int, attacker_name: str, cards_played: List[str]):
         pass
 
     @abstractmethod
@@ -119,12 +119,13 @@ class TextView(GameView):
                 print(f"  {card}")
         print("----------------------------------------")
         
-    def display_defense_result(self, success: bool, total_defense: int, attack_strength: int):
-        print(f"Your total defense is {total_defense} against the pig's {attack_strength}.")
+    def display_defense_result(self, success: bool, total_defense: int, attack_strength: int, attacker_name: str, cards_played: List[str]):
+        cards_str = ", ".join(cards_played) if cards_played else "no cards"
+        print(f"{attacker_name} defended with {total_defense} (using {cards_str}) against Strength {attack_strength}.")
         if success:
-            print("SUCCESS! You survived the attack.")
+            print("SUCCESS! They survived the attack.")
         else:
-            print("FAILURE! You have been eliminated by the wild pigs.")
+            print("FAILURE! They have been eliminated by the wild pigs.")
             
     def display_attack(self, original_strength: int, final_strength: int, barricade_active: bool):
         print(f"\nA Wild Pig ATTACKS with base Strength {original_strength}!")

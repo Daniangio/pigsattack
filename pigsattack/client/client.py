@@ -23,7 +23,7 @@ class Client:
         }
         self.clock = pygame.time.Clock()
         initial_log_width = int(self.width * LOG_PANEL_RATIO)
-        self.log_panel = LogCanvas(pygame.Rect(self.width - initial_log_width, 0, initial_log_width, self.height), self.fonts['s'], self)
+        self.log_panel = LogCanvas(pygame.Rect(self.width - initial_log_width, 0, initial_log_width, self.height), self.fonts['xs'], self)
         
         self.network = NetworkManager(self, self.SERVER_HOST, self.SERVER_PORT)
         self.state: ClientState = ConnectingState(self)
@@ -66,7 +66,9 @@ class Client:
     def _draw(self):
         self.screen.fill(BG_COLOR)
         self.state.draw(self.screen)
-        self.log_panel.draw(self.screen)
+        # Only draw the log panel in states where it's relevant
+        if isinstance(self.state, (InGameState, EndGameState)):
+            self.log_panel.draw(self.screen)
         pygame.display.flip()
 
     def _on_resize(self, width: int, height: int):
@@ -76,7 +78,8 @@ class Client:
 
     def on_layout_change(self):
         """Called when window resizes or log panel is toggled."""
-        new_log_width = int(self.width * LOG_PANEL_RATIO)
+        # Use the current log width if resizing, otherwise calculate from ratio
+        new_log_width = self.log_panel.rect.width if self.log_panel.is_resizing else int(self.width * LOG_PANEL_RATIO)
         log_rect = pygame.Rect(self.width - new_log_width, 0, new_log_width, self.height)
         self.log_panel.resize(log_rect)
         self.state.recalculate_layout(self.width, self.height)

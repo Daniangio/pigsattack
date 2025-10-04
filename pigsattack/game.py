@@ -42,6 +42,13 @@ class Game:
         winner = self._get_winner()
         self.view.announce_winner(winner, self.room)
 
+    def _log_and_sync(self, message: str):
+        """Central method to log an event and broadcast the new game state."""
+        if message:
+            self.view.display_event_result(message, self.room)
+        self.game_state.sync_from_sources()
+        self.view.display_game_state(self.game_state, self.room)
+
     def _trigger_nightfall(self):
         if not self.game_state.is_nightfall:
             self.game_state.is_nightfall = True
@@ -180,7 +187,7 @@ class Game:
         if attacker.has_barricade:
             final_strength = max(0, final_strength - 3)
         
-        self.view.display_attack(original_strength, final_strength, attacker.has_barricade)
+        self._log_and_sync(f"{attacker.name} is attacked by a pig of Strength {original_strength}! (Final strength: {final_strength})")
 
         helper_card, helper = None, None
         
@@ -201,27 +208,27 @@ class Game:
                 chosen_offer = attacker.controller.choose_helper(attacker, offers, self.game_state)
                 if chosen_offer:
                     helper, helper_card = chosen_offer
+                    self._log_and_sync(f"{attacker.name} accepts help from {helper.name}, who offers a {helper_card}.")
                     helper.hand.remove(helper_card)
             else:
-                print("No one offered to help.")
+                self._log_and_sync(f"{attacker.name} asked for help, but no one offered any.")
 
         defense_cards = attacker.controller.choose_defense_cards(attacker, self.game_state)
         
         used_ace = any(c.rank == "Ace" for c in defense_cards)
         total_defense = sum(c.value for c in defense_cards)
         if helper_card: total_defense += helper_card.value
+        all_played_cards = [str(c) for c in defense_cards] + ([str(helper_card)] if helper_card else [])
 
         success = total_defense >= final_strength or used_ace
-        self.view.display_defense_result(success, total_defense, final_strength)
+        self.view.display_defense_result(success, total_defense, final_strength, attacker.name, all_played_cards, self.room)
 
         for card in defense_cards:
             attacker.hand.remove(card)
             self._deck.discard(card)
         if helper_card: self._deck.discard(helper_card)
 
-        # Sync and broadcast the state so the player's hand is updated before the action phase
-        self.game_state.sync_from_sources()
-        self.view.display_game_state(self.game_state, self.room)
+        self._log_and_sync("") # Sync state after cards are removed/discarded
 
         if success:
             if helper:
@@ -229,9 +236,10 @@ class Game:
                     print(f"{helper.name} helped and draws a card as a reward.")
                     new_card = self._draw_card_with_reshuffle()
                     if new_card: helper.hand.append(new_card)
+                    self._log_and_sync(f"As a reward for helping during a Stampede, {helper.name} draws a card.")
                 elif attack_card.rank != "Piglet": # No spoil for a piglet
-                    print(f"{helper.name} claims the spoil: {attack_card}")
                     helper.hand.append(attack_card)
+                    self._log_and_sync(f"{helper.name} claims the spoil: the {attack_card} card.")
             
             if not is_stampede and attack_card.rank != "Piglet":
                 self._deck.discard(attack_card)
@@ -245,6 +253,8 @@ class Game:
             attacker.hand = []
             if not is_stampede and attack_card.rank != "Piglet":
                 self._deck.discard(attack_card)
+        
+        self._log_and_sync("") # Final sync to show rewards or elimination
 
     def _handle_rustling_leaves(self, player: Player):
         self.view.display_event_result("It was just the wind. You are safe.", self.room)
@@ -288,9 +298,8 @@ class Game:
             if action == "Scrounge":
                 card = self._draw_card_with_reshuffle()
                 if card:
-                    self.view.show_drawn_card(card, "Scrounge")
                     player.hand.append(card)
-                    self.view.display_player_hand(player)
+                    self._log_and_sync(f"{player.name} chose to Scrounge and drew a card.")
                 break
 
             elif action == "Scout Ahead":
@@ -316,10 +325,6 @@ class Game:
             else:
                 print("Unknown action.")
                 break
-        
-        # After any action, sync the state and broadcast it to all clients
-        self.game_state.sync_from_sources()
-        self.view.display_game_state(self.game_state, self.room)
 
     def _execute_scout_ahead(self, player: Player):
         revealed_card = self._draw_card_with_reshuffle()
@@ -327,18 +332,18 @@ class Game:
             self.view.display_action_result("Scout Ahead failed, the deck is completely empty!")
             return
         
+        log_msg = f"{player.name} scouted ahead and revealed a {revealed_card}. "
         success = 2 <= revealed_card.value <= 7
-        self.view.display_scout_ahead_result(success, revealed_card)
 
         if success:
             player.hand.append(revealed_card)
             bonus_card = self._draw_card_with_reshuffle()
-            if bonus_card:
-                player.hand.append(bonus_card)
-                print(f"Your bonus card is the {bonus_card}.")
-            self.view.display_player_hand(player)
+            log_msg += "Success! They keep it and draw a bonus card."
+            if bonus_card: player.hand.append(bonus_card)
         else:
+            log_msg += "Failure! The card is discarded."
             self._deck.discard(revealed_card)
+        self._log_and_sync(log_msg)
 
     def _get_card_to_play(self, player: Player, rank: str, action_name: str) -> Card:
         cards_of_rank = [card for card in player.hand if card.rank == rank]
@@ -352,7 +357,7 @@ class Game:
         player.hand.remove(card_to_play)
         player.has_barricade = True
         self._deck.discard(card_to_play)
-        self.view.display_action_result(f"{player.name} built a permanent Barricade!", self.room)
+        self._log_and_sync(f"{player.name} played a {card_to_play.rank} to build a permanent Barricade!")
         self._trigger_nightfall() # Building a barricade is a strategic choice to bring on the night
 
     def _execute_sabotage(self, player: Player):
@@ -360,7 +365,7 @@ class Game:
         targets = [p for p in self._players if p is not player and not p.is_eliminated and p.hand]
         if not targets:
             self.view.display_action_result("There are no valid targets to Sabotage.", self.room)
-            player.hand.remove(card_to_play)
+            player.hand.remove(card_to_play) # Still consumes the card
             self._deck.discard(card_to_play)
             return
 
@@ -371,8 +376,7 @@ class Game:
         player.hand.append(card_to_steal)
         player.hand.remove(card_to_play)
         self._deck.discard(card_to_play)
-        self.view.display_action_result(f"{player.name} sabotaged {target.name} and stole a card!", self.room)
-        self.view.display_player_hand(player)
+        self._log_and_sync(f"{player.name} played a {card_to_play.rank}, sabotaged {target.name}, and stole a card!")
 
     def _execute_kings_feast(self, player: Player):
         card_to_play = self._get_card_to_play(player, "King", "King's Feast")
@@ -388,18 +392,16 @@ class Game:
                 card = self._draw_card_with_reshuffle()
                 if card: p.hand.append(card)
         
-        self.view.display_action_result(f"{player.name} held a King's Feast! Everyone drew cards.", self.room)
-        self.view.display_player_hand(player)
+        self._log_and_sync(f"{player.name} played a {card_to_play.rank} for a King's Feast! Everyone drew cards.")
 
     def _resolve_end_of_turn(self, player: Player):
         while len(player.hand) > 6:
-            self.view.display_player_hand(player)
             reason = f"You have {len(player.hand)} cards and must discard down to 6."
             card_to_discard = player.controller.choose_card_to_discard(player, self.game_state, reason)
             if card_to_discard:
                 player.hand.remove(card_to_discard)
                 self._deck.discard(card_to_discard)
-                self.view.display_action_result(f"You discarded the {card_to_discard.rank}.", self.room)
+                self._log_and_sync(f"{player.name} discards a {card_to_discard.rank} to reduce their hand size.")
             else:
                 break
 

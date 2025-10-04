@@ -1,11 +1,11 @@
 from __future__ import annotations
 import pygame
-from .canvas import GameCanvas
 from typing import TYPE_CHECKING, List, Dict, Any
 
+from .canvases import PlaymatCanvas, HandCanvas, PromptCanvas
 from .ui import (
-    CARD_SELECTED_COLOR, TEXT_COLOR, draw_text, get_card_rects, Button, CardSprite,
-    WINDOW_WIDTH, LOG_PANEL_WIDTH, WINDOW_HEIGHT, CARD_WIDTH, CARD_HEIGHT,
+    LOG_PANEL_WIDTH, draw_text, Button,
+    WINDOW_WIDTH, WINDOW_HEIGHT,
 )
 
 if TYPE_CHECKING:
@@ -120,72 +120,6 @@ class LobbyState(ClientState):
             draw_text(screen, f"Waiting for host... (You are Player {my_id + 1})", (lobby_center_x, 200), self.client.fonts['m'], center=True)
 
 
-class PlaymatCanvas(GameCanvas):
-    def _draw_content(self, game_data: Dict[str, Any]):
-        super()._draw_content(game_data)
-        my_id = game_data.get("player_id", -1)
-        players = game_data.get("players", [])
-
-        draw_text(self.surface, f"You are Player {my_id + 1}", (20, 20), self.client.fonts['m'])
-        for i, p in enumerate(players):
-            status = "ELIMINATED" if p["is_eliminated"] else f"{len(p['hand'])} cards"
-            barricade = " | BARRICADE" if p["has_barricade"] else ""
-            turn_marker = "<- TURN" if i == game_data.get("current_player_index") else ""
-            draw_text(self.surface, f"{p['name']}: {status}{barricade} {turn_marker}", (20, 60 + i * 40), self.client.fonts['m'])
-
-class HandCanvas(GameCanvas):
-    def __init__(self, rect: pygame.Rect, client: Client, visible: bool = True):
-        super().__init__(rect, client, visible)
-        self.card_sprites = pygame.sprite.Group()
-
-    def _draw_content(self, game_data: Dict[str, Any]):
-        super()._draw_content(game_data)
-        my_hand = self._get_my_hand(game_data)
-        selected_cards = game_data.get("selected_cards", [])
-
-        # Re-create sprites only if the hand changes to avoid constant object creation
-        # This is a simple check; a more robust one would compare card IDs.
-        if len(self.card_sprites) != len(my_hand):
-            self.card_sprites.empty()
-            card_rects = get_card_rects(len(my_hand), self.rect.width)
-            for i, card_data in enumerate(my_hand):
-                # Pass all fonts to the sprite so it can choose what it needs
-                sprite = CardSprite(card_data, card_rects[i], self.client.fonts)
-                self.card_sprites.add(sprite)
-
-        # Update and draw sprites
-        for sprite in self.card_sprites:
-            sprite.update(is_selected=(sprite.card_data['id'] in selected_cards))
-        self.card_sprites.draw(self.surface)
-
-    def _get_my_hand(self, game_data: Dict[str, Any]) -> List[Dict[str, Any]]:
-        my_id = game_data.get("player_id", -1)
-        players = game_data.get("players", [])
-        if 0 <= my_id < len(players):
-            return players[my_id].get("hand", [])
-        return []
-
-class PromptCanvas(GameCanvas):
-    def _draw_content(self, game_data: Dict[str, Any]):
-        super()._draw_content(game_data)
-        prompt = game_data.get("prompt")
-        if not prompt:
-            return
-
-        prompt_rect = pygame.Rect(20, 20, self.rect.width - 40, 70)
-        draw_text(self.surface, prompt.get('prompt_text', ''), prompt_rect.topleft, self.client.fonts['m'], max_width=prompt_rect.width)
-        
-        # Buttons are drawn relative to the main screen, not this canvas, so we pass them up.
-        # A future refactor could make buttons draw on this surface too.
-
-    def get_buttons_for_drawing(self, game_data: Dict[str, Any]) -> List[Button]:
-        """This is a temporary bridge. Ideally buttons are part of the canvas."""
-        prompt = game_data.get("prompt")
-        if prompt and "action_buttons" in game_data:
-            return game_data.get("action_buttons", [])
-        return []
-
-
 class InGameState(ClientState):
     def __init__(self, client: Client):
         super().__init__(client)
@@ -197,7 +131,7 @@ class InGameState(ClientState):
         self.playmat_canvas: PlaymatCanvas | None = None
         self.prompt_canvas: PromptCanvas | None = None
         self.hand_canvas: HandCanvas | None = None
-        self.canvases: List[GameCanvas] = []
+        self.canvases: List[PlaymatCanvas | HandCanvas | PromptCanvas] = []
         self.recalculate_layout(self.client.width, self.client.height)
 
     def recalculate_layout(self, width: int, height: int):
