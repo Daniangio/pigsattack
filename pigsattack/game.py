@@ -11,10 +11,11 @@ from pigsattack.card import Card
 
 class Game:
     """The main game engine, orchestrating the flow and rules."""
-    def __init__(self, player_controllers: List[PlayerController], view: GameView):
+    def __init__(self, player_controllers: List[PlayerController], view: GameView, room=None):
         self.view = view
         self._players = [Player(f"Player {i+1}", ctrl) for i, ctrl in enumerate(player_controllers)]
         self._deck = Deck()
+        self.room = room # The GameRoom context
         self.game_state = GameState(self._players, self._deck)
         self._deck_has_been_reshuffled_once = False
         self._setup_game()
@@ -37,14 +38,14 @@ class Game:
                 self.game_state.advance_to_next_player()
         
         self.game_state.sync_from_sources()
-        self.view.display_game_state(self.game_state)
+        self.view.display_game_state(self.game_state, self.room)
         winner = self._get_winner()
-        self.view.announce_winner(winner)
+        self.view.announce_winner(winner, self.room)
 
     def _trigger_nightfall(self):
         if not self.game_state.is_nightfall:
             self.game_state.is_nightfall = True
-            self.view.announce_nightfall()
+            self.view.announce_nightfall(self.room)
 
     def _draw_card_with_reshuffle(self) -> Optional[Card]:
         """Helper method to draw a card, handling reshuffles and Nightfall trigger."""
@@ -60,8 +61,8 @@ class Game:
         return card
 
     def _take_turn(self, player: Player):
-        self.view.display_game_state(self.game_state)
-        self.view.display_turn_start(player)
+        self.view.display_game_state(self.game_state, self.room)
+        self.view.display_turn_start(player, self.room)
         self._resolve_event_phase(player)
         if self.game_state.is_game_over or player.is_eliminated: return
         self._resolve_action_phase(player)
@@ -80,42 +81,42 @@ class Game:
         # --- EVENT LOGIC ROUTER ---
         if 2 <= card.value <= 7:
             event_name = "Wild Pig Attack!"
-            self.view.display_event(card, event_name)
+            self.view.display_event(card, event_name, self.room)
             self._handle_pig_attack(player, card)
         
         elif 8 <= card.value <= 10:
             if self.game_state.is_nightfall:
                 event_name = "Stray Piglet Attack!"
-                self.view.display_event(card, event_name)
+                self.view.display_event(card, event_name, self.room)
                 # Create a dummy card for the attack, the original 8-10 is just the trigger
                 piglet_card = Card("Wilderness", "Piglet", 5, -1)
                 self._handle_pig_attack(player, piglet_card)
             else:
                 event_name = "Rustling Leaves"
-                self.view.display_event(card, event_name)
+                self.view.display_event(card, event_name, self.room)
                 self._handle_rustling_leaves(player)
             self._deck.discard(card)
         
         elif card.rank in ["Jack", "Queen"]:
             if self.game_state.is_nightfall:
                 event_name = "Ambush!"
-                self.view.display_event(card, event_name)
+                self.view.display_event(card, event_name, self.room)
                 self._handle_ambush(player)
             else:
                 event_name = "Wilderness Find"
-                self.view.display_event(card, event_name)
+                self.view.display_event(card, event_name, self.room)
                 self._handle_wilderness_find(player)
             self._deck.discard(card)
 
         elif card.rank == "Ace":
             event_name = "Alpha Pig Attack!"
-            self.view.display_event(card, event_name)
+            self.view.display_event(card, event_name, self.room)
             self._trigger_nightfall()
             self._handle_pig_attack(player, card)
 
         elif card.rank == "King":
             event_name = "The Stampede!"
-            self.view.display_event(card, event_name)
+            self.view.display_event(card, event_name, self.room)
             self._trigger_nightfall()
             self._handle_stampede(player, card)
         
@@ -124,13 +125,13 @@ class Game:
     def _handle_ambush(self, player: Player):
         """Handles the Ambush event at night."""
         if not player.hand:
-            self.view.display_event_result("You were ambushed, but your hand is empty and you lose nothing.")
+            self.view.display_event_result("You were ambushed, but your hand is empty and you lose nothing.", self.room)
             return
         
         card_to_discard = random.choice(player.hand)
         player.hand.remove(card_to_discard)
         self._deck.discard(card_to_discard)
-        self.view.display_event_result(f"You were ambushed and randomly discarded the {card_to_discard}!")
+        self.view.display_event_result(f"You were ambushed and randomly discarded the {card_to_discard}!", self.room)
 
 
     def _handle_stampede(self, starting_player: Player, stampede_card: Card):
@@ -218,6 +219,10 @@ class Game:
             self._deck.discard(card)
         if helper_card: self._deck.discard(helper_card)
 
+        # Sync and broadcast the state so the player's hand is updated before the action phase
+        self.game_state.sync_from_sources()
+        self.view.display_game_state(self.game_state, self.room)
+
         if success:
             if helper:
                 if is_stampede:
@@ -242,11 +247,11 @@ class Game:
                 self._deck.discard(attack_card)
 
     def _handle_rustling_leaves(self, player: Player):
-        self.view.display_event_result("It was just the wind. You are safe.")
+        self.view.display_event_result("It was just the wind. You are safe.", self.room)
 
     def _handle_wilderness_find(self, player: Player):
         if not player.hand:
-            self.view.display_event_result("You found something, but your hands are empty and you cannot swap.")
+            self.view.display_event_result("You found something, but your hands are empty and you cannot swap.", self.room)
             return
 
         wants_to_swap = player.controller.choose_wilderness_find_swap(player, self.game_state)
@@ -259,12 +264,12 @@ class Game:
                 new_card = self._draw_card_with_reshuffle()
                 if new_card:
                     player.hand.append(new_card)
-                    self.view.display_event_result(f"You discarded the {card_to_discard.rank} and drew a new card.")
+                    self.view.display_event_result(f"You discarded the {card_to_discard.rank} and drew a new card.", self.room)
                     self.view.display_player_hand(player)
                 else:
-                    self.view.display_event_result(f"You discarded the {card_to_discard.rank} but the deck is empty!")
+                    self.view.display_event_result(f"You discarded the {card_to_discard.rank} but the deck is empty!", self.room)
         else:
-            self.view.display_event_result("You decided not to swap any cards.")
+            self.view.display_event_result("You decided not to swap any cards.", self.room)
 
     def _resolve_action_phase(self, player: Player):
         while True:
@@ -311,6 +316,10 @@ class Game:
             else:
                 print("Unknown action.")
                 break
+        
+        # After any action, sync the state and broadcast it to all clients
+        self.game_state.sync_from_sources()
+        self.view.display_game_state(self.game_state, self.room)
 
     def _execute_scout_ahead(self, player: Player):
         revealed_card = self._draw_card_with_reshuffle()
@@ -343,14 +352,14 @@ class Game:
         player.hand.remove(card_to_play)
         player.has_barricade = True
         self._deck.discard(card_to_play)
-        self.view.display_action_result(f"{player.name} built a permanent Barricade!")
+        self.view.display_action_result(f"{player.name} built a permanent Barricade!", self.room)
         self._trigger_nightfall() # Building a barricade is a strategic choice to bring on the night
 
     def _execute_sabotage(self, player: Player):
         card_to_play = self._get_card_to_play(player, "Queen", "Sabotage")
         targets = [p for p in self._players if p is not player and not p.is_eliminated and p.hand]
         if not targets:
-            self.view.display_action_result("There are no valid targets to Sabotage.")
+            self.view.display_action_result("There are no valid targets to Sabotage.", self.room)
             player.hand.remove(card_to_play)
             self._deck.discard(card_to_play)
             return
@@ -362,7 +371,7 @@ class Game:
         player.hand.append(card_to_steal)
         player.hand.remove(card_to_play)
         self._deck.discard(card_to_play)
-        self.view.display_action_result(f"{player.name} sabotaged {target.name} and stole a card!")
+        self.view.display_action_result(f"{player.name} sabotaged {target.name} and stole a card!", self.room)
         self.view.display_player_hand(player)
 
     def _execute_kings_feast(self, player: Player):
@@ -379,7 +388,7 @@ class Game:
                 card = self._draw_card_with_reshuffle()
                 if card: p.hand.append(card)
         
-        self.view.display_action_result(f"{player.name} held a King's Feast! Everyone drew cards.")
+        self.view.display_action_result(f"{player.name} held a King's Feast! Everyone drew cards.", self.room)
         self.view.display_player_hand(player)
 
     def _resolve_end_of_turn(self, player: Player):
@@ -390,7 +399,7 @@ class Game:
             if card_to_discard:
                 player.hand.remove(card_to_discard)
                 self._deck.discard(card_to_discard)
-                self.view.display_action_result(f"You discarded the {card_to_discard.rank}.")
+                self.view.display_action_result(f"You discarded the {card_to_discard.rank}.", self.room)
             else:
                 break
 
