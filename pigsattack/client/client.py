@@ -3,7 +3,7 @@ from typing import Dict, Any
 
 from .network import NetworkManager
 from .state import ClientState, ConnectingState, EndGameState, MainMenuState, LobbyState, InGameState, DisconnectedState
-from .ui import LogPanel, WINDOW_WIDTH, WINDOW_HEIGHT, LOG_PANEL_WIDTH, BG_COLOR
+from .ui import LogCanvas, WINDOW_WIDTH, WINDOW_HEIGHT, LOG_PANEL_WIDTH, LOG_PANEL_RATIO, BG_COLOR
 
 class Client:
     SERVER_HOST = 'localhost'
@@ -11,7 +11,9 @@ class Client:
 
     def __init__(self):
         pygame.init()
-        self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
+        self.width, self.height = WINDOW_WIDTH, WINDOW_HEIGHT
+        # Add the RESIZABLE flag
+        self.screen = pygame.display.set_mode((self.width, self.height), pygame.RESIZABLE)
         pygame.display.set_caption("Pigs Will Attack - Client")
         self.fonts = {
             'l': pygame.font.Font(None, 48),
@@ -20,7 +22,8 @@ class Client:
             'xs': pygame.font.Font(None, 18)
         }
         self.clock = pygame.time.Clock()
-        self.log_panel = LogPanel(pygame.Rect(WINDOW_WIDTH - LOG_PANEL_WIDTH, 0, LOG_PANEL_WIDTH, WINDOW_HEIGHT), self.fonts['s'])
+        initial_log_width = int(self.width * LOG_PANEL_RATIO)
+        self.log_panel = LogCanvas(pygame.Rect(self.width - initial_log_width, 0, initial_log_width, self.height), self.fonts['s'], self)
         
         self.network = NetworkManager(self, self.SERVER_HOST, self.SERVER_PORT)
         self.state: ClientState = ConnectingState(self)
@@ -49,7 +52,11 @@ class Client:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self._running = False
-            self.log_panel.handle_event(event)
+            elif event.type == pygame.VIDEORESIZE:
+                self._on_resize(event.w, event.h)
+            
+            # Pass event to log panel first, as it might trigger a layout change
+            self.log_panel.handle_event(event) 
             self.state.handle_event(event)
 
     def _update(self):
@@ -60,6 +67,19 @@ class Client:
         self.screen.fill(BG_COLOR)
         self.state.draw(self.screen)
         self.log_panel.draw(self.screen)
+        pygame.display.flip()
+
+    def _on_resize(self, width: int, height: int):
+        self.width, self.height = width, height
+        self.screen = pygame.display.set_mode((self.width, self.height), pygame.RESIZABLE)
+        self.on_layout_change()
+
+    def on_layout_change(self):
+        """Called when window resizes or log panel is toggled."""
+        new_log_width = int(self.width * LOG_PANEL_RATIO)
+        log_rect = pygame.Rect(self.width - new_log_width, 0, new_log_width, self.height)
+        self.log_panel.resize(log_rect)
+        self.state.recalculate_layout(self.width, self.height)
         pygame.display.flip()
 
     def _process_server_messages(self):

@@ -1,11 +1,11 @@
 from __future__ import annotations
 import pygame
+from .canvas import GameCanvas
 from typing import TYPE_CHECKING, List, Dict, Any
 
 from .ui import (
-    draw_text, get_card_rects, Button,
+    CARD_SELECTED_COLOR, TEXT_COLOR, draw_text, get_card_rects, Button, CardSprite,
     WINDOW_WIDTH, LOG_PANEL_WIDTH, WINDOW_HEIGHT, CARD_WIDTH, CARD_HEIGHT,
-    TEXT_COLOR, CARD_SELECTED_COLOR
 )
 
 if TYPE_CHECKING:
@@ -19,6 +19,7 @@ class ClientState:
     def update(self, message: Dict[str, Any] | None = None): pass
     def draw(self, screen: pygame.Surface): pass
     def on_enter(self): pass
+    def recalculate_layout(self, width: int, height: int): pass
     def on_exit(self): pass
 
 class ConnectingState(ClientState):
@@ -118,13 +119,100 @@ class LobbyState(ClientState):
         else:
             draw_text(screen, f"Waiting for host... (You are Player {my_id + 1})", (lobby_center_x, 200), self.client.fonts['m'], center=True)
 
+
+class PlaymatCanvas(GameCanvas):
+    def _draw_content(self, game_data: Dict[str, Any]):
+        super()._draw_content(game_data)
+        my_id = game_data.get("player_id", -1)
+        players = game_data.get("players", [])
+
+        draw_text(self.surface, f"You are Player {my_id + 1}", (20, 20), self.client.fonts['m'])
+        for i, p in enumerate(players):
+            status = "ELIMINATED" if p["is_eliminated"] else f"{len(p['hand'])} cards"
+            barricade = " | BARRICADE" if p["has_barricade"] else ""
+            turn_marker = "<- TURN" if i == game_data.get("current_player_index") else ""
+            draw_text(self.surface, f"{p['name']}: {status}{barricade} {turn_marker}", (20, 60 + i * 40), self.client.fonts['m'])
+
+class HandCanvas(GameCanvas):
+    def __init__(self, rect: pygame.Rect, client: Client, visible: bool = True):
+        super().__init__(rect, client, visible)
+        self.card_sprites = pygame.sprite.Group()
+
+    def _draw_content(self, game_data: Dict[str, Any]):
+        super()._draw_content(game_data)
+        my_hand = self._get_my_hand(game_data)
+        selected_cards = game_data.get("selected_cards", [])
+
+        # Re-create sprites only if the hand changes to avoid constant object creation
+        # This is a simple check; a more robust one would compare card IDs.
+        if len(self.card_sprites) != len(my_hand):
+            self.card_sprites.empty()
+            card_rects = get_card_rects(len(my_hand), self.rect.width)
+            for i, card_data in enumerate(my_hand):
+                # Pass all fonts to the sprite so it can choose what it needs
+                sprite = CardSprite(card_data, card_rects[i], self.client.fonts)
+                self.card_sprites.add(sprite)
+
+        # Update and draw sprites
+        for sprite in self.card_sprites:
+            sprite.update(is_selected=(sprite.card_data['id'] in selected_cards))
+        self.card_sprites.draw(self.surface)
+
+    def _get_my_hand(self, game_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        my_id = game_data.get("player_id", -1)
+        players = game_data.get("players", [])
+        if 0 <= my_id < len(players):
+            return players[my_id].get("hand", [])
+        return []
+
+class PromptCanvas(GameCanvas):
+    def _draw_content(self, game_data: Dict[str, Any]):
+        super()._draw_content(game_data)
+        prompt = game_data.get("prompt")
+        if not prompt:
+            return
+
+        prompt_rect = pygame.Rect(20, 20, self.rect.width - 40, 70)
+        draw_text(self.surface, prompt.get('prompt_text', ''), prompt_rect.topleft, self.client.fonts['m'], max_width=prompt_rect.width)
+        
+        # Buttons are drawn relative to the main screen, not this canvas, so we pass them up.
+        # A future refactor could make buttons draw on this surface too.
+
+    def get_buttons_for_drawing(self, game_data: Dict[str, Any]) -> List[Button]:
+        """This is a temporary bridge. Ideally buttons are part of the canvas."""
+        prompt = game_data.get("prompt")
+        if prompt and "action_buttons" in game_data:
+            return game_data.get("action_buttons", [])
+        return []
+
+
 class InGameState(ClientState):
     def __init__(self, client: Client):
         super().__init__(client)
         self.action_buttons: List[Button] = []
         self.selected_cards: List[int] = []
         self.input_prompt: Dict[str, Any] = {}
-        self.quit_button = Button(pygame.Rect(WINDOW_WIDTH - LOG_PANEL_WIDTH - 170, 20, 150, 40), "Surrender", "surrender")
+        self.quit_button: Button | None = None
+
+        self.playmat_canvas: PlaymatCanvas | None = None
+        self.prompt_canvas: PromptCanvas | None = None
+        self.hand_canvas: HandCanvas | None = None
+        self.canvases: List[GameCanvas] = []
+        self.recalculate_layout(self.client.width, self.client.height)
+
+    def recalculate_layout(self, width: int, height: int):
+        log_width = self.client.log_panel.rect.width if self.client.log_panel.is_visible else 0
+        game_area_width = width - log_width
+
+        playmat_height = 300
+        prompt_height = 150
+        hand_height = height - playmat_height - prompt_height
+
+        self.playmat_canvas = PlaymatCanvas(pygame.Rect(0, 0, game_area_width, playmat_height), self.client)
+        self.prompt_canvas = PromptCanvas(pygame.Rect(0, playmat_height, game_area_width, prompt_height), self.client)
+        self.hand_canvas = HandCanvas(pygame.Rect(0, playmat_height + prompt_height, game_area_width, hand_height), self.client)
+        self.canvases = [self.playmat_canvas, self.prompt_canvas, self.hand_canvas]
+        self.quit_button = Button(pygame.Rect(game_area_width - 170, 20, 150, 40), "Surrender", "surrender")
 
     def update(self, message: Dict[str, Any] | None = None):
         # Check for new prompts from the server
@@ -137,11 +225,11 @@ class InGameState(ClientState):
         
         # Update quit button based on player status
         my_player_data = self._get_my_player_data()
-        if my_player_data and my_player_data.get("is_eliminated"):
+        if self.quit_button and my_player_data and my_player_data.get("is_eliminated"):
             self.quit_button.text = "Quit to Menu"
             self.quit_button.value = "leave_room"
             self.quit_button.is_disabled = False # Re-enable the button
-        else:
+        elif self.quit_button:
             self.quit_button.text = "Surrender"
             self.quit_button.value = "surrender"
             self.quit_button.is_disabled = False
@@ -151,16 +239,17 @@ class InGameState(ClientState):
             self.client.set_state(EndGameState(self.client))
 
     def handle_event(self, event: pygame.event.Event):
-        if not self.input_prompt: return
+        if not self.input_prompt or not self.hand_canvas: return
 
         input_mode = self.input_prompt.get("input_mode")
         if event.type == pygame.MOUSEBUTTONDOWN:
             if input_mode in ['card_select', 'multi_card_select']:
-                my_hand = self._get_my_hand()
-                card_rects = get_card_rects(len(my_hand))
-                for i, rect in enumerate(card_rects):
-                    if rect.collidepoint(event.pos):
-                        card_id = my_hand[i]['id']
+                # Translate mouse position to hand canvas coordinates
+                local_pos = (event.pos[0] - self.hand_canvas.rect.x, event.pos[1] - self.hand_canvas.rect.y)
+                # Check for collision with card sprites
+                for sprite in self.hand_canvas.card_sprites:
+                    if sprite.rect.collidepoint(local_pos):
+                        card_id = sprite.card_data['id']
                         if input_mode == 'card_select':
                             self._send_input(str(card_id))
                         elif input_mode == 'multi_card_select':
@@ -174,7 +263,7 @@ class InGameState(ClientState):
                 self._send_input(value)
                 break
         
-        if self.quit_button.handle_event(event):
+        if self.quit_button and self.quit_button.handle_event(event):
             if self.quit_button.value == "leave_room":
                 self.client.network.send_message({"command": "leave_room"})
                 self.client.set_state(MainMenuState(self.client))
@@ -182,39 +271,19 @@ class InGameState(ClientState):
                 self.client.network.send_message({"command": "surrender"})
 
     def draw(self, screen: pygame.Surface):
-        state = self.client.game_data
-        my_id = state.get("player_id", -1)
-        players = state.get("players", [])
-        my_hand = self._get_my_hand()
-        card_rects = get_card_rects(len(my_hand))
+        # Pass dynamic data to canvases for drawing
+        draw_data = self.client.game_data.copy()
+        draw_data["selected_cards"] = self.selected_cards
+        draw_data["action_buttons"] = self.action_buttons
 
-        draw_text(screen, f"You are Player {my_id + 1}", (20, 20), self.client.fonts['m'])
-        for i, p in enumerate(players):
-            status = "ELIMINATED" if p["is_eliminated"] else f"{len(p['hand'])} cards"
-            barricade = " | BARRICADE" if p["has_barricade"] else ""
-            turn_marker = "<- TURN" if i == state.get("current_player_index") else ""
-            draw_text(screen, f"{p['name']}: {status}{barricade} {turn_marker}", (20, 60 + i * 40), self.client.fonts['m'])
+        for canvas in self.canvases:
+            canvas.draw(screen, draw_data)
 
-        for i, rect in enumerate(card_rects):
-            card_data = my_hand[i]
-            pygame.draw.rect(screen, (50, 70, 60), rect, border_radius=8)
-            border_color = TEXT_COLOR
-            if self.input_prompt and card_data['id'] in self.selected_cards:
-                border_color = CARD_SELECTED_COLOR
-            pygame.draw.rect(screen, border_color, rect, 2, border_radius=8)
-            
-            parts = card_data['repr'].split(" of ")
-            rank, suit = (parts[0], parts[1]) if len(parts) > 1 else (parts[0], "")
-            draw_text(screen, rank, (rect.x + 10, rect.y + 10), self.client.fonts['s'])
-            draw_text(screen, f"(ID:{card_data['id']})", (rect.x + 10, rect.y + CARD_HEIGHT - 25), self.client.fonts['xs'])
-
-        if self.input_prompt:
-            prompt_rect = pygame.Rect(20, WINDOW_HEIGHT - 380, WINDOW_WIDTH - LOG_PANEL_WIDTH - 40, 70)
-            draw_text(screen, self.input_prompt.get('prompt_text', ''), prompt_rect.topleft, self.client.fonts['m'], max_width=prompt_rect.width)
-            for btn in self.action_buttons:
-                btn.draw(screen, self.client.fonts['s'])
-        
-        self.quit_button.draw(screen, self.client.fonts['s'])
+        # Buttons are still drawn on the main screen for now
+        for btn in self.action_buttons:
+            btn.draw(screen, self.client.fonts['s'])
+        if self.quit_button:
+            self.quit_button.draw(screen, self.client.fonts['s'])
 
     def _get_my_hand(self) -> List[Dict[str, Any]]:
         my_id = self.client.game_data.get("player_id", -1)
@@ -236,27 +305,35 @@ class InGameState(ClientState):
         self.client.game_data.pop("prompt", None)
 
     def _create_buttons_for_prompt(self, prompt: Dict[str, Any]):
-        choices = prompt.get("choices")
+        if not self.prompt_canvas: return
         mode = prompt.get("input_mode")
 
         if mode == 'card_select':
-            rect = pygame.Rect(WINDOW_WIDTH - LOG_PANEL_WIDTH - 220, WINDOW_HEIGHT - 120, 200, 50)
+            # Position relative to prompt canvas
+            rect = pygame.Rect(self.prompt_canvas.rect.x + 20, self.prompt_canvas.rect.y + 80, 200, 50)
             self.action_buttons.append(Button(rect, "Skip", "skip"))
         elif mode == 'multi_card_select':
-            rect = pygame.Rect(WINDOW_WIDTH - LOG_PANEL_WIDTH - 220, WINDOW_HEIGHT - 120, 200, 50)
+            rect = pygame.Rect(self.prompt_canvas.rect.x + 20, self.prompt_canvas.rect.y + 80, 200, 50)
             self.action_buttons.append(Button(rect, "Done", "done"))
-        elif choices:
+        elif choices := prompt.get("choices"):
             for i, choice in enumerate(choices):
-                rect = pygame.Rect(50 + (i % 3) * 220, WINDOW_HEIGHT - 350 + (i // 3) * 60, 200, 50)
+                # Position relative to prompt canvas
+                rect = pygame.Rect(self.prompt_canvas.rect.x + 20 + (i % 3) * 220, self.prompt_canvas.rect.y + 80 + (i // 3) * 60, 200, 50)
                 self.action_buttons.append(Button(rect, choice['text'], choice['value']))
 
 class EndGameState(ClientState):
     def __init__(self, client: Client):
         super().__init__(client)
-        self.quit_button = Button(pygame.Rect((WINDOW_WIDTH - LOG_PANEL_WIDTH) / 2 - 100, WINDOW_HEIGHT / 2 + 50, 200, 50), "Quit to Menu", "leave_room")
+        self.quit_button: Button | None = None
+        self.recalculate_layout(client.width, client.height)
+
+    def recalculate_layout(self, width: int, height: int):
+        log_width = self.client.log_panel.rect.width if self.client.log_panel.is_visible else 0
+        center_x = (width - log_width) / 2
+        self.quit_button = Button(pygame.Rect(center_x - 100, height / 2 + 50, 200, 50), "Quit to Menu", "leave_room")
 
     def on_enter(self):
-        self.client.log_panel.clear()
+        self.client.log_panel.clear() # Using the new name for clarity
 
     def handle_event(self, event: pygame.event.Event):
         if self.quit_button.handle_event(event):
@@ -265,9 +342,11 @@ class EndGameState(ClientState):
 
     def draw(self, screen: pygame.Surface):
         winner_name = self.client.game_data.get("winner", "NO ONE")
-        center_x = (WINDOW_WIDTH - LOG_PANEL_WIDTH) / 2
+        log_width = self.client.log_panel.rect.width if self.client.log_panel.is_visible else 0
+        center_x = (self.client.width - log_width) / 2
         
-        draw_text(screen, "Game Over!", (center_x, WINDOW_HEIGHT / 2 - 100), self.client.fonts['l'], center=True)
-        draw_text(screen, f"The winner is {winner_name}!", (center_x, WINDOW_HEIGHT / 2 - 40), self.client.fonts['m'], center=True)
+        draw_text(screen, "Game Over!", (center_x, self.client.height / 2 - 100), self.client.fonts['l'], center=True)
+        draw_text(screen, f"The winner is {winner_name}!", (center_x, self.client.height / 2 - 40), self.client.fonts['m'], center=True)
 
-        self.quit_button.draw(screen, self.client.fonts['m'])
+        if self.quit_button:
+            self.quit_button.draw(screen, self.client.fonts['m'])
