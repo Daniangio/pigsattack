@@ -297,19 +297,24 @@ def main():
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.bind((HOST, PORT))
     server_socket.listen(MAX_PLAYERS)
+    server_socket.settimeout(1.0)  # Unblock every second
     print(f"Server listening on {HOST}:{PORT}")
 
     try:
         while True:
-            client_socket, addr = server_socket.accept()
-            with lock:
-                if len(clients) >= MAX_PLAYERS or game_started:
-                    print(f"Rejecting connection from {addr}, server full/game in progress.")
-                    client_socket.close()
-                    continue
-            
-            thread = threading.Thread(target=handle_client, args=(client_socket, addr), daemon=True)
-            thread.start()
+            try:
+                client_socket, addr = server_socket.accept()
+                with lock:
+                    if len(clients) >= MAX_PLAYERS or game_started:
+                        print(f"Rejecting connection from {addr}, server full/game in progress.")
+                        client_socket.close()
+                        continue
+                
+                thread = threading.Thread(target=handle_client, args=(client_socket, addr), daemon=True)
+                thread.start()
+            except socket.timeout:
+                # This is expected when no client connects within the timeout
+                continue
     except KeyboardInterrupt:
         print("Shutting down server.")
     finally:
