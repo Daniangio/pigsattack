@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wild Pigs Will Attack</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head><body>
+    <div class="container">
+        <h1>Wild Pigs Will Attack</h1>
+
+        <!-- Connecting Screen -->
+        <div id="connecting-screen" class="screen active">
+            <h2>Connecting to Server...</h2>
+            <p class="status-text">Establishing a link to the wilderness...</p>
+        </div>
+
+        <!-- Main Menu Screen -->
+        <div id="main-menu-screen" class="screen">
+            <h2>Main Menu</h2>
+            <button id="create-lobby-btn">Establish New Camp</button>
+            <ul id="lobby-list" class="lobby-list">
+                <!-- Lobbies will be populated by JS -->
+            </ul>
+        </div>
+
+        <!-- Lobby Screen -->
+        <div id="lobby-screen" class="screen">
+            <h2 id="lobby-name">'Unnamed Camp'</h2>
+            <p id="player-list-lobby">Survivors in camp: 1</p>
+            <div id="ai-controls" class="ai-controls" style="display: none;">
+                <p>Recruit Lost Souls:</p>
+                <button id="remove-ai-btn">-</button>
+                <span id="ai-count">0</span>
+                <button id="add-ai-btn">+</button>
+            </div>
+            <p id="lobby-status" class="status-text">Waiting for others...</p>
+            <div>
+                <button id="leave-lobby-btn">Leave Camp</button>
+                <button id="start-game-btn" style="display: none;">Begin Ordeal</button>
+            </div>
+        </div>
+
+        <!-- In-Game Screen -->
+        <div id="game-screen" class="screen">
+            <div id="game-header">
+                <div id="game-info"></div>
+                <button id="surrender-btn">Surrender</button>
+            </div>
+            <div id="playmat"></div>
+            <div id="prompt-area"></div>
+            <div id="hand-area">
+                <h3>Your Hand</h3>
+                <div id="player-hand"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script type="module" src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

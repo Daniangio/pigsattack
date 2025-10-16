@@ -1,0 +1,21 @@
+[project]
+name = "pigsattack"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Daniangio",email = "daniele.angioletti0@gmail.com"}
+]
+readme = "README.md"
+package-mode = false
+license = "MIT"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi (>=0.119.0,<0.120.0)",
+    "uvicorn[standard] (>=0.37.0,<0.38.0)",
+    "python-multipart (>=0.0.20,<0.0.21)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
