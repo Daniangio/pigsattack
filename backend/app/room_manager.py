@@ -1,8 +1,11 @@
 import uuid
+from datetime import datetime, timezone
 from typing import Dict, List
 from .models import User, Room, LobbyState
 from .connection_manager import ConnectionManager
-
+# Import the fake DB to store game results
+from .routers import fake_games_db
+from .models import GameRecord
 class RoomManager:
     """Manages game rooms and the lobby."""
     def __init__(self):
@@ -13,7 +16,8 @@ class RoomManager:
         """Constructs the current lobby state."""
         return LobbyState(
             users=[user.model_dump() for user in self.lobby_users.values()],
-            rooms=[room.model_dump() for room in self.rooms.values()]
+            # Only show rooms that are in the 'lobby' state
+            rooms=[room.model_dump() for room in self.rooms.values() if room.status == 'lobby']
         ).model_dump()
 
     async def broadcast_lobby_state(self, manager: ConnectionManager):
@@ -89,9 +93,59 @@ class RoomManager:
             # Notify remaining players of the change
             await self.broadcast_room_state(room_id, manager)
 
-        # Move the user back to the lobby
+        # Add the user back to the lobby and broadcast the updated state to everyone.
+        # The add_user_to_lobby method handles sending the correct state to both
+        # the user who just joined the lobby and all other lobby members.
         await self.add_user_to_lobby(user, manager)
     
+    async def start_game(self, user: User, manager: ConnectionManager):
+        """Starts the game in a room if the user is the host and conditions are met."""
+        room_id, room = self.find_room_by_user(user.id)
+        if not room:
+            return
+
+        # Check if the user is the host and if there are enough players
+        if room.host_id == user.id and len(room.players) >= 2 and room.status == "lobby":
+            print(f"Host {user.username} is starting the game in room {room_id}.")
+            # Transition the room to the 'in_game' state
+            room.status = "in_game"
+            # Broadcast the updated state, which now includes status='in_game'
+            await self.broadcast_room_state(room_id, manager)
+            # The lobby no longer needs to show this room
+            await self.broadcast_lobby_state(manager)
+
+    async def handle_surrender(self, user: User, manager: ConnectionManager):
+        """Handles a player surrendering from an active game."""
+        room_id, room = self.find_room_by_user(user.id, include_spectators=False)
+        if not room or room.status != "in_game":
+            return
+
+        # Get the full list of participants before modifying it
+        all_participants = room.players[:]
+
+        # Remove the surrendering player
+        active_players = [p for p in room.players if p.id != user.id]
+        room.players = active_players
+        print(f"User {user.username} surrendered from room {room_id}.")
+
+        # Check if the game should end
+        if len(active_players) <= 1:
+            winner = active_players[0] if active_players else None
+            print(f"Game in room {room_id} ended. Winner: {winner.username}")
+            
+            # Create and store a persistent game record
+            game_record_id = str(uuid.uuid4())[:8]
+            record = GameRecord(id=game_record_id, room_name=room.name, players=all_participants, winner=winner, ended_at=datetime.now(timezone.utc))
+            fake_games_db[game_record_id] = record
+            
+            # Notify all original participants of the game over event
+            participant_ids = [p.id for p in all_participants]
+            await manager.broadcast_to_users(participant_ids, {"type": "game_over", "payload": {"game_record_id": game_record_id}})
+            
+            # The game is over, dismantle the room
+            del self.rooms[room_id]
+            await self.broadcast_lobby_state(manager) # Update lobby since room is gone
+
     async def handle_disconnect(self, user_id: str, manager: ConnectionManager):
         """Handles a user disconnecting from anywhere."""
         # Find the user object if they are in a room or lobby
@@ -111,10 +165,9 @@ class RoomManager:
         if room_id in self.rooms:
             room = self.rooms[room_id]
             room_state_msg = {"type": "room_state", "payload": room.model_dump()}
-            player_ids = [p.id for p in room.players]
-            await manager.broadcast_to_users(player_ids, room_state_msg)
+            await manager.broadcast_to_users([p.id for p in room.players], room_state_msg)
 
-    def find_room_by_user(self, user_id: str):
+    def find_room_by_user(self, user_id: str, include_spectators: bool = False):
         """Finds the room a user is currently in."""
         for room_id, room in self.rooms.items():
             for player in room.players:

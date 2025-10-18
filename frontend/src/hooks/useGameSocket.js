@@ -10,6 +10,7 @@ const useGameSocket = () => {
     handleAuthSuccess,
     handleGuestAuth,
     handleError,
+    handleGameOver,
     clearAuth,
   } = useStore.getState();
 
@@ -36,6 +37,7 @@ const useGameSocket = () => {
         auth_success: handleAuthSuccess,
         lobby_state: handleLobbyState,
         room_state: handleRoomState,
+        game_over: handleGameOver,
         error: handleError,
       };
 
@@ -51,7 +53,18 @@ const useGameSocket = () => {
 
   const disconnect = useCallback(() => socketRef.current?.close(), []);
 
-  return { connect, disconnect, isConnected: useStore((s) => s.isConnected) };
+  const sendMessage = useCallback((message) => {
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify(message));
+    }
+  }, []);
+
+  return {
+    connect,
+    disconnect,
+    sendMessage,
+    isConnected: useStore((s) => s.isConnected),
+  };
 };
 
 export default useGameSocket;

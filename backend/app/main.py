@@ -67,8 +67,15 @@ async def websocket_endpoint(websocket: WebSocket):
         user_id_for_cleanup = user.id
         await connection_manager.add_connection(user.id, websocket)
         
-        # Add user to the lobby and broadcast the new lobby state
-        await room_manager.add_user_to_lobby(user, connection_manager)
+        # --- RECONNECTION LOGIC ---
+        # Check if the user was in a room that is currently in a game
+        room_id, room = room_manager.find_room_by_user(user.id)
+        if room and room.status == "in_game":
+            print(f"User {user.username} reconnected to active game in room {room_id}.")
+            await room_manager.broadcast_room_state(room_id, connection_manager)
+        else:
+            # If not rejoining a game, add user to the lobby
+            await room_manager.add_user_to_lobby(user, connection_manager)
 
         # Main message loop
         while True:
@@ -82,7 +89,13 @@ async def websocket_endpoint(websocket: WebSocket):
                 await room_manager.join_room(user, payload.get("room_id"), connection_manager)
             elif action == "leave_room":
                 await room_manager.leave_room(user, connection_manager)
-            # Add other game-related actions here later
+            elif action == "start_game":
+                await room_manager.start_game(user, connection_manager)
+            elif action == "surrender":
+                await room_manager.handle_surrender(user, connection_manager)
+            elif action == "return_to_lobby":
+                await room_manager.return_to_lobby(user, connection_manager)
+
 
     except WebSocketDisconnect:
         if user_id_for_cleanup:

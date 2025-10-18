@@ -1,22 +1,24 @@
 import React, { useState } from "react";
 import { useStore } from "../store";
-import useGameSocket from "../hooks/useGameSocket";
 
-const LobbyPage = ({ onLogout }) => {
+const LobbyPage = ({ onLogout, sendMessage }) => {
   const { user, lobbyState } = useStore();
-  const { sendMessage } = useGameSocket();
   const [newRoomName, setNewRoomName] = useState("");
 
   const handleCreateRoom = (e) => {
     e.preventDefault();
     if (newRoomName.trim()) {
-      sendMessage("create_room", { room_name: newRoomName });
+      // The message must be a single object with 'action' and 'payload' keys
+      sendMessage({
+        action: "create_room",
+        payload: { room_name: newRoomName },
+      });
       setNewRoomName("");
     }
   };
 
   const handleJoinRoom = (roomId) => {
-    sendMessage("join_room", { room_id: roomId });
+    sendMessage({ action: "join_room", payload: { room_id: roomId } });
   };
 
   return (

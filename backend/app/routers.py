@@ -10,10 +10,14 @@ router = APIRouter()
 # In a real application, this would be a database session.
 fake_users_db = {
     "admin": models.UserInDB(
+        id="admin",
         username="admin",
         hashed_password=security.get_password_hash("admin")
     )
 }
+
+# In-memory "database" for completed game records.
+fake_games_db: dict[str, models.GameRecord] = {}
 
 @router.post("/register", response_model=models.UserPublic)
 def register_user(user: models.UserCreate):
@@ -42,7 +46,7 @@ def register_user(user: models.UserCreate):
     hashed_password = security.get_password_hash(user.password)
     
     # Create the user object to store
-    stored_user = models.UserInDB(username=user.username, hashed_password=hashed_password)
+    stored_user = models.UserInDB(id=user.username, username=user.username, hashed_password=hashed_password)
     fake_users_db[user.username] = stored_user
     
     # Return the public version of the user object
@@ -67,3 +71,14 @@ def login_for_access_token(
         data={"sub": user.username, "username": user.username}
     )
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+@router.get("/results/{game_id}", response_model=models.GameRecord)
+def get_game_result(game_id: str):
+    """
+    Retrieve the results of a completed game.
+    """
+    record = fake_games_db.get(game_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Game record not found")
+    return record
