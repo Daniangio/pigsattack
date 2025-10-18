@@ -1,0 +1,41 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: .devcontainer/Dockerfile
+    # We use 'sh -c' to run a sequence of commands.
+    # 1. Install/update Python packages from requirements.txt.
+    # 2. If successful (&&), then start the Uvicorn server.
+    # This makes the container self-sufficient.
+    command: >
+      sh -c "pip install -r /workspaces/nightfall/backend/requirements.txt &&
+             uvicorn app.main:app --reload --workers 1 --host 0.0.0.0 --port 8000"
+    volumes:
+      - .:/workspaces/nightfall
+    ports:
+      - "8000:8000"
+    working_dir: /workspaces/nightfall/backend
+    depends_on:
+      - redis
+    tty: true
+
+  frontend:
+    image: node:18-alpine
+    # MODIFICATION:
+    # Same principle as the backend.
+    # 1. Install/update Node.js packages from package.json.
+    # 2. If successful (&&), then start the Vite dev server.
+    command: >
+      sh -c "npm install &&
+             npm run dev"
+    volumes:
+      - ./frontend:/app
+    ports:
+      - "5173:5173"
+    working_dir: /app
+    tty: true
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"

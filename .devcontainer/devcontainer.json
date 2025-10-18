@@ -1,0 +1,28 @@
+{
+  "name": "Nightfall Dev Environment",
+  // This tells VS Code to use our docker-compose.yml file.
+  "dockerComposeFile": "../docker-compose.yml",
+  // We want to attach to the 'backend' service as our primary workspace.
+  "service": "backend",
+  // The folder inside the container where our project will be mounted.
+  "workspaceFolder": "/workspaces/nightfall",
+  // Forward necessary ports from the container to the local machine.
+  "forwardPorts": [8000, 5173, 6379],
+  // VS Code settings to apply inside the container.
+  "settings": {
+    "python.pythonPath": "/usr/local/bin/python",
+    "python.defaultInterpreterPath": "/usr/local/bin/python"
+  },
+  // Extensions to install automatically inside the container.
+  "extensions": [
+    "ms-python.python", // Python language support
+    "esbenp.prettier-vscode", // Code formatter
+    "bradlc.vscode-tailwindcss", // Tailwind CSS IntelliSense
+    "humao.rest-client" // For testing API endpoints
+  ],
+  // A command to run after the container is created.
+  // This installs dependencies so the developer doesn't have to.
+  "postCreateCommand": "pip install -r backend/requirements.txt && cd frontend && npm install",
+  // Connect as a non-root user for better security.
+  "remoteUser": "vscode"
+}

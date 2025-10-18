@@ -1,0 +1,23 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python: FastAPI",
+      "type": "python",
+      "request": "attach",
+      "connect": {
+        "host": "localhost",
+        "port": 5678 // Default debug port for Python
+      },
+      "pathMappings": [
+        {
+          "localRoot": "${workspaceFolder}",
+          "remoteRoot": "/workspaces/nightfall"
+        }
+      ],
+      // This requires you to install the 'debugpy' package.
+      // We should add it to requirements.txt for a seamless experience.
+      "justMyCode": true
+    }
+  ]
+}

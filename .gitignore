@@ -1,3 +1,6 @@
+# VSCode
+.vscode/settings.json
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -50,6 +53,22 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 cover/
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Compiled binary addons (https://nodejs.org/api/addons.html)
+build/Release
+
+# Dependency directories
+node_modules/
+jspm_packages/
 
 # Translations
 *.mo
