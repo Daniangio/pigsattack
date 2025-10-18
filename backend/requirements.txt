@@ -2,3 +2,9 @@ fastapi
 uvicorn[standard]
 redis
 debugpy
+passlib[bcrypt]
+bcrypt==4.3
+python-jose[cryptography]
+pydantic-settings
+python-multipart
+sqlmodel
