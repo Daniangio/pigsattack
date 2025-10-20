@@ -175,7 +175,7 @@ class RoomManager:
         await manager.broadcast_to_users(
             all_involved_ids, 
             {"type": "state_update", "payload": {
-                "view": "post_game", "gameResult": record.model_dump(mode="json")
+                "view": "post_game", "gameResult": record.model_dump(mode="json"), "force": True
             }}
         )
         
@@ -259,38 +259,46 @@ class RoomManager:
         await self.add_user_to_lobby(user, manager)
 
     async def handle_view_request(self, user: User, payload: dict, manager: ConnectionManager):
-        """Handles a client's request to change their view, enforcing game rules."""
+        """
+        Handles a client's request to change their view. This is the authoritative gatekeeper.
+        
+        The core rule: If a player is in an active game, they are ALWAYS forced back to the game view.
+        Otherwise, the user's request is granted.
+        """
         requested_view = payload.get("view")
         if not requested_view:
             return
 
-        room_id, room = self.find_room_by_user(user.id)
-
-        # Rule: If a player is in an active game, they cannot leave the game view.
+        # THE ONE RULE: Is the player in an active, non-surrendered game?
+        room_id, room = self.find_room_by_user(user.id, include_spectators=False)
         if room and room.status == "in_game":
             record = fake_games_db.get(room.game_record_id)
-            participant = next((p for p in record.participants if p.user.id == user.id), None)
-            if participant and participant.status == PlayerStatus.ACTIVE:
-                print(f"Denied {user.username}'s request for '{requested_view}' view; forcing back to 'game'.")
-                await self.broadcast_room_state(room.id, manager) # This sends the correct 'game' view state
-                return
+            if record:
+                participant = next((p for p in record.participants if p.user.id == user.id), None)
+                if participant and participant.status == PlayerStatus.ACTIVE:
+                    print(f"FORCE: User {user.username} is in an active game. Denying '{requested_view}' request and forcing 'game' view.")
+                    # Send the full, authoritative game state back to the user.
+                    await self.broadcast_room_state(room.id, manager, force_view=True)
+                    return
 
-        # Rule: If a player is in a pre-game room and requests the lobby (e.g., from the profile page),
-        # don't kick them out. Instead, send them back to their room.
+        # NEW RULE: If user is in a pre-game room and requests the lobby (e.g. from profile page),
+        # send them back to their room instead of kicking them out.
         if room and room.status == "lobby" and requested_view == "lobby":
-            print(f"Denied {user.username}'s request for 'lobby' view; they are in a pre-game room. Sending back to 'room'.")
+            print(f"DENY: User {user.username} is in a pre-game room. Denying 'lobby' request and sending 'room' view.")
             await self.broadcast_room_state(room.id, manager)
             return
 
-        # Rule: If the user requests the lobby and is not in a room (e.g., after a game),
-        # send them the full lobby state.
-        if not room and requested_view == "lobby":
-            print(f"User {user.username} is returning to lobby. Sending full lobby state.")
+        # If the rule above doesn't apply, the user is free to navigate.
+        print(f"GRANT: Granting {user.username}'s request for '{requested_view}' view.")
+        if requested_view == "lobby":
+            # This will now only be reached if the user is NOT in a pre-game room.
             await self.add_user_to_lobby(user, manager)
-            return
-
-        # Fallback: If no other rules apply, grant the simple view change.
-        await manager.send_to_user(user.id, {"type": "state_update", "payload": {"view": requested_view }})
+        elif requested_view == "profile":
+            # Just grant the view change without any other state.
+            await manager.send_to_user(user.id, {"type": "state_update", "payload": {"view": "profile"}})
+        else:
+            # This can be expanded for other views if needed.
+            print(f"Warning: Unhandled view request for '{requested_view}'")
 
     def get_room_dump(self, room: Room) -> dict:
         """Helper to get the dictionary representation of a room, enriched with game details."""
@@ -300,7 +308,7 @@ class RoomManager:
             room_dump['game_details'] = record.model_dump()
         return room_dump
 
-    async def broadcast_room_state(self, room_id: str, manager: ConnectionManager):
+    async def broadcast_room_state(self, room_id: str, manager: ConnectionManager, force_view: bool = False):
         """Broadcasts the detailed state of a specific room to all its members."""
         if room_id not in self.rooms:
             return
@@ -310,9 +318,13 @@ class RoomManager:
 
         # The backend authoritatively determines the view based on room status.
         view = "game" if room.status == "in_game" else "room"
+        
+        # A game start is always a forced view change.
+        should_force = force_view or (view == "game")
+
         state_update_msg = {
             "type": "state_update",
-            "payload": {"view": view, "roomState": room_dump}
+            "payload": {"view": view, "roomState": room_dump, "force": should_force}
         }
         all_user_ids = [p.id for p in room.players] + [s.id for s in room.spectators]
         await manager.broadcast_to_users(all_user_ids, state_update_msg)

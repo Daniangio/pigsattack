@@ -67,9 +67,10 @@ export const useStore = create((set, get) => ({
   // REFACTOR: A single, authoritative state handler
   handleStateUpdate: (payload) => {
     // The backend sends the view and all relevant state.
-    // The frontend's job is just to apply it. The logic to protect special views
-    // has been moved to the backend's `handle_view_request`.
-    // If a field isn't in the payload, it keeps its existing value from the store.
-    set((state) => ({ ...state, ...payload }));
+    // The frontend's only job is to apply it. All logic is now on the backend.
+    set((state) => {
+      // If a field isn't in the payload (e.g., roomState), it keeps its existing value.
+      return { ...state, ...payload };
+    });
   },
 }));
