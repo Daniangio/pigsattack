@@ -5,12 +5,10 @@ const useGameSocket = () => {
   const socketRef = useRef(null);
   const {
     setConnectionStatus,
-    handleLobbyState,
-    handleRoomState,
+    handleStateUpdate, // <-- The new unified handler
     handleAuthSuccess,
     handleGuestAuth,
     handleError,
-    handleGameOver,
     clearAuth,
   } = useStore.getState();
 
@@ -35,10 +33,8 @@ const useGameSocket = () => {
       const actions = {
         guest_auth_success: handleGuestAuth,
         auth_success: handleAuthSuccess,
-        lobby_state: handleLobbyState,
-        room_state: handleRoomState,
-        game_over: handleGameOver,
         error: handleError,
+        state_update: handleStateUpdate, // <-- Route the new message type
       };
 
       actions[type]?.(payload);

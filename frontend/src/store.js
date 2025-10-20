@@ -6,14 +6,15 @@ export const useStore = create((set, get) => ({
   view: "auth", // Default view is always 'auth'
   token: sessionStorage.getItem("authToken") || null,
   user: null,
-  isConnected: false,
-  gameResultId: null, // Add state to hold the game result ID
+  isConnected: false, // This can stay as it's client-side state
+  gameResult: null,
   lobbyState: { users: [], rooms: [] },
   roomState: null,
-  previousView: "auth", // Keep track of the previous view
 
   // Actions
-  setView: (view) => set((state) => ({ previousView: state.view, view })),
+  // FIX: Add a dedicated action to handle client-side view changes.
+  // The `set` function is only available inside the store's definition.
+  setView: (view) => set({ view }),
 
   setToken: (token) => {
     sessionStorage.setItem("authToken", token);
@@ -23,58 +24,30 @@ export const useStore = create((set, get) => ({
       username: decoded.username, // Assuming username is in the token
       currentRoomId: null,
     };
-    set({ token, user, view: "lobby" }); // <-- Transition to lobby on successful login
+    // Don't set view here. The backend will send the authoritative state upon connection.
+    set({ token, user });
   },
 
   clearAuth: () => {
     sessionStorage.removeItem("authToken");
-    set({ token: null, user: null, isConnected: false, view: "auth" });
+    // Reset all state and return to auth view
+    set({
+      token: null,
+      user: null,
+      isConnected: false,
+      view: "auth",
+      roomState: null,
+      lobbyState: { users: [], rooms: [] },
+      gameResult: null,
+    });
   },
 
   setConnectionStatus: (status) => set({ isConnected: status }),
 
-  handleLobbyState: (payload) => {
-    set((state) => {
-      // If the user is in a special view (like 'profile'), only update the state
-      // in the background. Don't force a view change.
-      if (["profile"].includes(state.view)) {
-        return { lobbyState: payload, roomState: null };
-      }
-      return { lobbyState: payload, roomState: null, view: "lobby" };
-    });
-  },
-
-  handleRoomState: (payload) => {
-    set((state) => {
-      // Do not kick the user from the profile page when room state changes.
-      if (state.view === "profile") {
-        // If a game starts, it's a high-priority event and should force a view change.
-        if (payload?.status === "in_game") {
-          return { roomState: payload, view: "game" };
-        }
-        // Otherwise, just update the room state in the background.
-        return { roomState: payload };
-      }
-
-      // If payload is null, it means the user left a room or it was dismantled.
-      // The backend will follow up with a `lobby_state` message to handle the view change.
-      if (!payload) {
-        return { roomState: null };
-      }
-
-      // Determine view based on room status.
-      const view = payload.status === "in_game" ? "game" : "room";
-      return { roomState: payload, view };
-    });
-  },
-
   handleGuestAuth: (payload) => {
-    const user = {
-      id: payload.id,
-      username: payload.username,
-      currentRoomId: null,
-    };
-    set({ user, view: "lobby" }); // <-- Transition to lobby on successful guest login
+    const user = { id: payload.id, username: payload.username };
+    // Don't set view here. The backend will send the authoritative state.
+    set({ user });
   },
 
   handleAuthSuccess: (payload) => {
@@ -91,9 +64,12 @@ export const useStore = create((set, get) => ({
     alert(`Server Error: ${payload.message}`);
   },
 
-  handleGameOver: (payload) => {
-    // Force a navigation to the results page. This is more reliable
-    // than trying to manage URL state within React's render cycle.
-    set({ view: "post_game", gameResultId: payload.game_record_id });
+  // REFACTOR: A single, authoritative state handler
+  handleStateUpdate: (payload) => {
+    // The backend sends the view and all relevant state.
+    // The frontend's job is just to apply it. The logic to protect special views
+    // has been moved to the backend's `handle_view_request`.
+    // If a field isn't in the payload, it keeps its existing value from the store.
+    set((state) => ({ ...state, ...payload }));
   },
 }));

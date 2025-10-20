@@ -9,7 +9,7 @@ import ProfilePage from "./pages/ProfilePage.jsx";
 import PostGamePage from "./pages/PostGamePage.jsx";
 
 function App() {
-  const { view, token, clearAuth, gameResultId } = useStore();
+  const { view, token, clearAuth, gameResult, setView } = useStore();
   const { connect, disconnect, sendMessage, isConnected } = useGameSocket();
 
   // This effect now runs whenever the token changes.
@@ -26,12 +26,10 @@ function App() {
   };
 
   const handleReturnToLobby = () => {
-    // Optimistically set the view back to what it was before.
-    // Then, ask the server for the latest state. The server's response
-    // (`lobby_state` or `room_state`) will correct the view if it has changed
-    // (e.g., if the game started while the user was on their profile).
-    useStore.getState().setView(useStore.getState().previousView);
-    sendMessage({ action: "return_to_lobby" });
+    // The frontend now ASKS the backend to go to the lobby.
+    // The backend will validate this request and send back the appropriate `state_update`.
+    // This handles leaving a pre-game room, a post-game screen, or a profile page.
+    sendMessage({ action: "request_view", payload: { view: "lobby" } });
   };
 
   const renderView = () => {
@@ -43,7 +41,12 @@ function App() {
           <LobbyPage
             onLogout={handleLogout}
             sendMessage={sendMessage}
-            onViewProfile={() => useStore.getState().setView("profile")}
+            onViewProfile={() =>
+              sendMessage({
+                action: "request_view",
+                payload: { view: "profile" },
+              })
+            }
           />
         );
       case "room":
@@ -51,15 +54,21 @@ function App() {
           <RoomPage
             onLogout={handleLogout}
             sendMessage={sendMessage}
-            onViewProfile={() => useStore.getState().setView("profile")}
+            onViewProfile={() =>
+              sendMessage({
+                action: "request_view",
+                payload: { view: "profile" },
+              })
+            }
           />
         );
       case "game":
         return <GamePage onLogout={handleLogout} sendMessage={sendMessage} />;
       case "post_game":
+        // The gameResult is now an object directly in the store
         return (
           <PostGamePage
-            resultId={gameResultId}
+            gameRecord={gameResult}
             onReturnToLobby={handleReturnToLobby}
           />
         );

@@ -1,12 +1,26 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime
+from enum import Enum
+
+# --- START NEW ADDITIONS ---
+class PlayerStatus(str, Enum):
+    """Enumeration for a player's status within a game."""
+    ACTIVE = "ACTIVE"
+    SURRENDERED = "SURRENDERED"
+    DISCONNECTED = "DISCONNECTED"
 
 class User(BaseModel):
     id: str
     username: str
     game_ids: List[str] = Field(default_factory=list)
     hashed_password: Optional[str] = None
+
+class GameParticipant(BaseModel):
+    """Represents a player's state within a specific game."""
+    user: User
+    status: PlayerStatus = PlayerStatus.ACTIVE
+# --- END NEW ADDITIONS ---
 
 class Token(BaseModel):
     access_token: str
@@ -26,9 +40,11 @@ class LobbyState(BaseModel):
     rooms: List[dict]
 
 class GameRecord(BaseModel):
+    """Represents the persistent state of a single game instance."""
     id: str
     room_name: str
-    players: List[User]
+    # This now stores a list of participants with their statuses, not just users.
+    participants: List[GameParticipant]
     winner: Optional[User] = None
     ended_at: Optional[datetime] = None
     status: str = "in_progress" # 'in_progress', 'completed'

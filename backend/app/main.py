@@ -103,14 +103,16 @@ async def websocket_endpoint(websocket: WebSocket):
                 await room_manager.create_room(user, payload.get("room_name"), connection_manager)
             elif action == "join_room":
                 await room_manager.join_room(user, payload.get("room_id"), connection_manager)
-            elif action == "leave_room":
-                await room_manager.leave_room(user, connection_manager)
+            elif action == "leave_room": # This handles leaving a pre-game room
+                await room_manager.leave_room_pre_game(user, connection_manager)
             elif action == "start_game":
                 await room_manager.start_game(user, connection_manager)
             elif action == "surrender":
                 await room_manager.handle_surrender(user, connection_manager)
-            elif action == "return_to_lobby":
+            elif action == "return_to_lobby": # This handles returning to lobby after a game/surrender/profile view
                 await room_manager.return_to_lobby(user, connection_manager)
+            elif action == "request_view":
+                await room_manager.handle_view_request(user, payload, connection_manager)
 
 
     except WebSocketDisconnect:

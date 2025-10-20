@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
-from .models import User # Now imports the unified User model
+from .models import User, GameParticipant
 
 class UserPublic(BaseModel):
     """A schema for user information that is safe to be exposed to clients."""
@@ -23,10 +23,11 @@ class PlayerProfile(BaseModel):
     game_history: List[GameHistoryEntry]
 
 class GameRecordDetails(BaseModel):
-    """Represents the detailed record of a finished game."""
+    """Represents the detailed record of a finished or in-progress game."""
     id: str
     room_name: str
-    players: List[User]
+    # The API will now return the list of participants with their statuses
+    participants: List[GameParticipant]
     winner: Optional[User] = None
     ended_at: Optional[datetime] = None
     status: str # e.g., 'in_progress', 'completed'

@@ -1,23 +1,17 @@
 import React from "react";
-import { useStore } from "../store";
+import { useStore } from "../store.js";
 
 const RoomPage = ({ onLogout, sendMessage, onViewProfile }) => {
   const { user, roomState } = useStore();
 
-  // When leaving a room, roomState becomes null.
-  // This check prevents the component from crashing before the view switches back to the lobby.
   if (!roomState) {
-    // This can be a loading spinner or just null
     return <div>Loading room...</div>;
   }
 
   const isHost = user?.id === roomState.host_id;
   const canStartGame = roomState.players.length >= 2;
 
-  const handleLeaveRoom = () => {
-    sendMessage({ action: "leave_room" });
-  };
-
+  const handleLeaveRoom = () => sendMessage({ action: "leave_room" });
   const handleStartGame = () => {
     if (isHost && canStartGame) {
       sendMessage({ action: "start_game" });
@@ -43,12 +37,12 @@ const RoomPage = ({ onLogout, sendMessage, onViewProfile }) => {
         </div>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid md:grid-cols-3 gap-6">
         <div className="md:col-span-2 p-6 bg-slate-700 rounded-lg shadow-lg">
-          <h2 className="text-2xl font-semibold mb-4">Players in Room</h2>
+          <h2 className="text-2xl font-semibold mb-4">Players</h2>
           <ul className="space-y-2">
             {roomState.players.map((p) => (
-              <li key={p.id} className="px-3 py-2 bg-slate-600 rounded-md">
+              <li key={p.id} className="p-2 bg-slate-600 rounded">
                 {p.username}
                 {p.id === roomState.host_id && " (Host)"}
                 {p.id === user.id && " (You)"}
@@ -64,7 +58,7 @@ const RoomPage = ({ onLogout, sendMessage, onViewProfile }) => {
               <button
                 onClick={handleStartGame}
                 disabled={!canStartGame}
-                className="btn btn-primary w-full mb-2 disabled:bg-slate-500 disabled:cursor-not-allowed"
+                className="btn btn-primary w-full mb-2"
               >
                 Start Game
               </button>
@@ -77,7 +71,7 @@ const RoomPage = ({ onLogout, sendMessage, onViewProfile }) => {
           </div>
           <button
             onClick={handleLeaveRoom}
-            className="btn btn-secondary w-full"
+            className="btn btn-secondary w-full mt-auto"
           >
             Leave Room
           </button>
