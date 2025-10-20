@@ -47,7 +47,12 @@ const useGameSocket = () => {
     ws.onclose = () => {
       console.log("WebSocket disconnected");
       socketRef.current = null;
-      clearAuth(); // Reset state on disconnect
+      setConnectionStatus(false);
+      // If the user had a token, they are a registered user.
+      // A disconnect for them means they need to be logged out.
+      if (useStore.getState().token) {
+        clearAuth();
+      }
     };
   }, []);
 

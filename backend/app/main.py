@@ -6,7 +6,12 @@ import uuid
 from .connection_manager import ConnectionManager
 from .room_manager import RoomManager
 from .models import User
-from .routers import router
+# --- START FIX ---
+# Import the player_router and the fake_users_db
+from .routers import router as auth_router
+from .player_router import router as player_router
+from .routers import fake_users_db 
+# --- END FIX ---
 from .security import get_current_user
 
 app = FastAPI()
@@ -20,8 +25,12 @@ app.add_middleware(
     allow_headers=["*"],  # Allows all headers
 )
 
-# Include the authentication router
-app.include_router(router, prefix="/api")
+# --- START FIX ---
+# Include both the authentication and player routers
+app.include_router(auth_router, prefix="/api")
+app.include_router(player_router, prefix="/api")
+# --- END FIX ---
+
 
 # Singleton instances of our managers
 connection_manager = ConnectionManager()
@@ -40,6 +49,7 @@ async def websocket_endpoint(websocket: WebSocket):
     A client connects with a token which is used for initial identification.
     """
     user_id_for_cleanup: str = None
+    user: User = None
     try:
         # First, accept the connection
         await websocket.accept()
@@ -50,7 +60,7 @@ async def websocket_endpoint(websocket: WebSocket):
         
         if token:
             # Authenticated user
-            user: User = get_current_user(token=token)
+            user = get_current_user(token=token)
             # Send a specific message to the authenticated client to confirm their identity
             await websocket.send_json({
                 "type": "auth_success", "payload": user.model_dump()
@@ -59,6 +69,12 @@ async def websocket_endpoint(websocket: WebSocket):
             # Guest user
             guest_id = f"guest_{str(uuid.uuid4())[:8]}"
             user = User(id=guest_id, username=guest_id)
+            
+            # --- START FIX ---
+            # Add the guest user to our in-memory "database"
+            fake_users_db[guest_id] = user
+            # --- END FIX ---
+
             # Send a specific message to the guest client to confirm their identity
             await websocket.send_json({
                 "type": "guest_auth_success", "payload": user.model_dump()

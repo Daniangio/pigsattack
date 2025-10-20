@@ -16,6 +16,15 @@ export default defineConfig({
     watch: {
       usePolling: true,
     },
+    // Add this proxy configuration
+    proxy: {
+      // Proxy requests from /api to the backend server
+      "/api": {
+        // Use the service name from docker-compose.yml as the hostname
+        target: "http://backend:8000",
+        changeOrigin: true,
+      },
+    },
     // We bind to 0.0.0.0 to make the server accessible from outside the container.
     host: "0.0.0.0",
   },

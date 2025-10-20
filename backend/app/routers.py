@@ -3,13 +3,13 @@ from fastapi.security import OAuth2PasswordRequestForm
 from typing import Annotated
 from . import security
 from . import models
-
+from . import schemas
 router = APIRouter()
 
 # In-memory "database" for registered users.
 # In a real application, this would be a database session.
 fake_users_db = {
-    "admin": models.UserInDB(
+    "admin": models.User(
         id="admin",
         username="admin",
         hashed_password=security.get_password_hash("admin")
@@ -19,7 +19,7 @@ fake_users_db = {
 # In-memory "database" for completed game records.
 fake_games_db: dict[str, models.GameRecord] = {}
 
-@router.post("/register", response_model=models.UserPublic)
+@router.post("/register", response_model=schemas.UserPublic)
 def register_user(user: models.UserCreate):
     """
     Register a new user.
@@ -46,11 +46,11 @@ def register_user(user: models.UserCreate):
     hashed_password = security.get_password_hash(user.password)
     
     # Create the user object to store
-    stored_user = models.UserInDB(id=user.username, username=user.username, hashed_password=hashed_password)
+    stored_user = models.User(id=user.username, username=user.username, hashed_password=hashed_password)
     fake_users_db[user.username] = stored_user
     
     # Return the public version of the user object
-    return models.UserPublic(id=user.username, username=user.username)
+    return stored_user
 
 
 @router.post("/token", response_model=models.Token)

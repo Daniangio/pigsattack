@@ -1,7 +1,7 @@
 import React from "react";
 import { useStore } from "../store";
 
-const RoomPage = ({ onLogout, sendMessage }) => {
+const RoomPage = ({ onLogout, sendMessage, onViewProfile }) => {
   const { user, roomState } = useStore();
 
   // When leaving a room, roomState becomes null.
@@ -34,6 +34,9 @@ const RoomPage = ({ onLogout, sendMessage }) => {
           <span className="text-lg">
             Welcome, <span className="font-semibold">{user?.username}</span>
           </span>
+          <button onClick={onViewProfile} className="btn btn-secondary">
+            View Profile
+          </button>
           <button onClick={onLogout} className="btn btn-danger">
             Logout
           </button>

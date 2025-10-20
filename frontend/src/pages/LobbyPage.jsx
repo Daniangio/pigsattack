@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useStore } from "../store";
 
-const LobbyPage = ({ onLogout, sendMessage }) => {
+const LobbyPage = ({ onLogout, sendMessage, onViewProfile }) => {
   const { user, lobbyState } = useStore();
   const [newRoomName, setNewRoomName] = useState("");
 
@@ -29,6 +29,9 @@ const LobbyPage = ({ onLogout, sendMessage }) => {
           <span className="text-lg">
             Welcome, <span className="font-semibold">{user?.username}</span>
           </span>
+          <button onClick={onViewProfile} className="btn btn-secondary">
+            View Profile
+          </button>
           <button onClick={onLogout} className="btn btn-danger">
             Logout
           </button>

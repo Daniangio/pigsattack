@@ -4,7 +4,7 @@ from typing import Dict, List
 from .models import User, Room, LobbyState
 from .connection_manager import ConnectionManager
 # Import the fake DB to store game results
-from .routers import fake_games_db
+from .routers import fake_games_db, fake_users_db
 from .models import GameRecord
 class RoomManager:
     """Manages game rooms and the lobby."""
@@ -106,12 +106,24 @@ class RoomManager:
 
         # Check if the user is the host and if there are enough players
         if room.host_id == user.id and len(room.players) >= 2 and room.status == "lobby":
+            # --- START MODIFICATION: Create GameRecord on game start ---
             print(f"Host {user.username} is starting the game in room {room_id}.")
+            
+            # Create and store a persistent game record immediately
+            game_record_id = str(uuid.uuid4())[:8]
+            record = GameRecord(id=game_record_id, room_name=room.name, players=room.players[:], winner=None, ended_at=None, status="in_progress")
+            fake_games_db[game_record_id] = record
+            room.game_record_id = game_record_id # Associate record with the room
+
+            # Associate the game record with each player
+            for p in room.players:
+                if p.id in fake_users_db:
+                    fake_users_db[p.id].game_ids.append(game_record_id)
+            # --- END MODIFICATION ---
+
             # Transition the room to the 'in_game' state
             room.status = "in_game"
-            # Broadcast the updated state, which now includes status='in_game'
             await self.broadcast_room_state(room_id, manager)
-            # The lobby no longer needs to show this room
             await self.broadcast_lobby_state(manager)
 
     async def handle_surrender(self, user: User, manager: ConnectionManager):
@@ -120,43 +132,86 @@ class RoomManager:
         if not room or room.status != "in_game":
             return
 
-        # Get the full list of participants before modifying it
-        all_participants = room.players[:]
+        # --- Handle surrender without ending game for others ---
 
-        # Remove the surrendering player
+        # Move the surrendering player to spectators and immediately send them to post-game
+        surrendering_player = next((p for p in room.players if p.id == user.id), None)
+        if not surrendering_player:
+            return
+
         active_players = [p for p in room.players if p.id != user.id]
         room.players = active_players
+        room.spectators.append(surrendering_player)
+
         print(f"User {user.username} surrendered from room {room_id}.")
+
+        # Send the surrendering player to the post-game screen
+        await manager.send_to_user(user.id, {"type": "game_over", "payload": {"game_record_id": room.game_record_id}})
 
         # Check if the game should end
         if len(active_players) <= 1:
             winner = active_players[0] if active_players else None
-            print(f"Game in room {room_id} ended. Winner: {winner.username}")
+            winner_name = winner.username if winner else "No one"
+            print(f"Game in room {room_id} ended. Winner: {winner_name}")
             
-            # Create and store a persistent game record
-            game_record_id = str(uuid.uuid4())[:8]
-            record = GameRecord(id=game_record_id, room_name=room.name, players=all_participants, winner=winner, ended_at=datetime.now(timezone.utc))
-            fake_games_db[game_record_id] = record
-            
-            # Notify all original participants of the game over event
-            participant_ids = [p.id for p in all_participants]
-            await manager.broadcast_to_users(participant_ids, {"type": "game_over", "payload": {"game_record_id": game_record_id}})
+            # Update the existing game record
+            if room.game_record_id in fake_games_db:
+                record = fake_games_db[room.game_record_id]
+                record.winner = winner
+                record.ended_at = datetime.now(timezone.utc)
+                record.status = "completed"
+
+            # Notify all remaining players and spectators of the game over event
+            all_involved_ids = [p.id for p in active_players] + [s.id for s in room.spectators]
+            await manager.broadcast_to_users(all_involved_ids, {"type": "game_over", "payload": {"game_record_id": room.game_record_id}})
             
             # The game is over, dismantle the room
             del self.rooms[room_id]
             await self.broadcast_lobby_state(manager) # Update lobby since room is gone
+        else:
+             # If game is not over, just update the room state for remaining players
+            await self.broadcast_room_state(room_id, manager)
+        
+    async def return_to_lobby(self, user: User, manager: ConnectionManager):
+        """
+        Handles a user's request to return to the lobby.
+        If the user is in any room (pre-game or in-game), it resends their current room state.
+        If the user is not in a room, it adds them to the main lobby.
+        """
+        room_id, room = self.find_room_by_user(user.id, include_spectators=True)
+        if room:
+            # User is in a room, send them back to it (pre-game or in-game)
+            await self.broadcast_room_state(room_id, manager)
+        else:
+            # User is not in any room, send them to the main lobby.
+            await self.add_user_to_lobby(user, manager)
 
     async def handle_disconnect(self, user_id: str, manager: ConnectionManager):
         """Handles a user disconnecting from anywhere."""
-        # Find the user object if they are in a room or lobby
-        user_in_room = next((p for room in self.rooms.values() for p in room.players if p.id == user_id), None)
+        # Find the room the user is in, and the user object itself.
+        room_id, room = self.find_room_by_user(user_id, include_spectators=True)
+        user_in_room = None
+        if room:
+            user_in_room = next((p for p in room.players if p.id == user_id), None)
+            if not user_in_room:
+                 user_in_room = next((p for p in room.spectators if p.id == user_id), None)
+
         user_in_lobby = self.lobby_users.get(user_id)
         user = user_in_room or user_in_lobby
 
-        # If user was in a room, handle their departure
-        if user_in_room and user:
+        if not user:
+            print(f"Disconnected user {user_id} not found in any active session.")
+            return
+
+        if room and room.status == "in_game":
+            # If a user disconnects from an active game, treat it as a surrender.
+            print(f"User {user.username} disconnected from an active game. Treating as surrender.")
+            await self.handle_surrender(user, manager)
+        elif room and room.status == "lobby":
+            # If user was in a pre-game lobby, handle their departure normally.
             await self.leave_room(user, manager)
         elif user_in_lobby:
+            # If user was just in the main lobby.
             del self.lobby_users[user_id]
             await self.broadcast_lobby_state(manager)
 
@@ -165,7 +220,8 @@ class RoomManager:
         if room_id in self.rooms:
             room = self.rooms[room_id]
             room_state_msg = {"type": "room_state", "payload": room.model_dump()}
-            await manager.broadcast_to_users([p.id for p in room.players], room_state_msg)
+            all_user_ids = [p.id for p in room.players] + [s.id for s in room.spectators]
+            await manager.broadcast_to_users(all_user_ids, room_state_msg)
 
     def find_room_by_user(self, user_id: str, include_spectators: bool = False):
         """Finds the room a user is currently in."""
@@ -173,4 +229,8 @@ class RoomManager:
             for player in room.players:
                 if player.id == user_id:
                     return room_id, room
+            if include_spectators:
+                for spectator in room.spectators:
+                    if spectator.id == user_id:
+                        return room_id, room
         return None, None

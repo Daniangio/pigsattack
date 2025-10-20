@@ -5,6 +5,7 @@ import AuthPage from "./pages/AuthPage.jsx";
 import LobbyPage from "./pages/LobbyPage.jsx";
 import RoomPage from "./pages/RoomPage.jsx";
 import GamePage from "./pages/GamePage.jsx";
+import ProfilePage from "./pages/ProfilePage.jsx";
 import PostGamePage from "./pages/PostGamePage.jsx";
 
 function App() {
@@ -25,33 +26,45 @@ function App() {
   };
 
   const handleReturnToLobby = () => {
-    // This forces a full reload, which will re-trigger the auth and connect flow
-    window.location.href = "/";
+    // Optimistically set the view back to what it was before.
+    // Then, ask the server for the latest state. The server's response
+    // (`lobby_state` or `room_state`) will correct the view if it has changed
+    // (e.g., if the game started while the user was on their profile).
+    useStore.getState().setView(useStore.getState().previousView);
+    sendMessage({ action: "return_to_lobby" });
   };
 
   const renderView = () => {
-    const path = window.location.pathname;
-    if (path.startsWith("/results/")) {
-      const resultId = path.split("/")[2];
-      return (
-        <PostGamePage
-          resultId={resultId}
-          onReturnToLobby={handleReturnToLobby}
-        />
-      );
-    }
-
     // The view is now derived directly from the store's state,
     // which is updated by websocket events. This is much cleaner.
     switch (view) {
       case "lobby":
-        return <LobbyPage onLogout={handleLogout} sendMessage={sendMessage} />;
+        return (
+          <LobbyPage
+            onLogout={handleLogout}
+            sendMessage={sendMessage}
+            onViewProfile={() => useStore.getState().setView("profile")}
+          />
+        );
       case "room":
-        return <RoomPage onLogout={handleLogout} sendMessage={sendMessage} />;
+        return (
+          <RoomPage
+            onLogout={handleLogout}
+            sendMessage={sendMessage}
+            onViewProfile={() => useStore.getState().setView("profile")}
+          />
+        );
       case "game":
         return <GamePage onLogout={handleLogout} sendMessage={sendMessage} />;
       case "post_game":
-        return <div>Redirecting to results...</div>;
+        return (
+          <PostGamePage
+            resultId={gameResultId}
+            onReturnToLobby={handleReturnToLobby}
+          />
+        );
+      case "profile":
+        return <ProfilePage onReturnToLobby={handleReturnToLobby} />;
       case "auth":
       default:
         // We pass the connect function to the AuthPage for guest login
