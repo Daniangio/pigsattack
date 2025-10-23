@@ -66,22 +66,25 @@ export const useStore = create((set, get) => ({
     alert(`Server Error: ${payload.message}`);
   },
 
-  // REFACTOR: A single, authoritative state handler
+  // A single, authoritative state handler
   handleStateUpdate: (payload) => {
     // The backend sends the view and all relevant state.
     // The frontend's only job is to apply it. All logic is now on the backend.
-    set((state) => ({
-      ...state,
-      ...payload,
-      // If the new view is NOT 'game', explicitly clear the gameState.
-      // This prevents stale game data from persisting when a player leaves a game.
-      // If the payload doesn't include a view, gameState remains untouched.
-      gameState:
-        payload.view === "game"
-          ? payload.gameState
-          : payload.view
-          ? null
-          : state.gameState,
-    }));
+    set((state) => {
+      return { ...state, ...payload };
+    });
+
+    const newState = { ...get(), ...payload };
+    if (payload.view && payload.view !== "game") {
+      newState.gameState = null;
+    }
+    set(newState);
+  },
+
+  // --- Handle the specific game state update ---
+  handleGameStateUpdate: (payload) => {
+    // This message ONLY comes when we are in a game.
+    // It forces the view to 'game' and updates the state.
+    set({ gameState: payload, view: "game" });
   },
 }));

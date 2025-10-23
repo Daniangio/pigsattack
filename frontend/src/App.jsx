@@ -81,9 +81,13 @@ function App() {
     }
   };
 
+  // Conditionally set container classes. The game view will not be constrained.
+  const containerClasses = view === "game" ? "" : "container mx-auto p-4";
+
   return (
     <div className="bg-slate-800 min-h-screen text-white font-sans">
-      <div className="container mx-auto p-4">{renderView()}</div>
+      {/* The game view will now occupy the full width */}
+      <div className={containerClasses}>{renderView()}</div>
     </div>
   );
 }
