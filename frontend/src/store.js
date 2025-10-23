@@ -10,6 +10,7 @@ export const useStore = create((set, get) => ({
   gameResult: null,
   lobbyState: { users: [], rooms: [] },
   roomState: null,
+  gameState: null,
 
   // Actions
   // FIX: Add a dedicated action to handle client-side view changes.
@@ -39,6 +40,7 @@ export const useStore = create((set, get) => ({
       roomState: null,
       lobbyState: { users: [], rooms: [] },
       gameResult: null,
+      gameState: null,
     });
   },
 
@@ -68,9 +70,18 @@ export const useStore = create((set, get) => ({
   handleStateUpdate: (payload) => {
     // The backend sends the view and all relevant state.
     // The frontend's only job is to apply it. All logic is now on the backend.
-    set((state) => {
-      // If a field isn't in the payload (e.g., roomState), it keeps its existing value.
-      return { ...state, ...payload };
-    });
+    set((state) => ({
+      ...state,
+      ...payload,
+      // If the new view is NOT 'game', explicitly clear the gameState.
+      // This prevents stale game data from persisting when a player leaves a game.
+      // If the payload doesn't include a view, gameState remains untouched.
+      gameState:
+        payload.view === "game"
+          ? payload.gameState
+          : payload.view
+          ? null
+          : state.gameState,
+    }));
   },
 }));
