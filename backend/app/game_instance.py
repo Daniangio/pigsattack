@@ -226,10 +226,11 @@ class GameInstance:
         if not threat_id:
             if self.state.attraction_phase_state == "FIRST_PASS":
                 if matching_threats:
-                    self.state.add_log(f"Invalid action: {player.username} must select a matching threat.")
+                    self.state.add_log(f"Invalid action: {player.username} must select a matching threat during the First Pass.")
                     return False # Rule: You *must* choose if your lure matches.
-                # Valid skip (no match)
-                self.state.add_log(f"{player.username} has no matching lure and skips the First Pass.")
+                # This case is now handled automatically by _find_next_attraction_turn.
+                # A player should not be able to manually skip if they have no matching lure.
+                return False
             
             elif self.state.attraction_phase_state == "SECOND_PASS":
                 if available_threats:
@@ -315,6 +316,30 @@ class GameInstance:
                 next_player_id = pid
                 break
         
+        # --- Automatic Skip Logic ---
+        # If we found a player, check if they should be skipped automatically.
+        if next_player_id and self.state.attraction_phase_state == "FIRST_PASS":
+            player = self.state.players[next_player_id]
+            plan = self.state.player_plans[next_player_id]
+            available_threats = [
+                t for t in self.state.current_threats 
+                if t.id in self.state.available_threat_ids
+            ]
+            matching_threats = [
+                t for t in available_threats 
+                if t.lure == plan.lure_card
+            ]
+            
+            # If there are no threats matching the player's lure, they are skipped.
+            if not matching_threats:
+                self.state.add_log(f"{player.username} has no matching lure and is skipped during the First Pass.")
+                self.state.unassigned_player_ids.remove(next_player_id)
+                # Recursively call to find the *next* player's turn.
+                self._find_next_attraction_turn()
+                return # Stop execution to avoid setting the turn player below.
+
+        # --- End Automatic Skip Logic ---
+
         self.state.attraction_turn_player_id = next_player_id
         
         if not next_player_id:

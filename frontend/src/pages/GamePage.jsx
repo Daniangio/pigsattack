@@ -111,12 +111,33 @@ const LureIcon = ({ lure }) => {
   );
 };
 
+// --- NEW: Player Tag for assigned cards ---
+const PlayerTag = ({ username }) => {
+  return (
+    <div className="absolute -top-3 -right-3 bg-indigo-600 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg border-2 border-gray-800">
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        className="h-4 w-4 inline-block mr-1"
+        viewBox="0 0 20 20"
+        fill="currentColor"
+      >
+        <path
+          fillRule="evenodd"
+          d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"
+          clipRule="evenodd"
+        />
+      </svg>
+      {username}
+    </div>
+  );
+};
+
 // --- UPDATED: Threat Card Component ---
 const ThreatCard = ({
   threat,
   onClick,
   isSelected,
-  isSelectable,
+  isSelectable, // Can the current player click this?
   isAvailable,
 }) => {
   if (!threat) return null;
@@ -126,6 +147,7 @@ const ThreatCard = ({
   let borderStyle = "border-gray-700";
   let cursorStyle = "cursor-default";
   let opacityStyle = "opacity-100";
+  let positionStyle = "relative"; // For the player tag
 
   if (!isAvailable) {
     borderStyle = "border-gray-900";
@@ -141,7 +163,7 @@ const ThreatCard = ({
 
   return (
     <div
-      className={`${baseStyle} ${borderStyle} ${cursorStyle} ${opacityStyle}`}
+      className={`${baseStyle} ${borderStyle} ${cursorStyle} ${opacityStyle} ${positionStyle}`}
       onClick={onClick}
     >
       <div>
@@ -268,6 +290,19 @@ const AttractionPhaseActions = ({ sendGameAction, player, gameState }) => {
     players,
   } = gameState;
 
+  // --- NEW: Create a map of which player has which threat ---
+  const threatAssignments = useMemo(() => {
+    const assignments = {};
+    if (!players) return assignments;
+
+    Object.values(players).forEach((p) => {
+      if (p.assigned_threat) {
+        assignments[p.assigned_threat.id] = p.username;
+      }
+    });
+    return assignments;
+  }, [players]);
+
   const isMyTurn = player.user_id === attraction_turn_player_id;
   const myPlan = player_plans[player.user_id];
   const myLure = myPlan.lure_card;
@@ -301,22 +336,7 @@ const AttractionPhaseActions = ({ sendGameAction, player, gameState }) => {
       attraction_phase_state,
     ]);
 
-  // --- Button Logic ---
-  let canSkip = false;
-  let skipText = "Skip";
-  if (isMyTurn) {
-    if (attraction_phase_state === "FIRST_PASS") {
-      // Can only skip if no lures match
-      canSkip = matchingThreats.length === 0;
-      skipText = "No Matching Lure";
-    } else {
-      // SECOND_PASS
-      // Can only skip if no threats are left
-      canSkip = availableThreats.length === 0;
-      skipText = "No Threats Left";
-    }
-  }
-
+  // --- UPDATED: Button Logic ---
   const canConfirm = selectedThreatId !== null;
 
   // --- Handlers ---
@@ -335,25 +355,9 @@ const AttractionPhaseActions = ({ sendGameAction, player, gameState }) => {
     }
   };
 
-  const handleSkip = () => {
-    if (canSkip) {
-      sendGameAction("select_threat", { threat_id: null });
-    }
-  };
-
   // --- Render ---
-  if (!isMyTurn) {
-    const currentPlayerName =
-      players[attraction_turn_player_id]?.username || "A player";
-    return (
-      <div className="text-center p-4">
-        <h3 className="text-2xl text-gray-300">Phase: ATTRACTION</h3>
-        <p className="text-xl text-yellow-300 animate-pulse mt-2">
-          Waiting for {currentPlayerName} to choose a threat...
-        </p>
-      </div>
-    );
-  }
+  const currentPlayerName =
+    players[attraction_turn_player_id]?.username || "A player";
 
   return (
     <div className="space-y-4 p-4 bg-gray-700 bg-opacity-80 rounded-lg">
@@ -362,44 +366,56 @@ const AttractionPhaseActions = ({ sendGameAction, player, gameState }) => {
         {attraction_phase_state === "FIRST_PASS" ? "First Pass" : "Second Pass"}
         )
       </h3>
-      <p className="text-lg text-blue-300">
-        It's your turn. Your Lure: <LureIcon lure={myLure} />
-      </p>
+
+      {/* --- NEW: Turn Indicator --- */}
+      <div className="text-center p-3 bg-black bg-opacity-25 rounded-lg">
+        {isMyTurn ? (
+          <>
+            <p className="text-xl text-blue-300 animate-pulse">
+              It's your turn to choose!
+            </p>
+            <p className="text-md text-gray-200">
+              Your Lure: <LureIcon lure={myLure} />
+            </p>
+          </>
+        ) : (
+          <p className="text-xl text-yellow-300">
+            Waiting for {currentPlayerName} to choose a threat...
+          </p>
+        )}
+      </div>
 
       {/* --- Threat Display --- */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-4">
         {current_threats.map((threat) => {
-          const isAvailable = available_threat_ids.includes(threat.id);
-          const isSelectable = selectableThreats.some(
-            (t) => t.id === threat.id
-          );
+          const assignedTo = threatAssignments[threat.id];
+          const isAvailable = !assignedTo;
+          const isSelectable =
+            isMyTurn && selectableThreats.some((t) => t.id === threat.id);
           const isSelected = threat.id === selectedThreatId;
 
           return (
-            <ThreatCard
-              key={threat.id}
-              threat={threat}
-              isAvailable={isAvailable}
-              isSelectable={isSelectable}
-              isSelected={isSelected}
-              onClick={() => handleSelectThreat(threat.id)}
-            />
+            <div key={threat.id} className="relative">
+              <ThreatCard
+                key={threat.id}
+                threat={threat}
+                isAvailable={isAvailable}
+                isSelectable={isSelectable}
+                isSelected={isSelected}
+                onClick={() => handleSelectThreat(threat.id)}
+              />
+              {assignedTo && <PlayerTag username={assignedTo} />}
+            </div>
           );
         })}
       </div>
 
       {/* --- Action Buttons --- */}
-      <div className="flex justify-between items-center pt-4 border-t border-gray-600">
-        <button
-          onClick={handleSkip}
-          disabled={!canSkip}
-          className={`btn ${canSkip ? "btn-warning" : "btn-disabled"}`}
-        >
-          {skipText}
-        </button>
+      <div className="flex justify-end items-center pt-4 border-t border-gray-600">
+        {/* The "No Matching Lure" button is removed as the server handles this skip automatically */}
         <button
           onClick={handleSubmit}
-          disabled={!canConfirm}
+          disabled={!canConfirm || !isMyTurn}
           className={`btn ${
             canConfirm ? "btn-primary" : "btn-disabled"
           } text-xl px-8`}
