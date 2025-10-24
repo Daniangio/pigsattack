@@ -2,6 +2,15 @@ import React, { useState, useMemo, useEffect, useRef } from "react";
 import { useStore } from "../store";
 import gameBackground from "../images/game-background.png"; // Load the background image
 
+// --- CARD IMAGES ---
+import bloodyRagsCard from "../images/cards/lure-bloody-rags.png";
+import strangeNoisesCard from "../images/cards/lure-strange-noises.png";
+import fallenFruitCard from "../images/cards/lure-fallen-fruit.png";
+import scavengeCard from "../images/cards/action-scavenge.png";
+import fortifyCard from "../images/cards/action-fortify.png";
+import armoryRunCard from "../images/cards/action-armory-run.png";
+import schemeCard from "../images/cards/action-scheme.png";
+
 // --- DATA CONSTANTS ---
 // From rules: "Armory Run adds +2 vs p", "Scavenge adds +2 vs k", etc.
 const ACTION_CARD_DEFENSE = {
@@ -10,6 +19,19 @@ const ACTION_CARD_DEFENSE = {
   ARMORY_RUN: { PARTS: 2, WIRING: 0, PLATES: 0 },
   SCHEME: { PARTS: 1, WIRING: 1, PLATES: 1 },
 };
+
+const LURE_CARDS = [
+  { id: "BLOODY_RAGS", name: "Bloody Rags", image: bloodyRagsCard },
+  { id: "STRANGE_NOISES", name: "Strange Noises", image: strangeNoisesCard },
+  { id: "FALLEN_FRUIT", name: "Fallen Fruit", image: fallenFruitCard },
+];
+
+const ACTION_CARDS = [
+  { id: "SCAVENGE", name: "Scavenge", image: scavengeCard },
+  { id: "FORTIFY", name: "Fortify", image: fortifyCard },
+  { id: "ARMORY_RUN", name: "Armory Run", image: armoryRunCard },
+  { id: "SCHEME", name: "Scheme", image: schemeCard },
+];
 
 // --- HELPER COMPONENTS ---
 
@@ -337,33 +359,50 @@ const PlanningPhaseActions = ({
       <p className="text-gray-300 pt-4 border-t border-gray-600">
         Choose your Lure and Action cards:
       </p>
-      <div className="flex flex-col sm:flex-row justify-around space-y-4 sm:space-y-0 sm:space-x-4">
-        <div className="flex-1">
-          <label className="block text-gray-300 mb-2">Lure Card</label>
-          <select
-            value={lure}
-            onChange={(e) => setLure(e.target.value)}
-            className="p-2 rounded bg-gray-800 text-white w-full"
-          >
-            <option value="BLOODY_RAGS">Bloody Rags</option>
-            <option value="STRANGE_NOISES">Strange Noises</option>
-            <option value="FALLEN_FRUIT">Fallen Fruit</option>
-          </select>
-        </div>
-        <div className="flex-1">
-          <label className="block text-gray-300 mb-2">Action Card</label>
-          <select
-            value={action}
-            onChange={(e) => setAction(e.target.value)}
-            className="p-2 rounded bg-gray-800 text-white w-full"
-          >
-            <option value="SCAVENGE">Scavenge</option>
-            <option value="FORTIFY">Fortify</option>
-            <option value="ARMORY_RUN">Armory Run</option>
-            <option value="SCHEME">Scheme</option>
-          </select>
+      {/* --- Lure Card Selection --- */}
+      <div className="mb-4">
+        <label className="block text-gray-300 mb-2 font-semibold">
+          Choose a Lure Card
+        </label>
+        <div className="flex justify-center space-x-2 sm:space-x-4">
+          {LURE_CARDS.map((card) => (
+            <img
+              key={card.id}
+              src={card.image}
+              alt={card.name}
+              onClick={() => setLure(card.id)}
+              className={`w-1/4 max-w-[120px] rounded-lg cursor-pointer transition-all duration-200 ${
+                lure === card.id
+                  ? "ring-4 ring-blue-400 shadow-lg scale-105"
+                  : "ring-2 ring-transparent hover:ring-blue-500"
+              }`}
+            />
+          ))}
         </div>
       </div>
+
+      {/* --- Action Card Selection --- */}
+      <div className="mb-4">
+        <label className="block text-gray-300 mb-2 font-semibold">
+          Choose an Action Card
+        </label>
+        <div className="flex justify-center space-x-2 sm:space-x-4">
+          {ACTION_CARDS.map((card) => (
+            <img
+              key={card.id}
+              src={card.image}
+              alt={card.name}
+              onClick={() => setAction(card.id)}
+              className={`w-1/4 max-w-[120px] rounded-lg cursor-pointer transition-all duration-200 ${
+                action === card.id
+                  ? "ring-4 ring-blue-400 shadow-lg scale-105"
+                  : "ring-2 ring-transparent hover:ring-blue-500"
+              }`}
+            />
+          ))}
+        </div>
+      </div>
+
       <button
         onClick={handleSubmit}
         className="w-full btn btn-primary text-xl mt-4"
