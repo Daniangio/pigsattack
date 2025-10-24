@@ -13,6 +13,53 @@ const ACTION_CARD_DEFENSE = {
 
 // --- HELPER COMPONENTS ---
 
+// --- NEW: Shared Turn Status Icon Component ---
+// This is now a single component used by both PlayerHUD and InitiativeTrack
+const TurnStatusIcon = ({ turnStatus, size = "h-4 w-4" }) => {
+  const iconStyles = {
+    ACTIVE: "text-blue-300 animate-pulse",
+    WAITING: "text-green-400",
+    PENDING: "text-gray-500",
+  };
+  const title = {
+    ACTIVE: "Currently Deciding",
+    WAITING: "Turn Complete",
+    PENDING: "Waiting for turn",
+  };
+
+  const path = {
+    ACTIVE: "M15 13l-3 3m0 0l-3-3m3 3V8m0 13a9 9 0 110-18 9 9 0 010 18z",
+    WAITING: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z",
+    PENDING: "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z",
+  };
+
+  if (!path[turnStatus]) return null;
+
+  return (
+    <span
+      title={title[turnStatus]}
+      className={`inline-block ${size} ${iconStyles[turnStatus]}`}
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        className="h-full w-full"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2}
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d={path[turnStatus]}
+        />
+      </svg>
+      <span className="sr-only">{title[turnStatus]}</span>
+    </span>
+  );
+};
+// --- END NEW COMPONENT ---
+
 const PlayerStatusPill = ({ status }) => {
   const baseClasses = "px-3 py-1 text-sm font-semibold rounded-full shadow-md";
   const statusStyles = {
@@ -28,25 +75,20 @@ const PlayerStatusPill = ({ status }) => {
   );
 };
 
-// --- FIX: Game Log updated to stack from bottom ---
+// --- Game Log to stack from bottom ---
 const GameLog = ({ logs }) => {
   const logEndRef = useRef(null);
-
-  // Reverse the logs so newest are at the bottom
-  const reversedLogs = useMemo(
-    () => (logs ? logs.slice().reverse() : []),
-    [logs]
-  );
+  const gameLogs = logs || [];
 
   useEffect(() => {
     // Scroll to the new message at the bottom
     logEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [reversedLogs]);
+  }, [gameLogs]);
 
   return (
     <div className="w-full h-48 bg-gray-900 bg-opacity-80 rounded-lg p-4 font-mono text-sm text-white overflow-y-auto shadow-inner flex flex-col">
-      {/* Map the reversed logs */}
-      {reversedLogs.map((log, index) => (
+      {/* Map the logs in their original order */}
+      {gameLogs.map((log, index) => (
         <p key={index} className="text-green-400">
           <span className="text-gray-500 mr-2">&gt;</span>
           {log}
@@ -58,8 +100,12 @@ const GameLog = ({ logs }) => {
   );
 };
 
-const PlayerHUD = ({ player, isSelf }) => {
+// --- UPDATED: PlayerHUD component ---
+// Now accepts `turnStatus` prop and uses the shared `TurnStatusIcon`
+const PlayerHUD = ({ player, isSelf, turnStatus }) => {
+  if (!player) return null; // Add guard for missing player prop
   const { scrap } = player;
+
   return (
     <li
       className={`p-4 bg-gray-800 bg-opacity-70 rounded-lg shadow-lg flex justify-between items-center transition-all duration-300 ${
@@ -67,7 +113,13 @@ const PlayerHUD = ({ player, isSelf }) => {
       }`}
     >
       <div>
-        <span className="text-xl font-bold text-white">{player.username}</span>
+        <span className="text-xl font-bold text-white flex items-center">
+          {player.username}
+          {/* Use the new shared component */}
+          {/* <div className="ml-2">
+            <TurnStatusIcon turnStatus={turnStatus} size="h-6 w-6" />
+          </div> */}
+        </span>
         {isSelf && <span className="text-blue-300"> (You)</span>}
         <div className="flex space-x-2 mt-2">
           <span className="text-red-500 font-semibold">HP: {player.hp}</span>
@@ -87,6 +139,36 @@ const PlayerHUD = ({ player, isSelf }) => {
     </li>
   );
 };
+
+// --- Initiative Track Component ---
+const InitiativeTrack = ({
+  initiative_queue,
+  players,
+  getPlayerTurnStatus,
+}) => {
+  return (
+    <div className="flex flex-col items-center justify-center space-y-2">
+      {initiative_queue.map((pid, index) => (
+        <React.Fragment key={pid}>
+          <div className="relative flex items-center justify-center w-full max-w-xs bg-indigo-900 text-white font-semibold px-4 py-2 rounded-lg shadow-md border-2 border-indigo-700">
+            {/* Use the new shared component, wrapped in a div for positioning */}
+            <span className="flex-grow">{players[pid]?.username || "???"}</span>
+            <div className="mr-2 flex-shrink-0">
+              <TurnStatusIcon
+                turnStatus={getPlayerTurnStatus(pid)}
+                size="h-8 w-8"
+              />
+            </div>
+          </div>
+          {index < initiative_queue.length - 1 && (
+            <span className="text-2xl text-gray-400 font-light">&darr;</span>
+          )}
+        </React.Fragment>
+      ))}
+    </div>
+  );
+};
+// --- END UPDATED COMPONENT ---
 
 // --- NEW: Lure Icon Component ---
 const LureIcon = ({ lure }) => {
@@ -117,7 +199,7 @@ const PlayerTag = ({ username }) => {
     <div className="absolute -top-3 -right-3 bg-indigo-600 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg border-2 border-gray-800">
       <svg
         xmlns="http://www.w3.org/2000/svg"
-        className="h-4 w-4 inline-block mr-1"
+        className="h-1 w-1 inline-block mr-1"
         viewBox="0 0 20 20"
         fill="currentColor"
       >
@@ -143,7 +225,7 @@ const ThreatCard = ({
   if (!threat) return null;
 
   const baseStyle =
-    "bg-gray-800 bg-opacity-90 rounded-lg shadow-lg p-4 border flex flex-col justify-between transition-all duration-200";
+    "bg-gray-800 bg-opacity-90 rounded-lg shadow-lg p-4 border flex flex-col justify-between transition-all duration-200 h-full"; // Added h-full
   let borderStyle = "border-gray-700";
   let cursorStyle = "cursor-default";
   let opacityStyle = "opacity-100";
@@ -175,7 +257,9 @@ const ThreatCard = ({
           &ldquo;{threat.ability || "No special ability."}&rdquo;
         </p>
       </div>
-      <div className="flex justify-around text-center p-2 bg-black bg-opacity-20 rounded">
+      <div className="flex justify-around text-center p-2 bg-black bg-opacity-20 rounded mt-auto">
+        {" "}
+        {/* Added mt-auto */}
         <div>
           <span className="text-red-400 font-semibold text-sm">Ferocity</span>
           <p className="text-xl font-bold">{threat.ferocity}</p>
@@ -207,6 +291,15 @@ const PlanningPhaseActions = ({
   const handleSubmit = () => {
     sendGameAction("submit_plan", { lure, action });
   };
+
+  // Add guard for playerState
+  if (!playerState) {
+    return (
+      <div className="text-center p-4">
+        <h3 className="text-xl text-yellow-400">Loading plan...</h3>
+      </div>
+    );
+  }
 
   if (playerState.ready) {
     return (
@@ -244,8 +337,8 @@ const PlanningPhaseActions = ({
       <p className="text-gray-300 pt-4 border-t border-gray-600">
         Choose your Lure and Action cards:
       </p>
-      <div className="flex justify-around">
-        <div>
+      <div className="flex flex-col sm:flex-row justify-around space-y-4 sm:space-y-0 sm:space-x-4">
+        <div className="flex-1">
           <label className="block text-gray-300 mb-2">Lure Card</label>
           <select
             value={lure}
@@ -257,7 +350,7 @@ const PlanningPhaseActions = ({
             <option value="FALLEN_FRUIT">Fallen Fruit</option>
           </select>
         </div>
-        <div>
+        <div className="flex-1">
           <label className="block text-gray-300 mb-2">Action Card</label>
           <select
             value={action}
@@ -271,7 +364,10 @@ const PlanningPhaseActions = ({
           </select>
         </div>
       </div>
-      <button onClick={handleSubmit} className="w-full btn btn-primary text-xl">
+      <button
+        onClick={handleSubmit}
+        className="w-full btn btn-primary text-xl mt-4"
+      >
         Submit Plan
       </button>
     </div>
@@ -305,6 +401,16 @@ const AttractionPhaseActions = ({ sendGameAction, player, gameState }) => {
 
   const isMyTurn = player.user_id === attraction_turn_player_id;
   const myPlan = player_plans[player.user_id];
+
+  // --- FIX: Add guard for myPlan ---
+  if (!myPlan) {
+    return (
+      <div className="text-center p-4">
+        <h3 className="text-xl text-yellow-400">Loading attraction state...</h3>
+      </div>
+    );
+  }
+
   const myLure = myPlan.lure_card;
 
   const { availableThreats, selectableThreats, matchingThreats } =
@@ -397,7 +503,6 @@ const AttractionPhaseActions = ({ sendGameAction, player, gameState }) => {
           return (
             <div key={threat.id} className="relative">
               <ThreatCard
-                key={threat.id}
                 threat={threat}
                 isAvailable={isAvailable}
                 isSelectable={isSelectable}
@@ -442,6 +547,11 @@ const DefensePhaseActions = ({
 
   // --- NEW: Calculate Base Defense ---
   const baseDefense = useMemo(() => {
+    // --- FIX: Add guards for player and playerPlans ---
+    if (!player || !playerPlans) {
+      return { PARTS: 0, WIRING: 0, PLATES: 0 };
+    }
+
     const allCards = ["SCAVENGE", "FORTIFY", "ARMORY_RUN", "SCHEME"];
     const usedAction = playerPlans.action_card;
 
@@ -483,15 +593,15 @@ const DefensePhaseActions = ({
       WIRING: cardDefense.WIRING + upgradeDefense.WIRING,
       PLATES: cardDefense.PLATES + upgradeDefense.PLATES,
     };
-  }, [player.upgrades, playerPlans.action_card]);
+  }, [player, playerPlans]); // --- FIX: Use player and playerPlans as dependencies ---
   // --- END NEW ---
 
   const handleSubmit = () => {
     sendGameAction("submit_defense", {
       scrap_spent: {
-        PARTS: Number(parts),
-        WIRING: Number(wiring),
-        PLATES: Number(plates),
+        PARTS: Number(parts) || 0,
+        WIRING: Number(wiring) || 0,
+        PLATES: Number(plates) || 0,
       },
       arsenal_ids: [], // TODO: Add UI for selecting arsenal cards
     });
@@ -507,6 +617,15 @@ const DefensePhaseActions = ({
           </h4>
           <p className="text-gray-200">Waiting for other players...</p>
         </div>
+      </div>
+    );
+  }
+
+  // --- FIX: Add guard for defenseState ---
+  if (!defenseState) {
+    return (
+      <div className="text-center p-4">
+        <h3 className="text-xl text-yellow-400">Loading defense...</h3>
       </div>
     );
   }
@@ -528,7 +647,7 @@ const DefensePhaseActions = ({
       {/* Display Threat */}
       <div className="p-3 bg-red-900 bg-opacity-60 rounded">
         <h4 className="text-xl text-red-300">Your Threat: {threat?.name}</h4>
-        <p className="text-lg text-red-100 font-semibold text-center">
+        <p className="text-lg text-red-100 font-semibold text-center flex flex-wrap justify-center">
           <span className="mr-3">Ferocity: {threat?.ferocity}</span>
           <span className="mr-3">Cunning: {threat?.cunning}</span>
           <span>Mass: {threat?.mass}</span>
@@ -538,8 +657,8 @@ const DefensePhaseActions = ({
       {/* --- NEW: Display Base Defense --- */}
       <div className="p-3 bg-gray-600 bg-opacity-80 rounded text-center">
         <h4 className="text-lg text-white font-semibold">Your Base Defense</h4>
-        <p className="text-lg text-gray-200">(from cards + upgrades)</p>
-        <p className="text-xl font-bold mt-1">
+        <p className="text-gray-200 text-sm">(from cards + upgrades)</p>
+        <p className="text-xl font-bold mt-1 flex flex-wrap justify-center">
           <span className="text-red-400 mr-3">P: {baseDefense.PARTS}</span>
           <span className="text-blue-400 mr-3">W: {baseDefense.WIRING}</span>
           <span className="text-green-400">Pl: {baseDefense.PLATES}</span>
@@ -550,8 +669,8 @@ const DefensePhaseActions = ({
       <p className="text-gray-300 pt-4 border-t border-gray-600">
         Spend Scrap to defend (1 Scrap = +2 Defense):
       </p>
-      <div className="flex justify-around">
-        <div>
+      <div className="flex flex-col sm:flex-row justify-around space-y-4 sm:space-y-0 sm:space-x-2">
+        <div className="flex-1 text-center sm:text-left">
           <label className="block text-red-400">Parts (vs Ferocity)</label>
           <input
             type="number"
@@ -563,7 +682,7 @@ const DefensePhaseActions = ({
           />
           <span className="text-gray-400 text-sm"> / {player.scrap.PARTS}</span>
         </div>
-        <div>
+        <div className="flex-1 text-center sm:text-left">
           <label className="block text-blue-400">Wiring (vs Cunning)</label>
           <input
             type="number"
@@ -578,7 +697,7 @@ const DefensePhaseActions = ({
             / {player.scrap.WIRING}
           </span>
         </div>
-        <div>
+        <div className="flex-1 text-center sm:text-left">
           <label className="block text-green-400">Plates (vs Mass)</label>
           <input
             type="number"
@@ -594,7 +713,10 @@ const DefensePhaseActions = ({
           </span>
         </div>
       </div>
-      <button onClick={handleSubmit} className="w-full btn btn-primary text-xl">
+      <button
+        onClick={handleSubmit}
+        className="w-full btn btn-primary text-xl mt-4"
+      >
         Submit Defense
       </button>
     </div>
@@ -619,18 +741,23 @@ const GamePage = ({ onLogout, sendMessage }) => {
   const handleReturnToLobby = () => sendMessage({ action: "return_to_lobby" });
 
   const self = useMemo(() => {
-    return gameState ? gameState.players[user.id] : null;
+    // Add guard for gameState.players
+    return gameState?.players ? gameState.players[user.id] : null;
   }, [gameState, user.id]);
 
   const selfPlans = useMemo(() => {
-    return gameState ? gameState.player_plans[user.id] : null;
+    // Add guard for gameState.player_plans
+    return gameState?.player_plans ? gameState.player_plans[user.id] : null;
   }, [gameState, user.id]);
 
   const selfDefense = useMemo(() => {
-    return gameState ? gameState.player_defenses[user.id] : null;
+    // Add guard for gameState.player_defenses
+    return gameState?.player_defenses
+      ? gameState.player_defenses[user.id]
+      : null;
   }, [gameState, user.id]);
 
-  if (!gameState || !self) {
+  if (!gameState || !user) {
     return (
       <div
         className="flex justify-center items-center min-h-screen bg-gray-900 text-white bg-cover bg-center bg-fixed"
@@ -641,19 +768,57 @@ const GamePage = ({ onLogout, sendMessage }) => {
     );
   }
 
-  const { phase, log, initiative_queue, first_player, current_threats } =
-    gameState;
+  const {
+    phase,
+    log,
+    initiative_queue,
+    current_threats,
+    attraction_turn_player_id,
+    player_plans,
+    player_defenses,
+  } = gameState;
+
+  const getPlayerTurnStatus = (playerId) => {
+    if (phase === "ATTRACTION") {
+      if (playerId === attraction_turn_player_id) {
+        return "ACTIVE";
+      }
+      // A player has "acted" if they are no longer in the initiative queue for this phase
+      // This logic is flawed, let's check unassigned_player_ids
+      const hasActed = !gameState.unassigned_player_ids.includes(playerId);
+      return hasActed ? "WAITING" : "PENDING";
+    }
+
+    if (phase === "PLANNING") {
+      const plan = player_plans[playerId];
+      return plan?.ready ? "WAITING" : "ACTIVE";
+    }
+
+    if (phase === "DEFENSE") {
+      const defense = player_defenses[playerId];
+      // If they have no threat, they are effectively "waiting"
+      const hasNoThreat = !gameState.players[playerId]?.assigned_threat;
+      return defense?.ready || hasNoThreat ? "WAITING" : "ACTIVE";
+    }
+
+    return "NONE"; // No specific turn status for other phases
+  };
+
+  // --- FIX: Safer logic for spectators and eliminated players ---
   const isSpectator = !self;
-  const hasLeft = self.status === "SURRENDERED" || self.status === "ELIMINATED";
+  const hasLeft = self
+    ? self.status === "SURRENDERED" || self.status === "ELIMINATED"
+    : false;
+  // --- END FIX ---
 
   return (
     // --- FIX: Fullscreen Background ---
     <div
-      className="p-8 min-h-screen text-white bg-cover bg-center bg-fixed"
+      className="p-4 sm:p-8 min-h-screen text-white bg-cover bg-center bg-fixed"
       style={{ backgroundImage: `url(${gameBackground})` }}
     >
-      <header className="flex justify-between items-center mb-6">
-        <h1 className="text-4xl font-bold text-indigo-300 [text-shadow:_0_2px_4px_rgb(0_0_0_/_50%)]">
+      <header className="flex flex-col sm:flex-row justify-between items-center mb-6 space-y-4 sm:space-y-0">
+        <h1 className="text-3xl sm:text-4xl font-bold text-indigo-300 [text-shadow:_0_2px_4px_rgb(0_0_0_/_50%)]">
           Wild Pigs Will Attack!
         </h1>
         <button onClick={onLogout} className="btn btn-danger">
@@ -661,31 +826,35 @@ const GamePage = ({ onLogout, sendMessage }) => {
         </button>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* --- Left Column (Players & Info) --- */}
-        <div className="md:col-span-1 space-y-4">
+        <div className="lg:col-span-1 space-y-4">
           <div className="p-4 bg-gray-800 bg-opacity-70 rounded-lg shadow-lg">
             <h2 className="text-2xl font-semibold mb-3">Players</h2>
             <ul className="space-y-3">
+              {/* --- FIX: Pass turnStatus to PlayerHUD --- */}
               {initiative_queue.map((pid) => (
                 <PlayerHUD
                   key={pid}
                   player={gameState.players[pid]}
                   isSelf={pid === user.id}
+                  turnStatus={getPlayerTurnStatus(pid)}
                 />
               ))}
             </ul>
-          </div>
-          <div className="p-4 bg-gray-800 bg-opacity-70 rounded-lg shadow-lg">
-            <h3 className="text-xl font-semibold">First Player</h3>
-            <p className="text-blue-300">
-              {gameState.players[first_player]?.username || "Unknown"}
-            </p>
+            <h2 className="text-2xl font-semibold mt-6 mb-4 pt-4 border-t border-gray-600">
+              Turn Order
+            </h2>
+            <InitiativeTrack
+              initiative_queue={initiative_queue}
+              players={gameState.players}
+              getPlayerTurnStatus={getPlayerTurnStatus}
+            />
           </div>
         </div>
 
         {/* --- Center Column (Log & Actions) --- */}
-        <div className="md:col-span-2 space-y-4">
+        <div className="lg:col-span-2 space-y-4">
           <GameLog logs={log} />
 
           <div className="p-4 bg-gray-800 bg-opacity-70 rounded-lg shadow-lg">

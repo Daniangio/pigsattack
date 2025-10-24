@@ -143,10 +143,16 @@ class GameInstance:
         active_pids = [p.user_id for p in self.state.get_active_players()]
         
         if phase == GamePhase.PLANNING:
+            # Handle edge case where there are no active players
+            if not active_pids:
+                 return True
             return all(
                 self.state.player_plans[pid].ready for pid in active_pids
             )
         elif phase == GamePhase.DEFENSE:
+            # Handle edge case where there are no active players
+            if not active_pids:
+                 return True
             return all(
                 self.state.player_defenses[pid].ready for pid in active_pids
             )
@@ -283,6 +289,16 @@ class GameInstance:
                     self.state.unassigned_player_ids.remove(user_id)
                 self.state.add_log(f"{player.username} left, advancing attraction turn.")
                 self._find_next_attraction_turn()
+            
+            # If player leaves during a "wait" phase, check if we can advance
+            if self.state.phase == GamePhase.PLANNING:
+                if self._check_if_all_ready(GamePhase.PLANNING):
+                    self._advance_to(GamePhase.ATTRACTION)
+            elif self.state.phase == GamePhase.DEFENSE:
+                 if self._check_if_all_ready(GamePhase.DEFENSE):
+                    self._resolve_all_defenses()
+                    if self.state.phase != GamePhase.GAME_OVER:
+                        self._advance_to(GamePhase.ACTION)
             # --- END NEW LOGIC ---
 
             self._check_for_game_over()
@@ -294,6 +310,11 @@ class GameInstance:
         """Phase 1: Reveal Threat cards."""
         num_threats = len(self.state.get_active_players())
         
+        if num_threats == 0:
+            self.state.add_log("No active players to reveal threats for.")
+            self._check_for_game_over() # This will end the game
+            return
+
         for _ in range(num_threats):
             if not self.state.threat_deck:
                 self.state.add_log("Threat deck is empty! The wilderness is quiet... for now.")
@@ -353,7 +374,15 @@ class GameInstance:
                     p.user_id for p in self.state.get_active_players() 
                     if not p.assigned_threat # Find all active players who still don't have a threat
                 ]
-                self._find_next_attraction_turn() # Find the first player for the second pass
+
+                # --- FIX: Check if there are any unassigned players OR available threats ---
+                # If no one needs a threat, or no threats are left, skip second pass
+                if not self.state.unassigned_player_ids or not self.state.available_threat_ids:
+                    self.state.add_log("No players or no threats remaining for Second Pass. Skipping.")
+                    self.state.attraction_turn_player_id = None
+                    self._advance_to(GamePhase.DEFENSE)
+                else:
+                    self._find_next_attraction_turn() # Find the first player for the second pass
             else:
                 # Second pass is over
                 self.state.add_log("Attraction phase complete.")
@@ -370,6 +399,13 @@ class GameInstance:
         self.state.available_threat_ids = [t.id for t in self.state.current_threats]
         self.state.unassigned_player_ids = [p.user_id for p in self.state.get_active_players()]
         
+        # --- FIX: Check if there are any threats or players ---
+        if not self.state.current_threats or not self.state.unassigned_player_ids:
+            self.state.add_log("No threats or no active players. Skipping Attraction Phase.")
+            self._advance_to(GamePhase.DEFENSE)
+            return
+        # --- END FIX ---
+
         # Start the turn-based process
         self._find_next_attraction_turn()
         
@@ -424,6 +460,12 @@ class GameInstance:
     def _resolve_action(self):
         """Phase 5: Resolve Survivor Action cards in initiative order."""
         self.state.add_log("Resolving actions...")
+        
+        # --- Check for game over before starting ---
+        self._check_for_game_over()
+        if self.state.phase == GamePhase.GAME_OVER:
+            return
+
         for user_id in self.state.initiative_queue:
             player = self.state.players.get(user_id)
             if not player or player.status != "ACTIVE":
@@ -486,13 +528,22 @@ class GameInstance:
         ]
         
         for user_id in active_players_in_order:
-            if self.state.player_plans[user_id].action_card == SurvivorActionCard.SCHEME:
+            # We must check if the plan exists, in case a player was eliminated
+            # before the action phase but after planning.
+            plan = self.state.player_plans.get(user_id)
+            if plan and plan.action_card == SurvivorActionCard.SCHEME:
                 schemers.append(user_id)
             else:
                 non_schemers.append(user_id)
         
-        # New queue is [schemers (in old order)] + [non-schemers (in old order)]
+        # --- LOGIC CHANGE FOR "LAST-IN, FIRST-OUT" ---
+        # Per your request, reverse the list of schemers so the
+        # last player in initiative to scheme becomes the first player.
+        schemers.reverse()
+        
+        # New queue is [schemers (in REVERSE old order)] + [non_schemers (in old order)]
         self.state.initiative_queue = schemers + non_schemers
+        # --- END LOGIC CHANGE ---
         
         # Pass first player token
         if self.state.initiative_queue:
@@ -501,16 +552,21 @@ class GameInstance:
         else:
             # This can happen if all remaining players schemed and then disconnected
             self.state.first_player = None 
+            self.state.add_log("No active players left to set initiative.")
 
-        # Start the next round
-        self._start_round()
+        # Check for game over *before* starting the next round
+        self._check_for_game_over()
+        if self.state.phase != GamePhase.GAME_OVER:
+            self._start_round()
 
     def _check_for_game_over(self):
         """Checks if only one player remains active."""
         active_players = self.state.get_active_players()
         if len(active_players) <= 1:
-            self.state.winner = active_players[0] if active_players else None
-            self._advance_to(GamePhase.GAME_OVER)
+            # Check if phase is already GAME_OVER to avoid repeat logs
+            if self.state.phase != GamePhase.GAME_OVER:
+                self.state.winner = active_players[0] if active_players else None
+                self._advance_to(GamePhase.GAME_OVER)
             
     def _resolve_game_over(self):
         """Announces the winner."""
