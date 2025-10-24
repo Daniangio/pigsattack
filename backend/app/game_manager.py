@@ -88,6 +88,14 @@ class GameManager:
                     arsenal_ids=payload.get("arsenal_ids", [])
                 )
             
+            # --- START NEW ACTION ---
+            elif action == "select_threat":
+                action_success = game.select_threat(
+                    user_id=user.id,
+                    threat_id=payload.get("threat_id") # Can be None if skipping
+                )
+            # --- END NEW ACTION ---
+
             # TODO: Add other actions like "buy_upgrade", "buy_arsenal"
             
             else:
@@ -211,3 +219,5 @@ class GameManager:
         if game_id in active_games:
             del active_games[game_id]
             print(f"GameInstance {game_id} removed from active_games.")
+        else:
+            print(f"Warning: GameInstance {game_id} not found in active_games.")

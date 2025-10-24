@@ -111,11 +111,39 @@ const LureIcon = ({ lure }) => {
   );
 };
 
-// --- NEW: Threat Card Component ---
-const ThreatCard = ({ threat }) => {
+// --- UPDATED: Threat Card Component ---
+const ThreatCard = ({
+  threat,
+  onClick,
+  isSelected,
+  isSelectable,
+  isAvailable,
+}) => {
   if (!threat) return null;
+
+  const baseStyle =
+    "bg-gray-800 bg-opacity-90 rounded-lg shadow-lg p-4 border flex flex-col justify-between transition-all duration-200";
+  let borderStyle = "border-gray-700";
+  let cursorStyle = "cursor-default";
+  let opacityStyle = "opacity-100";
+
+  if (!isAvailable) {
+    borderStyle = "border-gray-900";
+    opacityStyle = "opacity-40";
+  } else if (isSelectable) {
+    borderStyle = "border-blue-400";
+    cursorStyle = "cursor-pointer hover:border-blue-300";
+  }
+
+  if (isSelected) {
+    borderStyle = "border-green-500 ring-2 ring-green-500";
+  }
+
   return (
-    <div className="bg-gray-800 bg-opacity-90 rounded-lg shadow-lg p-4 border border-gray-700 flex flex-col justify-between">
+    <div
+      className={`${baseStyle} ${borderStyle} ${cursorStyle} ${opacityStyle}`}
+      onClick={onClick}
+    >
       <div>
         <div className="flex justify-between items-center mb-2">
           <h4 className="text-lg font-bold text-red-300">{threat.name}</h4>
@@ -177,7 +205,15 @@ const PlanningPhaseActions = ({
         <p className="text-gray-300 mb-3">Wilderness Threats:</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {currentThreats.map((threat) => (
-            <ThreatCard key={threat.id} threat={threat} />
+            // Render non-interactive threat card
+            <ThreatCard
+              key={threat.id}
+              threat={threat}
+              isAvailable={true}
+              isSelectable={false}
+              isSelected={false}
+              onClick={null}
+            />
           ))}
         </div>
       </div>
@@ -219,6 +255,162 @@ const PlanningPhaseActions = ({
     </div>
   );
 };
+
+// --- START NEW COMPONENT: AttractionPhaseActions ---
+const AttractionPhaseActions = ({ sendGameAction, player, gameState }) => {
+  const [selectedThreatId, setSelectedThreatId] = useState(null);
+  const {
+    attraction_phase_state,
+    attraction_turn_player_id,
+    current_threats,
+    available_threat_ids,
+    player_plans,
+    players,
+  } = gameState;
+
+  const isMyTurn = player.user_id === attraction_turn_player_id;
+  const myPlan = player_plans[player.user_id];
+  const myLure = myPlan.lure_card;
+
+  const { availableThreats, selectableThreats, matchingThreats } =
+    useMemo(() => {
+      const available = current_threats.filter((t) =>
+        available_threat_ids.includes(t.id)
+      );
+      const matching = available.filter((t) => t.lure === myLure);
+
+      let selectable = [];
+      if (isMyTurn) {
+        if (attraction_phase_state === "FIRST_PASS") {
+          selectable = matching; // Rule: Can only select matching
+        } else {
+          // SECOND_PASS
+          selectable = available; // Rule: Can select any remainder
+        }
+      }
+      return {
+        availableThreats: available,
+        selectableThreats: selectable,
+        matchingThreats: matching,
+      };
+    }, [
+      current_threats,
+      available_threat_ids,
+      myLure,
+      isMyTurn,
+      attraction_phase_state,
+    ]);
+
+  // --- Button Logic ---
+  let canSkip = false;
+  let skipText = "Skip";
+  if (isMyTurn) {
+    if (attraction_phase_state === "FIRST_PASS") {
+      // Can only skip if no lures match
+      canSkip = matchingThreats.length === 0;
+      skipText = "No Matching Lure";
+    } else {
+      // SECOND_PASS
+      // Can only skip if no threats are left
+      canSkip = availableThreats.length === 0;
+      skipText = "No Threats Left";
+    }
+  }
+
+  const canConfirm = selectedThreatId !== null;
+
+  // --- Handlers ---
+  const handleSelectThreat = (threatId) => {
+    if (!isMyTurn) return;
+    // Check if this threat is actually in the selectable list
+    if (selectableThreats.some((t) => t.id === threatId)) {
+      setSelectedThreatId(threatId);
+    }
+  };
+
+  const handleSubmit = () => {
+    if (canConfirm) {
+      sendGameAction("select_threat", { threat_id: selectedThreatId });
+      setSelectedThreatId(null);
+    }
+  };
+
+  const handleSkip = () => {
+    if (canSkip) {
+      sendGameAction("select_threat", { threat_id: null });
+    }
+  };
+
+  // --- Render ---
+  if (!isMyTurn) {
+    const currentPlayerName =
+      players[attraction_turn_player_id]?.username || "A player";
+    return (
+      <div className="text-center p-4">
+        <h3 className="text-2xl text-gray-300">Phase: ATTRACTION</h3>
+        <p className="text-xl text-yellow-300 animate-pulse mt-2">
+          Waiting for {currentPlayerName} to choose a threat...
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4 p-4 bg-gray-700 bg-opacity-80 rounded-lg">
+      <h3 className="text-2xl font-semibold text-white">
+        Phase: ATTRACTION (
+        {attraction_phase_state === "FIRST_PASS" ? "First Pass" : "Second Pass"}
+        )
+      </h3>
+      <p className="text-lg text-blue-300">
+        It's your turn. Your Lure: <LureIcon lure={myLure} />
+      </p>
+
+      {/* --- Threat Display --- */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-4">
+        {current_threats.map((threat) => {
+          const isAvailable = available_threat_ids.includes(threat.id);
+          const isSelectable = selectableThreats.some(
+            (t) => t.id === threat.id
+          );
+          const isSelected = threat.id === selectedThreatId;
+
+          return (
+            <ThreatCard
+              key={threat.id}
+              threat={threat}
+              isAvailable={isAvailable}
+              isSelectable={isSelectable}
+              isSelected={isSelected}
+              onClick={() => handleSelectThreat(threat.id)}
+            />
+          );
+        })}
+      </div>
+
+      {/* --- Action Buttons --- */}
+      <div className="flex justify-between items-center pt-4 border-t border-gray-600">
+        <button
+          onClick={handleSkip}
+          disabled={!canSkip}
+          className={`btn ${canSkip ? "btn-warning" : "btn-disabled"}`}
+        >
+          {skipText}
+        </button>
+        <button
+          onClick={handleSubmit}
+          disabled={!canConfirm}
+          className={`btn ${
+            canConfirm ? "btn-primary" : "btn-disabled"
+          } text-xl px-8`}
+        >
+          Confirm Selection
+        </button>
+      </div>
+    </div>
+  );
+};
+// --- END NEW COMPONENT ---
 
 // --- UPDATED: Defense Phase ---
 const DefensePhaseActions = ({
@@ -288,6 +480,20 @@ const DefensePhaseActions = ({
       arsenal_ids: [], // TODO: Add UI for selecting arsenal cards
     });
   };
+
+  if (!threat) {
+    return (
+      <div className="space-y-4 p-4 bg-gray-700 bg-opacity-80 rounded-lg">
+        <h3 className="text-2xl font-semibold text-white">Phase: DEFENSE</h3>
+        <div className="p-3 bg-gray-600 bg-opacity-80 rounded text-center">
+          <h4 className="text-lg text-white font-semibold">
+            You attracted no threat.
+          </h4>
+          <p className="text-gray-200">Waiting for other players...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (defenseState.ready) {
     return (
@@ -492,6 +698,16 @@ const GamePage = ({ onLogout, sendMessage }) => {
                     currentThreats={current_threats} // Pass threats
                   />
                 )}
+
+                {/* --- NEWLY ADDED --- */}
+                {phase === "ATTRACTION" && (
+                  <AttractionPhaseActions
+                    sendGameAction={sendGameAction}
+                    player={self}
+                    gameState={gameState}
+                  />
+                )}
+
                 {phase === "DEFENSE" && (
                   <DefensePhaseActions
                     sendGameAction={sendGameAction}
@@ -501,12 +717,16 @@ const GamePage = ({ onLogout, sendMessage }) => {
                     threat={self.assigned_threat}
                   />
                 )}
-                {phase !== "PLANNING" && phase !== "DEFENSE" && (
-                  <div className="text-center p-4">
-                    <h3 className="text-2xl text-gray-300">Phase: {phase}</h3>
-                    <p className="text-gray-400">Waiting for server...</p>
-                  </div>
-                )}
+
+                {/* --- UPDATED TO EXCLUDE NEW PHASE --- */}
+                {phase !== "PLANNING" &&
+                  phase !== "DEFENSE" &&
+                  phase !== "ATTRACTION" && (
+                    <div className="text-center p-4">
+                      <h3 className="text-2xl text-gray-300">Phase: {phase}</h3>
+                      <p className="text-gray-400">Waiting for server...</p>
+                    </div>
+                  )}
               </>
             )}
           </div>
