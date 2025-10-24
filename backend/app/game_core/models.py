@@ -38,6 +38,13 @@ class SurvivorActionCard(str, Enum):
 
 # --- Data-Only Card Models ---
 
+class Card(BaseModel):
+    """Base class for cards."""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    effect: str
+    cost: Dict[ScrapType, int] = Field(default_factory=dict)
+
 class ThreatCard(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
@@ -50,19 +57,11 @@ class ThreatCard(BaseModel):
     spoil: Dict[ScrapType, int] = Field(default_factory=dict)
     trophy: LureCard # Trophies are just LureCard enums
 
-class UpgradeCard(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    name: str
-    cost: Dict[ScrapType, int]
-    effect: str
+class UpgradeCard(Card):
     permanent_defense: Dict[ScrapType, int] = Field(default_factory=dict)
     special_effect_id: Optional[str] = None
 
-class ArsenalCard(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    name: str
-    cost: Dict[ScrapType, int]
-    effect: str
+class ArsenalCard(Card):
     defense_boost: Dict[ScrapType, int] = Field(default_factory=dict)
     special_effect_id: Optional[str] = None
 
@@ -75,7 +74,6 @@ class ScrapPool(BaseModel):
     def __init__(self, **data):
         super().__init__(**data)
         if not self.scraps:
-            # Initialize with 50 of each
             self.scraps.extend([ScrapType.PARTS] * 50)
             self.scraps.extend([ScrapType.WIRING] * 50)
             self.scraps.extend([ScrapType.PLATES] * 50)
@@ -86,19 +84,39 @@ class ScrapPool(BaseModel):
         drawn = []
         for _ in range(count):
             if not self.scraps:
-                break # Pool is empty
+                break
             drawn.append(self.scraps.pop(random.randint(0, len(self.scraps) - 1)))
         return drawn
     
     def add(self, scraps_to_add: List[ScrapType]):
         """Adds scrap back to the pool."""
         self.scraps.extend(scraps_to_add)
-        random.shuffle(self.scraps) # Not strictly necessary but good practice
+        random.shuffle(self.scraps)
+    
+    def add_from_dict(self, scraps_dict: Dict[ScrapType, int]):
+        """Adds scrap back to the pool from a cost dictionary."""
+        for scrap_type, amount in scraps_dict.items():
+            self.scraps.extend([scrap_type] * amount)
+        random.shuffle(self.scraps)
 
 class Market(BaseModel):
     """Holds the face-up market cards."""
     upgrade_market: List[UpgradeCard] = Field(default_factory=list)
     arsenal_market: List[ArsenalCard] = Field(default_factory=list)
+
+    def find_upgrade(self, card_id: str) -> Tuple[Optional[UpgradeCard], Optional[int]]:
+        """Finds an upgrade card by ID and returns it and its index."""
+        for i, card in enumerate(self.upgrade_market):
+            if card.id == card_id:
+                return card, i
+        return None, None
+        
+    def find_arsenal(self, card_id: str) -> Tuple[Optional[ArsenalCard], Optional[int]]:
+        """Finds an arsenal card by ID and returns it and its index."""
+        for i, card in enumerate(self.arsenal_market):
+            if card.id == card_id:
+                return card, i
+        return None, None
 
 class PlayerPlans(BaseModel):
     """Holds a player's submitted plan for the round."""
@@ -110,13 +128,13 @@ class PlayerDefense(BaseModel):
     """Holds a player's submitted defense for the round."""
     ready: bool = False
     scrap_spent: Dict[ScrapType, int] = Field(default_factory=dict)
-    arsenal_cards_used: List[str] = Field(default_factory=list) # List of ArsenalCard IDs
+    arsenal_cards_used: List[str] = Field(default_factory=list)
 
 class PlayerState(BaseModel):
     """Represents the complete state of a single player."""
     user_id: str
     username: str
-    status: str # "ACTIVE", "SURRENDERED", "ELIMINATED", "DISCONNECTED"
+    status: str 
     hp: int = 2
     scrap: Dict[ScrapType, int] = Field(default_factory=lambda: {
         ScrapType.PARTS: 0,
@@ -125,19 +143,34 @@ class PlayerState(BaseModel):
     })
     upgrades: List[UpgradeCard] = Field(default_factory=list)
     arsenal_hand: List[ArsenalCard] = Field(default_factory=list)
-    trophies: List[LureCard] = Field(default_factory=list) # Store trophies by their Lure type
+    trophies: List[LureCard] = Field(default_factory=list)
     
     # Round-specific state
     assigned_threat: Optional[ThreatCard] = None
     defense_result: Optional[str] = None # "KILL", "DEFEND", "FAIL"
+    action_choice_pending: Optional[str] = None # e.g., "SCAVENGE", "FORTIFY"
+
+    def can_afford(self, cost: Dict[ScrapType, int]) -> bool:
+        """Checks if the player has enough scrap for a given cost."""
+        for scrap_type, amount in cost.items():
+            if self.scrap.get(scrap_type, 0) < amount:
+                return False
+        return True
+
+    def pay_cost(self, cost: Dict[ScrapType, int]):
+        """Deducts scrap from the player for a given cost."""
+        if not self.can_afford(cost):
+            raise ValueError(f"Player {self.username} cannot afford cost.")
+        for scrap_type, amount in cost.items():
+            self.scrap[scrap_type] -= amount
 
 class GameState(BaseModel):
     """The root model for all state of a single game instance."""
     game_id: str
     phase: GamePhase = GamePhase.WILDERNESS
     players: Dict[str, PlayerState]
-    initiative_queue: List[str] # List of user_ids in order
-    first_player: str # user_id of the first player
+    initiative_queue: List[str]
+    first_player: str
     log: List[str] = Field(default_factory=list)
     
     # Decks
@@ -152,18 +185,23 @@ class GameState(BaseModel):
     player_plans: Dict[str, PlayerPlans] = Field(default_factory=dict)
     player_defenses: Dict[str, PlayerDefense] = Field(default_factory=dict)
     
-    # --- NEW FIELDS FOR ATTRACTION PHASE ---
-    attraction_phase_state: Optional[str] = None # "FIRST_PASS" or "SECOND_PASS"
-    attraction_turn_player_id: Optional[str] = None # user_id of player whose turn it is
-    available_threat_ids: List[str] = Field(default_factory=list) # IDs of threats not yet taken
-    unassigned_player_ids: List[str] = Field(default_factory=list) # user_ids of players who still need a threat
-    # --- END NEW FIELDS ---
+    # Attraction Phase state
+    attraction_phase_state: Optional[str] = None 
+    attraction_turn_player_id: Optional[str] = None
+    available_threat_ids: List[str] = Field(default_factory=list)
+    unassigned_player_ids: List[str] = Field(default_factory=list)
+    
+    # Action Phase state
+    action_turn_player_id: Optional[str] = None
     
     winner: Optional[PlayerState] = None
 
     def add_log(self, message: str):
         """Adds a message to the game log."""
         print(f"[{self.game_id}] {message}")
+        # Keep log from getting too long
+        if len(self.log) > 100:
+            self.log = self.log[-50:]
         self.log.append(message)
 
     def get_active_players(self) -> List[PlayerState]:
@@ -176,18 +214,15 @@ class GameState(BaseModel):
         information for all players *except* the one specified.
         """
         
-        # Helper to redact plans for other players
         def get_redacted_plans():
             redacted_plans = {}
             for pid, plan in self.player_plans.items():
                 if pid == player_id:
-                    redacted_plans[pid] = plan # Show self
+                    redacted_plans[pid] = plan
                 else:
-                    # Show only readiness for others
                     redacted_plans[pid] = PlayerPlans(ready=plan.ready)
             return redacted_plans
             
-        # Helper to redact defenses for other players
         def get_redacted_defenses():
             redacted_defenses = {}
             for pid, defense in self.player_defenses.items():
@@ -197,16 +232,13 @@ class GameState(BaseModel):
                      redacted_defenses[pid] = PlayerDefense(ready=defense.ready)
             return redacted_defenses
 
-        # Helper to redact other players' hands
         def get_redacted_players():
             redacted_players = {}
             for pid, player in self.players.items():
                 if pid == player_id:
-                    redacted_players[pid] = player # Show self
+                    redacted_players[pid] = player
                 else:
-                    # Redact arsenal hand
                     redacted_p = player.model_copy()
-                    # Show *count* of cards, not the cards themselves
                     redacted_p.arsenal_hand = [
                         ArsenalCard(id=f"hidden_{i}", name="Hidden", cost={}, effect="")
                         for i in range(len(player.arsenal_hand))
@@ -231,6 +263,7 @@ class GameState(BaseModel):
             "attraction_turn_player_id": self.attraction_turn_player_id,
             "available_threat_ids": self.available_threat_ids,
             "unassigned_player_ids": self.unassigned_player_ids,
+            "action_turn_player_id": self.action_turn_player_id, # Added this
         }
         
         return public_state

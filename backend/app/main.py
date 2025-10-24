@@ -11,9 +11,9 @@ from .player_router import router as player_router
 from .routers import fake_users_db 
 from .security import get_current_user
 
-# --- NEW GAME CORE IMPORTS ---
+# --- GAME CORE IMPORTS ---
 from .game_manager import GameManager
-# --- END NEW IMPORTS ---
+from .game_core.models import GamePhase
 
 
 app = FastAPI()
@@ -117,8 +117,20 @@ async def websocket_endpoint(websocket: WebSocket):
 
             if is_in_game:
                 # --- User is IN-GAME ---
-                # Only allow game-related actions
                 
+                # --- Get Player Status ---
+                player_status = None
+                game = game_manager.active_games.get(current_room.game_record_id)
+                if game:
+                    player_state = game.state.players.get(user.id)
+                    if player_state:
+                        player_status = player_state.status
+                
+                game_is_over = game and game.state.phase == GamePhase.GAME_OVER
+                player_is_not_active = player_status and player_status != "ACTIVE"
+                # --- End Get Status ---
+
+
                 if action == "game_action":
                     await game_manager.handle_game_action(
                         user=user,
@@ -130,6 +142,20 @@ async def websocket_endpoint(websocket: WebSocket):
                 elif action == "surrender":
                     await room_manager.handle_surrender(user, connection_manager)
                 
+                # --- MODIFIED LOGIC for return_to_lobby ---
+                elif action == "return_to_lobby":
+                    if game_is_over or player_is_not_active:
+                        # Allow post-game or eliminated/surrendered players to return
+                        await room_manager.return_to_lobby(user, connection_manager)
+                    else:
+                        # Player is ACTIVE and game is ongoing, block
+                        print(f"User {user.username} in game, ignoring action: {action}")
+                        await connection_manager.send_to_user(user.id, {
+                            "type": "error",
+                            "payload": {"message": f"Cannot '{action}' while in an active game."}
+                        })
+                # --- END MODIFIED LOGIC ---
+
                 elif action == "request_view":
                     # --- REFACTOR FIX ---
                     # User is in a game but requesting a pre-game view (e.g., "lobby")
@@ -141,7 +167,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     # Explicit action to get back to game
                     await game_manager.broadcast_game_state(current_room.game_record_id)
 
-                elif action in ("create_room", "join_room", "leave_room", "start_game", "return_to_lobby"):
+                elif action in ("create_room", "join_room", "leave_room", "start_game"):
                     # Ignore other lobby/room actions while in-game
                     print(f"User {user.username} in game, ignoring action: {action}")
                     # Optionally send an error message to the client here
