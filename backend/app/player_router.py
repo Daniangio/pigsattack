@@ -31,6 +31,7 @@ async def get_player_profile(user_id: str):
             game_history.append(GameHistoryEntry(
                 game_record_id=game_id,
                 room_name=record.room_name,
+                started_at=record.started_at,
                 ended_at=record.ended_at,
                 is_win=is_win))
 

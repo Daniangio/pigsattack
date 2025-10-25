@@ -122,27 +122,40 @@ class GameManager:
             return
             
         game.handle_player_leave(user.id, status.value)
-        await self.broadcast_game_state(game_id)
         
         if game.state.phase == GamePhase.GAME_OVER:
+            # The game is over, so we terminate it. Terminate_game will send the
+            # final "post_game" state. We should NOT broadcast the intermediate
+            # game state here, as it can cause a race condition on the client.
             winner_state = game.state.winner
             await self.terminate_game(game_id, winner_state)
+        else:
+            # The game is not over, so we broadcast the new state.
+            await self.broadcast_game_state(game_id)
 
-    async def broadcast_game_state(self, game_id: str):
+    async def broadcast_game_state(self, game_id: str, specific_user_id: Optional[str] = None):
         """Sends the appropriate redacted state to every player in the game."""
         game = self.active_games.get(game_id)
         if not game:
             return
-            
-        all_states = game.get_all_player_states()
         
-        for user_id, state_payload in all_states.items():
-            if user_id in self.conn_manager.active_connections:
-                msg = {
-                    "type": "game_state_update",
-                    "payload": state_payload
-                }
-                await self.conn_manager.send_to_user(user_id, msg)
+        if specific_user_id:
+            # Send state to only one user (e.g., a new spectator)
+            # Spectators get a "redacted" view as if they were a non-existent player
+            state_payload = game.get_state_for_player("spectator_view")
+            msg = {"type": "game_state_update", "payload": state_payload}
+            await self.conn_manager.send_to_user(specific_user_id, msg)
+        else:
+            # Broadcast to all players in the game
+            all_states = game.get_all_player_states()
+            
+            for user_id, state_payload in all_states.items():
+                if user_id in self.conn_manager.active_connections:
+                    msg = {
+                        "type": "game_state_update",
+                        "payload": state_payload
+                    }
+                    await self.conn_manager.send_to_user(user_id, msg)
         
         # TODO: Send spectator state
 

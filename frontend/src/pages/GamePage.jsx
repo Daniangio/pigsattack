@@ -115,7 +115,7 @@ const GameLog = ({ logs }) => {
   }, [gameLogs]);
 
   return (
-    <div className="w-full h-40 bg-gray-900 bg-opacity-80 rounded-lg p-3 font-mono text-xs text-white overflow-y-auto shadow-inner flex flex-col">
+    <div className="w-full h-full bg-gray-900 bg-opacity-80 rounded-lg p-3 font-mono text-xs text-white overflow-y-auto shadow-inner flex flex-col">
       {gameLogs.map((log, index) => (
         <p key={index} className="text-green-400">
           <span className="text-gray-500 mr-2">&gt;</span>
@@ -177,58 +177,86 @@ const playerPortraits = [
   playerIcon5,
 ];
 
-const PlayerCard = ({ player, isSelf, turnStatus, playerIndex }) => {
+const PlayerCard = ({
+  player,
+  isSelf,
+  turnStatus,
+  portrait,
+  turnOrder,
+  isViewing,
+  onClick,
+}) => {
   if (!player) return null;
   const { scrap, hp, username, status } = player;
-
   const isInactive = status !== "ACTIVE";
-  const portrait = playerPortraits[playerIndex % playerPortraits.length];
 
   return (
-    <div className="flex flex-col items-center">
-      <div
-        className={`relative w-36 h-36 flex-shrink-0 transition-opacity duration-300 ${
-          isInactive ? "opacity-50" : ""
-        } ${isSelf ? "scale-110 mx-2" : ""}`}
-      >
-        <img
-          src={portrait}
-          alt="Player Portrait"
-          className="absolute top-1/2 left-1/2 h-[70%] w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-md object-cover"
-        />
-        <img
-          src={playerFrame}
-          alt="Player Frame"
-          className="absolute inset-0 w-full h-full z-10"
-        />
+    <div className="flex items-center gap-1 cursor-pointer" onClick={onClick}>
+      <div className="flex flex-col items-center">
+        <div
+          className={`relative w-32 h-32 flex-shrink-0 transition-all duration-200 ${
+            isInactive ? "opacity-50" : ""
+          } ${
+            isViewing // Updated logic
+              ? "ring-4 ring-yellow-300 shadow-lg"
+              : isSelf
+              ? "shadow-[0_0_12px_2px_rgba(59,130,246,0.7)]"
+              : ""
+          }`}
+        >
+          <img
+            src={portrait}
+            alt="Player Portrait"
+            className="absolute top-1/2 left-1/2 h-[80%] w-[80%] -translate-x-1/2 -translate-y-1/2 rounded-md object-cover"
+          />
+          <img
+            src={playerFrame}
+            alt="Player Frame"
+            className="absolute inset-0 w-full h-full z-10"
+          />
 
-        {/* Turn Status Icon */}
-        <div className="absolute top-1.5 right-2.5 z-20">
-          <TurnStatusIcon turnStatus={turnStatus} size="h-5 w-5" />
-        </div>
-
-        {/* Player Name */}
-        <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-[90%] z-20">
-          <div className="bg-black bg-opacity-60 rounded px-1 py-0.5 text-center">
+          {/* Turn Order Position */}
+          <div className="absolute top-1.5 left-1.5 z-20 bg-black bg-opacity-70 rounded-full w-6 h-6 flex items-center justify-center">
             <span
-              className={`text-xs font-bold truncate ${
-                isSelf ? "text-blue-300" : "text-white"
-              }`}
+              className="text-white font-bold text-sm"
+              style={{ textShadow: "1px 1px 2px black" }}
             >
-              {username}
+              {turnOrder}
             </span>
+          </div>
+
+          {/* Turn Status Icon */}
+          <div className="absolute top-0.5 right-0.5 z-20">
+            <TurnStatusIcon turnStatus={turnStatus} size="h-5 w-5" />
+          </div>
+          {/* Player Name */}
+          <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-[90%] z-20">
+            <div className="bg-black bg-opacity-60 rounded px-1 py-0.5 text-center">
+              <span
+                className={`text-xs font-bold truncate block ${
+                  isSelf ? "text-blue-300" : "text-white"
+                }`}
+              >
+                {username}
+              </span>
+            </div>
           </div>
         </div>
       </div>
       {/* HP and Scrap Counts */}
-      <div className="mt-2 flex items-end justify-center space-x-2">
-        <ScrapIcon image={hpIcon} count={hp} textColor="text-red-500" />
+      <div className="flex flex-col items-center justify-center space-y-1">
+        <ScrapIcon
+          image={hpIcon}
+          count={hp}
+          textColor="text-red-500"
+          size="w-7 h-7"
+        />
         {[
           { type: "PARTS", img: scrapsParts, count: scrap.PARTS },
           { type: "WIRING", img: scrapsWiring, count: scrap.WIRING },
           { type: "PLATES", img: scrapsPlates, count: scrap.PLATES },
         ].map(({ img, count }) => (
-          <ScrapIcon key={img} image={img} count={count} />
+          <ScrapIcon key={img} image={img} count={count} size="w-7 h-7" />
         ))}
       </div>
     </div>
@@ -295,8 +323,13 @@ const ThreatCard = ({
   );
 };
 
-const ScrapIcon = ({ image, count, textColor = "text-white" }) => (
-  <div className="relative w-8 h-8">
+const ScrapIcon = ({
+  image,
+  count,
+  textColor = "text-white",
+  size = "w-8 h-8",
+}) => (
+  <div className={`relative ${size}`}>
     <img src={image} alt="scrap icon" className="w-full h-full" />
     <div className="absolute -top-1 -right-1 bg-black bg-opacity-70 rounded-full w-5 h-5 flex items-center justify-center">
       <span
@@ -319,7 +352,7 @@ const MarketCard = ({ card, cardType, onClick, isSelectable, isDimmed }) => {
       ? "border-green-700 bg-green-900 bg-opacity-30"
       : "border-red-700 bg-red-900 bg-opacity-30";
 
-  let baseStyle = `bg-gray-800 bg-opacity-90 rounded-lg shadow-lg p-3 border flex flex-col justify-between transition-all duration-200 h-full ${cardColor}`;
+  let baseStyle = `bg-gray-800 bg-opacity-90 rounded-md shadow-md p-2 border flex flex-col justify-between transition-all duration-200 h-full ${cardColor}`;
   let cursorStyle = "cursor-default";
   let opacityStyle = "opacity-100";
 
@@ -327,7 +360,6 @@ const MarketCard = ({ card, cardType, onClick, isSelectable, isDimmed }) => {
     baseStyle += " ring-2 ring-blue-400 hover:ring-blue-300";
     cursorStyle = "cursor-pointer";
   } else if (isDimmed) {
-    // Dim the card if it's the player's turn to buy but they can't afford it
     opacityStyle = "opacity-50";
     cursorStyle = "cursor-not-allowed";
   }
@@ -338,42 +370,157 @@ const MarketCard = ({ card, cardType, onClick, isSelectable, isDimmed }) => {
       onClick={onClick}
     >
       <div>
-        <h4 className="text-base font-bold text-white mb-1">{card.name}</h4>
-        <p className="text-xs text-gray-300 mb-2 italic">
+        <h4 className="text-xs font-bold text-white mb-1">{card.name}</h4>
+        <p className="text-[10px] leading-tight text-gray-300 mb-1.5 italic">
           &ldquo;{card.effect}&rdquo;
         </p>
       </div>
-      <div className="flex justify-start items-center space-x-2 p-1.5 bg-black bg-opacity-20 rounded mt-auto">
-        <span className="text-gray-400 text-xs font-semibold">Cost:</span>
+      <div className="flex justify-start items-center space-x-1.5 p-1 bg-black bg-opacity-20 rounded mt-auto">
+        <span className="text-gray-400 text-[10px] font-semibold">Cost:</span>
         {costItems.length > 0 ? (
           costItems.map(([type, val]) => (
             <span
               key={type}
-              className={`font-bold text-sm ${SCRAP_TYPES[type].color}`}
+              className={`font-bold text-xs ${SCRAP_TYPES[type].color}`}
             >
               {val} {SCRAP_TYPES[type].name.charAt(0)}
             </span>
           ))
         ) : (
-          <span className="text-gray-500 text-sm">Free</span>
+          <span className="text-gray-500 text-xs">Free</span>
         )}
       </div>
     </div>
   );
 };
 
-// --- Market Display Component ---
-const MarketDisplay = ({
-  market,
+// --- Owned Card Component ---
+const OwnedCard = ({ card, cardType }) => {
+  if (!card) return null;
+  const cardColor =
+    cardType === "UPGRADE"
+      ? "border-green-700 bg-green-900 bg-opacity-30"
+      : "border-red-700 bg-red-900 bg-opacity-30";
+  const costItems = Object.entries(card.cost).filter(([, val]) => val > 0);
+
+  return (
+    <div
+      className={`bg-gray-800 rounded-md shadow-md p-2 border ${cardColor} w-40 flex-shrink-0`}
+    >
+      <h4 className="text-xs font-bold text-white mb-1 truncate">
+        {card.name}
+      </h4>
+      <p className="text-[10px] leading-tight text-gray-300 mb-1.5 italic">
+        &ldquo;{card.effect}&rdquo;
+      </p>
+      {card.name !== "Hidden" && ( // Don't show cost for hidden cards
+        <div className="flex justify-start items-center space-x-1 p-1 bg-black bg-opacity-20 rounded mt-auto">
+          <span className="text-gray-400 text-[10px] font-semibold">Cost:</span>
+          {costItems.length > 0 ? (
+            costItems.map(([type, val]) => (
+              <span
+                key={type}
+                className={`font-bold text-xs ${SCRAP_TYPES[type].color}`}
+              >
+                {val}
+                {SCRAP_TYPES[type].name.charAt(0)}
+              </span>
+            ))
+          ) : (
+            <span className="text-gray-500 text-xs">Free</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// --- Player Assets Component ---
+const PlayerAssets = ({ player, isSelf, onReturn }) => {
+  if (!player) return null;
+
+  return (
+    <div className="w-full h-full flex flex-col">
+      <div className="flex-shrink-0 flex justify-between items-center mb-1 px-2">
+        <h3 className="text-lg font-semibold text-gray-300">
+          {isSelf ? "Your Assets" : `Viewing ${player.username}'s Assets`}
+        </h3>
+        {!isSelf && (
+          <button onClick={onReturn} className="btn btn-primary btn-sm">
+            &larr; Return to My Board
+          </button>
+        )}
+      </div>
+      <div className="flex-grow overflow-y-auto">
+        {/* Upgrades Section */}
+        <div>
+          <h4 className="text-sm font-bold text-green-400 mb-1 px-2">
+            Upgrades ({player.upgrades.length})
+          </h4>
+          <div className="flex gap-2 overflow-x-auto p-2 bg-black bg-opacity-10 rounded">
+            {player.upgrades.length > 0 ? (
+              player.upgrades.map((card) => (
+                <OwnedCard key={card.id} card={card} cardType="UPGRADE" />
+              ))
+            ) : (
+              <p className="text-gray-500 text-sm italic px-2">
+                No upgrades built.
+              </p>
+            )}
+          </div>
+        </div>
+        {/* Arsenal Section */}
+        <div className="mt-2">
+          <h4 className="text-sm font-bold text-red-400 mb-1 px-2">
+            Arsenal ({player.arsenal_hand.length})
+          </h4>
+          <div className="flex gap-2 overflow-x-auto p-2 bg-black bg-opacity-10 rounded">
+            {player.arsenal_hand.length > 0 ? (
+              player.arsenal_hand.map((card, index) => (
+                <OwnedCard
+                  key={card.id || `hidden-${index}`}
+                  card={card}
+                  cardType="ARSENAL"
+                />
+              ))
+            ) : (
+              <p className="text-gray-500 text-sm italic px-2">
+                No arsenal cards in hand.
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- Confirmation Modal ---
+const ConfirmationModal = ({ title, message, onConfirm, onCancel }) => (
+  <div className="fixed inset-0 bg-black bg-opacity-75 flex justify-center items-center z-50">
+    <div className="bg-gray-800 p-6 rounded-lg shadow-xl border border-gray-600">
+      <h3 className="text-xl font-semibold text-white mb-4">{title}</h3>
+      <p className="text-gray-300 mb-6">{message}</p>
+      <div className="flex justify-end space-x-4">
+        <button onClick={onCancel} className="btn btn-secondary">
+          Cancel
+        </button>
+        <button onClick={onConfirm} className="btn btn-danger">
+          Confirm
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
+// --- Market Column Components ---
+const UpgradesMarket = ({
+  upgrade_market,
   myTurn,
   choiceType,
   onCardSelect,
   playerScrap,
 }) => {
-  if (!market) return null;
-
-  const { upgrade_market = [], arsenal_market = [] } = market;
-
   // Helper function to check affordability
   const canAfford = (cardCost) => {
     if (!playerScrap || !cardCost) return false;
@@ -386,62 +533,78 @@ const MarketDisplay = ({
   };
 
   const isMyTurnToBuyUpgrades = myTurn && choiceType === "FORTIFY";
+
+  return (
+    <div className="p-3 bg-gray-800 bg-opacity-70 rounded-lg shadow-lg h-full overflow-y-auto">
+      <h2 className="text-lg font-semibold mb-2 text-green-400 sticky top-0 bg-gray-800 py-1 z-10">
+        Upgrades
+      </h2>
+      <div className="space-y-2">
+        {upgrade_market.map((card) => {
+          const isAffordable = canAfford(card.cost);
+          const isSelectable = isMyTurnToBuyUpgrades && isAffordable;
+          const isDimmed = isMyTurnToBuyUpgrades && !isAffordable;
+
+          return (
+            <MarketCard
+              key={card.id}
+              card={card}
+              cardType="UPGRADE"
+              isSelectable={isSelectable}
+              isDimmed={isDimmed}
+              onClick={() => isSelectable && onCardSelect("FORTIFY", card.id)}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+const ArsenalMarket = ({
+  arsenal_market,
+  myTurn,
+  choiceType,
+  onCardSelect,
+  playerScrap,
+}) => {
+  // Helper function to check affordability
+  const canAfford = (cardCost) => {
+    if (!playerScrap || !cardCost) return false;
+    for (const [scrapType, cost] of Object.entries(cardCost)) {
+      if ((playerScrap[scrapType] || 0) < cost) {
+        return false;
+      }
+    }
+    return true;
+  };
+
   const isMyTurnToBuyArsenal = myTurn && choiceType === "ARMORY_RUN";
 
   return (
-    <div className="p-3 bg-gray-800 bg-opacity-70 rounded-lg shadow-lg">
-      <h2 className="text-xl font-semibold mb-3">Market</h2>
-      <div className="space-y-3">
-        {/* Upgrades */}
-        <div>
-          <h3 className="text-lg font-semibold text-green-400 mb-2">
-            Upgrades
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            {upgrade_market.map((card) => {
-              const isAffordable = canAfford(card.cost);
-              const isSelectable = isMyTurnToBuyUpgrades && isAffordable;
-              const isDimmed = isMyTurnToBuyUpgrades && !isAffordable;
+    <div className="p-3 bg-gray-800 bg-opacity-70 rounded-lg shadow-lg h-full overflow-y-auto">
+      <h2 className="text-lg font-semibold mb-2 text-red-400 sticky top-0 bg-gray-800 py-1 z-10">
+        Arsenal
+      </h2>
+      <div className="space-y-2">
+        {arsenal_market.map((card) => {
+          const isAffordable = canAfford(card.cost);
+          const isSelectable = isMyTurnToBuyArsenal && isAffordable;
+          const isDimmed = isMyTurnToBuyArsenal && !isAffordable;
 
-              return (
-                <MarketCard
-                  key={card.id}
-                  card={card}
-                  cardType="UPGRADE"
-                  isSelectable={isSelectable}
-                  isDimmed={isDimmed}
-                  onClick={() =>
-                    isSelectable && onCardSelect("FORTIFY", card.id)
-                  }
-                />
-              );
-            })}
-          </div>
-        </div>
-        {/* Arsenal */}
-        <div>
-          <h3 className="text-lg font-semibold text-red-400 mb-2">Arsenal</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            {arsenal_market.map((card) => {
-              const isAffordable = canAfford(card.cost);
-              const isSelectable = isMyTurnToBuyArsenal && isAffordable;
-              const isDimmed = isMyTurnToBuyArsenal && !isAffordable;
-
-              return (
-                <MarketCard
-                  key={card.id}
-                  card={card}
-                  cardType="ARSENAL"
-                  isSelectable={isSelectable}
-                  isDimmed={isDimmed}
-                  onClick={() =>
-                    isSelectable && onCardSelect("ARMORY_RUN", card.id)
-                  }
-                />
-              );
-            })}
-          </div>
-        </div>
+          return (
+            <MarketCard
+              key={card.id}
+              card={card}
+              cardType="ARSENAL"
+              isSelectable={isSelectable}
+              isDimmed={isDimmed}
+              onClick={() =>
+                isSelectable && onCardSelect("ARMORY_RUN", card.id)
+              }
+            />
+          );
+        })}
       </div>
     </div>
   );
@@ -451,7 +614,8 @@ const MarketDisplay = ({
 
 const PlanningPhaseActions = ({
   sendGameAction,
-  playerState,
+  player,
+  playerPlans,
   currentThreats,
 }) => {
   const [lure, setLure] = useState("BLOODY_RAGS");
@@ -461,7 +625,7 @@ const PlanningPhaseActions = ({
     sendGameAction("submit_plan", { lure, action });
   };
 
-  if (!playerState) {
+  if (!playerPlans || !player) {
     return (
       <div className="text-center p-4">
         <h3 className="text-lg text-yellow-400">Loading plan...</h3>
@@ -469,7 +633,7 @@ const PlanningPhaseActions = ({
     );
   }
 
-  if (playerState.ready) {
+  if (playerPlans.ready) {
     return (
       <div className="text-center p-4">
         <h3 className="text-lg text-green-400">
@@ -481,7 +645,7 @@ const PlanningPhaseActions = ({
 
   return (
     <div className="space-y-3 p-3 bg-gray-700 bg-opacity-80 rounded-lg">
-      <h3 className="text-xl font-semibold text-white">Phase: PLANNING</h3>
+      <h3 className="text-xl font-semibold text-white">Game Events</h3>
 
       <div className="mb-3">
         <p className="text-gray-300 mb-2 text-sm">Wilderness Threats:</p>
@@ -499,48 +663,59 @@ const PlanningPhaseActions = ({
         </div>
       </div>
 
-      <p className="text-gray-300 pt-3 border-t border-gray-600 text-sm">
-        Choose your Lure and Action cards:
-      </p>
-      <div className="mb-3">
-        <label className="block text-gray-300 mb-2 font-semibold text-sm">
-          Choose a Lure Card
-        </label>
-        <div className="flex justify-center space-x-2 sm:space-x-4">
-          {LURE_CARDS.map((card) => (
-            <img
-              key={card.id}
-              src={card.image}
-              alt={card.name}
-              onClick={() => setLure(card.id)}
-              className={`w-1/4 max-w-[100px] rounded-lg cursor-pointer transition-all duration-200 ${
-                lure === card.id
-                  ? "ring-4 ring-blue-400 shadow-lg scale-105"
-                  : "ring-2 ring-transparent hover:ring-blue-500"
-              }`}
-            />
-          ))}
+      <div className="p-4 bg-black bg-opacity-25 rounded-lg">
+        <p className="text-gray-300 pt-3 border-t border-gray-600 text-sm">
+          Choose your Lure and Action cards:
+        </p>
+        <div className="mb-3">
+          <label className="block text-gray-300 mb-2 font-semibold text-sm">
+            Choose a Lure Card
+          </label>
+          <div className="flex justify-center space-x-2 sm:space-x-4">
+            {LURE_CARDS.map((card) => (
+              <div key={card.id} className="relative">
+                <img
+                  src={card.image}
+                  alt={card.name}
+                  onClick={() => {
+                    if (player.last_round_lure !== card.id) {
+                      setLure(card.id);
+                    }
+                  }}
+                  className={`w-full max-w-[100px] rounded-lg transition-all duration-200 ${
+                    player.last_round_lure === card.id
+                      ? "cursor-not-allowed opacity-50"
+                      : `cursor-pointer ${
+                          lure === card.id
+                            ? "ring-4 ring-blue-400 shadow-lg scale-105"
+                            : "ring-2 ring-transparent hover:ring-blue-500"
+                        }`
+                  }`}
+                />
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
 
-      <div className="mb-3">
-        <label className="block text-gray-300 mb-2 font-semibold text-sm">
-          Choose an Action Card
-        </label>
-        <div className="flex justify-center space-x-2 sm:space-x-4">
-          {ACTION_CARDS.map((card) => (
-            <img
-              key={card.id}
-              src={card.image}
-              alt={card.name}
-              onClick={() => setAction(card.id)}
-              className={`w-1/4 max-w-[100px] rounded-lg cursor-pointer transition-all duration-200 ${
-                action === card.id
-                  ? "ring-4 ring-blue-400 shadow-lg scale-105"
-                  : "ring-2 ring-transparent hover:ring-blue-500"
-              }`}
-            />
-          ))}
+        <div className="mb-3">
+          <label className="block text-gray-300 mb-2 font-semibold text-sm">
+            Choose an Action Card
+          </label>
+          <div className="flex justify-center space-x-2 sm:space-x-4">
+            {ACTION_CARDS.map((card) => (
+              <img
+                key={card.id}
+                src={card.image}
+                alt={card.name}
+                onClick={() => setAction(card.id)}
+                className={`w-1/4 max-w-[100px] rounded-lg cursor-pointer transition-all duration-200 ${
+                  action === card.id
+                    ? "ring-4 ring-blue-400 shadow-lg scale-105"
+                    : "ring-2 ring-transparent hover:ring-blue-500"
+                }`}
+              />
+            ))}
+          </div>
         </div>
       </div>
 
@@ -631,11 +806,7 @@ const AttractionPhaseActions = ({ sendGameAction, player, gameState }) => {
 
   return (
     <div className="space-y-3 p-3 bg-gray-700 bg-opacity-80 rounded-lg">
-      <h3 className="text-xl font-semibold text-white">
-        Phase: ATTRACTION (
-        {attraction_phase_state === "FIRST_PASS" ? "First Pass" : "Second Pass"}
-        )
-      </h3>
+      <h3 className="text-xl font-semibold text-white">Game Events</h3>
 
       <div className="text-center p-2 bg-black bg-opacity-25 rounded-lg">
         {isMyTurn ? (
@@ -645,6 +816,13 @@ const AttractionPhaseActions = ({ sendGameAction, player, gameState }) => {
             </p>
             <p className="text-sm text-gray-200">
               Your Lure: <LureIcon lure={myLure} />
+            </p>
+            <p className="text-xs text-gray-400">
+              Phase: ATTRACTION (
+              {attraction_phase_state === "FIRST_PASS"
+                ? "First Pass"
+                : "Second Pass"}
+              )
             </p>
           </>
         ) : (
@@ -785,7 +963,7 @@ const DefensePhaseActions = ({
 
   return (
     <div className="space-y-3 p-3 bg-gray-700 bg-opacity-80 rounded-lg">
-      <h3 className="text-xl font-semibold text-white">Phase: DEFENSE</h3>
+      <h3 className="text-xl font-semibold text-white">Game Events</h3>
 
       <div className="p-2 bg-red-900 bg-opacity-60 rounded">
         <h4 className="text-lg text-red-300">Your Threat: {threat?.name}</h4>
@@ -869,7 +1047,7 @@ const DefensePhaseActions = ({
   );
 };
 
-// --- NEW: Scavenge Choice Modal ---
+// --- Scavenge Choice Modal ---
 const ScavengeChoiceModal = ({ onConfirm }) => {
   const [selection, setSelection] = useState([]);
   const canConfirm = selection.length === 2;
@@ -948,7 +1126,7 @@ const ScavengeChoiceModal = ({ onConfirm }) => {
   );
 };
 
-// --- NEW: Action Phase Panel ---
+// --- Action Phase Panel ---
 const ActionPhaseActions = ({ sendGameAction, player, gameState }) => {
   const { action_turn_player_id, players } = gameState;
   const isMyTurn = player.user_id === action_turn_player_id;
@@ -973,7 +1151,7 @@ const ActionPhaseActions = ({ sendGameAction, player, gameState }) => {
 
   return (
     <div className="space-y-3 p-3 bg-gray-700 bg-opacity-80 rounded-lg">
-      <h3 className="text-xl font-semibold text-white">Phase: ACTION</h3>
+      <h3 className="text-xl font-semibold text-white">Game Events</h3>
 
       {myChoice === "SCAVENGE" && isMyTurn && (
         <ScavengeChoiceModal onConfirm={handleScavengeConfirm} />
@@ -986,6 +1164,7 @@ const ActionPhaseActions = ({ sendGameAction, player, gameState }) => {
               It's your turn to act!
             </p>
             <p className="text-sm text-gray-200">Your Action: {myChoice}</p>
+            <p className="text-xs text-gray-400">Phase: ACTION</p>
           </>
         ) : (
           <p className="text-lg text-yellow-300">
@@ -1014,6 +1193,28 @@ const ActionPhaseActions = ({ sendGameAction, player, gameState }) => {
 // --- MAIN GAME PAGE COMPONENT ---
 const GamePage = ({ onLogout, sendMessage }) => {
   const { user, gameState } = useStore();
+  const [showSurrenderModal, setShowSurrenderModal] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [viewingPlayerId, setViewingPlayerId] = useState(null); // NEW: State for viewing other players
+
+  // NEW: Stable portrait mapping
+  const playerPortraitsMap = useMemo(() => {
+    if (!gameState?.players) return {};
+    const playerIds = Object.keys(gameState.players);
+    const portraits = {};
+    playerIds.forEach((pid, index) => {
+      portraits[pid] = playerPortraits[index % playerPortraits.length];
+    });
+    return portraits;
+    // This dependency array ensures the map is created once when players are loaded.
+  }, [gameState?.players && Object.keys(gameState.players).join(",")]);
+
+  // NEW: Effect to set viewing player to self on load
+  useEffect(() => {
+    if (user?.id && !viewingPlayerId) {
+      setViewingPlayerId(user.id);
+    }
+  }, [user?.id, viewingPlayerId]);
 
   const sendGameAction = (action, data) => {
     sendMessage({
@@ -1025,8 +1226,14 @@ const GamePage = ({ onLogout, sendMessage }) => {
     });
   };
 
-  const handleSurrender = () => sendMessage({ action: "surrender" });
-  const handleReturnToLobby = () => sendMessage({ action: "return_to_lobby" });
+  const handleSurrender = () => {
+    sendMessage({ action: "surrender" });
+    setShowSurrenderModal(false);
+  };
+  const handleReturnToLobby = () => {
+    sendMessage({ action: "return_to_lobby" });
+  };
+  const handleLogout = () => onLogout();
 
   const self = useMemo(() => {
     return gameState?.players ? gameState.players[user.id] : null;
@@ -1047,7 +1254,7 @@ const GamePage = ({ onLogout, sendMessage }) => {
     if (!gameState || !user) {
       return (
         <div
-          className="flex justify-center items-center min-h-screen bg-gray-900 text-white bg-cover bg-center bg-fixed"
+          className="flex justify-center items-center min-h-screen bg-gray-900 text-white bg-cover bg-top bg-fixed"
           style={{ backgroundImage: `url(${gameBackground})` }}
         >
           Loading game state...
@@ -1108,7 +1315,7 @@ const GamePage = ({ onLogout, sendMessage }) => {
 
   return (
     <div
-      className="p-2 sm:p-4 min-h-screen text-white bg-cover bg-center bg-fixed"
+      className="h-screen w-screen text-white bg-cover bg-top bg-fixed flex flex-col"
       style={{
         backgroundImage: `url(${gameBackground})`,
         onError: (e) => {
@@ -1117,127 +1324,199 @@ const GamePage = ({ onLogout, sendMessage }) => {
         }, // Fallback
       }}
     >
-      {/* --- NEW: Constrain width --- */}
-      <div className="max-w-8xl mx-auto">
-        <header className="flex flex-col sm:flex-row justify-between items-center mb-4 space-y-2 sm:space-y-0">
+      {showSurrenderModal && (
+        <ConfirmationModal
+          title="Confirm Surrender"
+          message="Are you sure you want to surrender? This action cannot be undone."
+          onConfirm={handleSurrender}
+          onCancel={() => setShowSurrenderModal(false)}
+        />
+      )}
+      {showLogoutModal && (
+        <ConfirmationModal
+          title="Confirm Logout"
+          message="Are you sure you want to logout and leave the game?"
+          onConfirm={handleLogout}
+          onCancel={() => setShowLogoutModal(false)}
+        />
+      )}
+
+      {/* --- Top Bar (5% height) --- */}
+      <header
+        className="flex-shrink-0 flex justify-between items-center p-2 bg-black bg-opacity-40"
+        style={{ height: "5vh" }}
+      >
+        <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-indigo-300 [text-shadow:_0_2px_4px_rgb(0_0_0_/_50%)]">
             Wild Pigs Will Attack!
           </h1>
-          <button onClick={onLogout} className="btn btn-danger btn-sm">
+        </div>
+        <div className="space-x-2">
+          {!isSpectator && !hasLeft && (
+            <button
+              onClick={() => setShowSurrenderModal(true)}
+              className="btn btn-warning btn-sm"
+            >
+              Surrender
+            </button>
+          )}
+          <button
+            onClick={() => setShowLogoutModal(true)}
+            className="btn btn-danger btn-sm"
+          >
             Logout
           </button>
-        </header>
-
-        {/* --- Top Row (Players) --- */}
-        <div className="flex justify-center items-start gap-4 p-4 mb-4 rounded-lg overflow-x-auto">
-          {initiative_queue.map((pid, index) => (
-            <PlayerCard
-              key={pid}
-              player={gameState.players[pid]}
-              isSelf={pid === user.id}
-              turnStatus={getPlayerTurnStatus(pid)}
-              playerIndex={index}
-            />
-          ))}
         </div>
+      </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
-          {/* --- Left Column (Players & Info) --- */}
-          <div className="lg:col-span-1 space-y-4 flex flex-col">
-            {/* --- Market Display --- */}
-            <MarketDisplay
-              className="flex-grow"
-              market={market}
-              myTurn={!isSpectator && self.user_id === action_turn_player_id}
-              choiceType={!isSpectator ? self.action_choice_pending : null}
-              onCardSelect={handleMarketCardSelect}
-              playerScrap={!isSpectator ? self.scrap : {}}
-            />
-            <GameLog logs={log} />
-          </div>
-
-          {/* --- Center Column (Log & Actions) --- */}
-          <div className="lg:col-span-2">
-            <div className="p-3 bg-gray-800 bg-opacity-70 rounded-lg shadow-lg">
-              {isSpectator ? (
-                <p>You are spectating...</p>
-              ) : hasLeft ? (
-                <>
-                  <p className="text-lg text-yellow-300 mb-4">
-                    You are {self.status.toLowerCase()}. You can watch.
-                  </p>
-                  <button
-                    onClick={handleReturnToLobby}
-                    className="btn btn-primary text-lg px-6 py-2"
-                  >
-                    Return to Lobby
-                  </button>
-                </>
-              ) : (
-                <>
-                  {phase === "PLANNING" && (
-                    <PlanningPhaseActions
-                      sendGameAction={sendGameAction}
-                      playerState={selfPlans}
-                      currentThreats={current_threats}
-                    />
-                  )}
-
-                  {phase === "ATTRACTION" && (
-                    <AttractionPhaseActions
-                      sendGameAction={sendGameAction}
-                      player={self}
-                      gameState={gameState}
-                    />
-                  )}
-
-                  {phase === "DEFENSE" && (
-                    <DefensePhaseActions
-                      sendGameAction={sendGameAction}
-                      defenseState={selfDefense}
-                      player={self}
-                      playerPlans={selfPlans}
-                      threat={self.assigned_threat}
-                    />
-                  )}
-
-                  {/* --- NEW: Action Phase --- */}
-                  {phase === "ACTION" && (
-                    <ActionPhaseActions
-                      sendGameAction={sendGameAction}
-                      player={self}
-                      gameState={gameState}
-                    />
-                  )}
-
-                  {phase !== "PLANNING" &&
-                    phase !== "DEFENSE" &&
-                    phase !== "ATTRACTION" &&
-                    phase !== "ACTION" && (
-                      <div className="text-center p-4">
-                        <h3 className="text-xl text-gray-300">
-                          Phase: {phase}
-                        </h3>
-                        <p className="text-gray-400">Waiting for server...</p>
-                      </div>
-                    )}
-                </>
+      {/* --- Players Row (25% height) --- */}
+      <div
+        className="flex-shrink-0 flex justify-center items-center gap-4 p-1 overflow-x-auto bg-black bg-opacity-20"
+        style={{ height: "25vh" }}
+      >
+        {initiative_queue.map((pid, index) => {
+          const isViewing = pid === viewingPlayerId;
+          return (
+            <React.Fragment key={pid}>
+              <PlayerCard
+                player={gameState.players[pid]}
+                isSelf={pid === user.id}
+                portrait={playerPortraitsMap[pid]}
+                turnStatus={getPlayerTurnStatus(pid)}
+                turnOrder={index + 1}
+                isViewing={isViewing}
+                onClick={() => setViewingPlayerId(pid)}
+              />
+              {index < initiative_queue.length - 1 && (
+                <span className="text-3xl text-indigo-300 font-light opacity-70">
+                  &rarr;
+                </span>
               )}
-            </div>
-
-            {!isSpectator && !hasLeft && (
-              <div className="text-center mt-4">
-                <button
-                  onClick={handleSurrender}
-                  className="btn btn-warning text-base px-4 py-1.5"
-                >
-                  Surrender
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
+            </React.Fragment>
+          );
+        })}
       </div>
+
+      {/* --- Main Content Area (flex-grow) --- */}
+      <main className="flex-grow flex gap-2 p-2" style={{ height: "55vh" }}>
+        {/* Left Column (15%) */}
+        <div className="w-[15%] h-full">
+          <UpgradesMarket
+            upgrade_market={market.upgrade_market}
+            myTurn={!isSpectator && self.user_id === action_turn_player_id}
+            choiceType={!isSpectator ? self.action_choice_pending : null}
+            onCardSelect={handleMarketCardSelect}
+            playerScrap={!isSpectator ? self.scrap : {}}
+          />
+        </div>
+
+        {/* Center Column (70%) */}
+        <div className="w-[70%] h-full overflow-y-auto">
+          {isSpectator ? ( // Pure spectator from lobby
+            <div className="text-center p-4 bg-gray-800 bg-opacity-70 rounded-lg">
+              <h3 className="text-xl text-blue-300">You are spectating.</h3>
+              <p className="text-gray-400 mb-4">
+                You can watch the game unfold.
+              </p>
+              <button
+                onClick={handleReturnToLobby}
+                className="btn btn-primary text-lg px-6 py-2"
+              >
+                Return to Lobby
+              </button>
+            </div>
+          ) : hasLeft ? ( // Player who has surrendered/been eliminated
+            <>
+              <p className="text-lg text-yellow-300 mb-4">
+                You are {self.status.toLowerCase()}. You can watch.
+              </p>
+              <button
+                onClick={handleReturnToLobby}
+                className="btn btn-primary text-lg px-6 py-2"
+              >
+                Return to Lobby
+              </button>
+            </>
+          ) : (
+            <>
+              {phase === "PLANNING" && (
+                <PlanningPhaseActions
+                  sendGameAction={sendGameAction}
+                  player={self}
+                  playerPlans={selfPlans}
+                  currentThreats={current_threats}
+                />
+              )}
+
+              {phase === "ATTRACTION" && (
+                <AttractionPhaseActions
+                  sendGameAction={sendGameAction}
+                  player={self}
+                  gameState={gameState}
+                />
+              )}
+
+              {phase === "DEFENSE" && (
+                <DefensePhaseActions
+                  sendGameAction={sendGameAction}
+                  defenseState={selfDefense}
+                  player={self}
+                  playerPlans={selfPlans}
+                  threat={self.assigned_threat}
+                />
+              )}
+
+              {phase === "ACTION" && (
+                <ActionPhaseActions
+                  sendGameAction={sendGameAction}
+                  player={self}
+                  gameState={gameState}
+                />
+              )}
+
+              {phase !== "PLANNING" &&
+                phase !== "DEFENSE" &&
+                phase !== "ATTRACTION" &&
+                phase !== "ACTION" && (
+                  <div className="text-center p-4 bg-gray-800 bg-opacity-70 rounded-lg">
+                    <h3 className="text-xl text-gray-300">Phase: {phase}</h3>
+                    <p className="text-gray-400">Waiting for server...</p>
+                  </div>
+                )}
+            </>
+          )}
+        </div>
+
+        {/* Right Column (15%) */}
+        <div className="w-[15%] h-full">
+          <ArsenalMarket
+            arsenal_market={market.arsenal_market}
+            myTurn={!isSpectator && self.user_id === action_turn_player_id}
+            choiceType={!isSpectator ? self.action_choice_pending : null}
+            onCardSelect={handleMarketCardSelect}
+            playerScrap={!isSpectator ? self.scrap : {}}
+          />
+        </div>
+      </main>
+
+      {/* --- Bottom Bar (15% height) --- */}
+      <footer
+        className="flex-shrink-0 flex gap-2 p-1"
+        style={{ height: "15vh" }}
+      >
+        {/* Game Log (30% width) */}
+        <div className="w-[30%] h-full">
+          <GameLog logs={log} />
+        </div>
+        {/* Player Cards/Upgrades (remaining width) */}
+        <div className="w-[70%] h-full bg-black bg-opacity-20 rounded-lg p-2">
+          <PlayerAssets
+            player={viewingPlayerId ? gameState.players[viewingPlayerId] : null}
+            isSelf={viewingPlayerId === user.id}
+            onReturn={() => setViewingPlayerId(user.id)}
+          />
+        </div>
+      </footer>
     </div>
   );
 };

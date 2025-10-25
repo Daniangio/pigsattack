@@ -111,25 +111,17 @@ async def websocket_endpoint(websocket: WebSocket):
             # --- Authoritative Game Check ---
             # First, check if this user is in an active game.
             current_game_id, current_room = room_manager.find_room_by_user(user.id)
-            is_in_game = (current_room and 
-                          current_room.status == "in_game" and 
-                          current_room.game_record_id)
+            
+            player_status = None
+            game_instance = None
+            if current_room and current_room.game_record_id and game_manager.active_games.get(current_room.game_record_id):
+                game_instance = game_manager.active_games.get(current_room.game_record_id)
+                player_state = game_instance.state.players.get(user.id)
+                if player_state:
+                    player_status = player_state.status
 
-            if is_in_game:
+            if game_instance and player_status == "ACTIVE":
                 # --- User is IN-GAME ---
-                
-                # --- Get Player Status ---
-                player_status = None
-                game = game_manager.active_games.get(current_room.game_record_id)
-                if game:
-                    player_state = game.state.players.get(user.id)
-                    if player_state:
-                        player_status = player_state.status
-                
-                game_is_over = game and game.state.phase == GamePhase.GAME_OVER
-                player_is_not_active = player_status and player_status != "ACTIVE"
-                # --- End Get Status ---
-
 
                 if action == "game_action":
                     await game_manager.handle_game_action(
@@ -142,19 +134,12 @@ async def websocket_endpoint(websocket: WebSocket):
                 elif action == "surrender":
                     await room_manager.handle_surrender(user, connection_manager)
                 
-                # --- MODIFIED LOGIC for return_to_lobby ---
-                elif action == "return_to_lobby":
-                    if game_is_over or player_is_not_active:
-                        # Allow post-game or eliminated/surrendered players to return
-                        await room_manager.return_to_lobby(user, connection_manager)
-                    else:
-                        # Player is ACTIVE and game is ongoing, block
-                        print(f"User {user.username} in game, ignoring action: {action}")
-                        await connection_manager.send_to_user(user.id, {
-                            "type": "error",
-                            "payload": {"message": f"Cannot '{action}' while in an active game."}
-                        })
-                # --- END MODIFIED LOGIC ---
+                elif action in ("return_to_lobby", "spectate_game"):
+                    print(f"User {user.username} is ACTIVE in game, ignoring action: {action}")
+                    await connection_manager.send_to_user(user.id, {
+                        "type": "error",
+                        "payload": {"message": f"Cannot '{action}' while you are an active player."}
+                    })
 
                 elif action == "request_view":
                     # --- REFACTOR FIX ---
@@ -186,6 +171,8 @@ async def websocket_endpoint(websocket: WebSocket):
                 await room_manager.create_room(user, payload.get("room_name"), connection_manager)
             elif action == "join_room":
                 await room_manager.join_room(user, payload.get("room_id"), connection_manager)
+            elif action == "spectate_game":
+                await room_manager.spectate_game(user, payload.get("game_record_id"), connection_manager)
             elif action == "leave_room":
                 await room_manager.leave_room_pre_game(user, connection_manager)
             elif action == "start_game":

@@ -70,6 +70,7 @@ function App() {
           <PostGamePage
             gameRecord={gameResult}
             onReturnToLobby={handleReturnToLobby}
+            sendMessage={sendMessage}
           />
         );
       case "profile":

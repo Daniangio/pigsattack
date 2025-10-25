@@ -28,7 +28,7 @@ class RoomManager:
         """Constructs the current lobby state."""
         return LobbyState(
             users=[user.model_dump() for user in self.lobby_users.values()],
-            rooms=[room.model_dump() for room in self.rooms.values() if room.status == 'lobby']
+            rooms=[room.model_dump() for room in self.rooms.values()] # Show all rooms (lobby and in_game)
         ).model_dump()
 
     async def broadcast_lobby_state(self, manager: ConnectionManager):
@@ -90,6 +90,30 @@ class RoomManager:
         await self.broadcast_room_state(room_id, manager)
         await self.broadcast_lobby_state(manager)
 
+    async def spectate_game(self, user: User, game_record_id: str, manager: ConnectionManager):
+        """Allows a user to join an in-progress game as a spectator."""
+        if user.id not in self.lobby_users:
+            return
+
+        # Find the room by game_record_id
+        room = None
+        for r in self.rooms.values():
+            if r.game_record_id == game_record_id:
+                room = r
+                break
+
+        if not room or room.status != 'in_game':
+            return
+
+        room.spectators.append(user)
+        del self.lobby_users[user.id]
+        
+        print(f"User {user.username} is now spectating game {game_record_id} in room {room.id}.")
+        # Send the current game state to the new spectator
+        if self.game_manager:
+            await self.game_manager.broadcast_game_state(game_record_id, specific_user_id=user.id)
+        await self.broadcast_lobby_state(manager)
+
     async def leave_room_pre_game(self, user: User, manager: ConnectionManager):
         """Handles a user leaving a room before the game starts."""
         room_id, room = self.find_room_by_user(user.id)
@@ -127,7 +151,13 @@ class RoomManager:
         
         game_record_id = str(uuid.uuid4())[:8]
         participants = [GameParticipant(user=p, status=PlayerStatus.ACTIVE) for p in room.players]
-        record = GameRecord(id=game_record_id, room_name=room.name, participants=participants, status="in_progress")
+        record = GameRecord(
+            id=game_record_id, 
+            room_name=room.name, 
+            participants=participants, 
+            status="in_progress",
+            started_at=datetime.now(timezone.utc)
+        )
         fake_games_db[game_record_id] = record
         
         room.game_record_id = game_record_id
@@ -175,14 +205,12 @@ class RoomManager:
         await self.game_manager.handle_player_leave(user, room.game_record_id, PlayerStatus.SURRENDERED)
         # --- END DELEGATION ---
 
-        # Send a confirmation to the surrendered player so their UI can update
-        # The "game_state_update" will handle this, but we can send an extra
-        # confirmation if needed.
-        surrendered_player_state = {
+        # Send the surrendered player to the post-game view with the current, in-progress record.
+        await manager.send_to_user(user.id, {
             "type": "state_update",
-            "payload": {"view": "game", "roomState": self.get_room_dump(room)}
-        }
-        await manager.send_to_user(user.id, surrendered_player_state)
+            "payload": {"view": "post_game", "gameResult": record.model_dump(mode="json"), "force": True}
+        })
+        # The game_state_update broadcast from handle_player_leave will update other players.
 
 
     async def end_game(self, room: Room, record: GameRecord, manager: ConnectionManager, winner: Optional[User]):
@@ -199,16 +227,13 @@ class RoomManager:
 
         all_involved_ids = [p.user.id for p in record.participants] + [s.id for s in room.spectators]
         
-        await manager.broadcast_to_users(
-            all_involved_ids, 
-            {"type": "state_update", "payload": {
-                "view": "post_game", "gameResult": record.model_dump(mode="json"), "force": True
-            }}
-        )
-        
         if room.id in self.rooms:
             del self.rooms[room.id]
         
+        await manager.broadcast_to_users(
+            all_involved_ids, 
+            {"type": "state_update", "payload": {"view": "post_game", "gameResult": record.model_dump(mode="json"), "force": True}}
+        )
         await self.broadcast_lobby_state(manager)
 
 
@@ -283,7 +308,7 @@ class RoomManager:
             game = self.game_manager.active_games.get(game_id)
             if game:
                 player_state = game.state.players.get(user.id)
-                if player_state and player_state.status == "ACTIVE":
+                if player_state and player_state.status == "ACTIVE" and game.state.phase != GamePhase.GAME_OVER:
                     print(f"FORCE: User {user.username} is in an active game. Denying '{requested_view}' request.")
                     # Force the game state back to them
                     await self.game_manager.broadcast_game_state(game_id)

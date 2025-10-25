@@ -21,6 +21,13 @@ const LobbyPage = ({ onLogout, sendMessage, onViewProfile }) => {
     sendMessage({ action: "join_room", payload: { room_id: roomId } });
   };
 
+  const handleSpectateGame = (gameRecordId) => {
+    sendMessage({
+      action: "spectate_game",
+      payload: { game_record_id: gameRecordId },
+    });
+  };
+
   return (
     <div>
       <header className="flex justify-between items-center mb-6">
@@ -59,20 +66,38 @@ const LobbyPage = ({ onLogout, sendMessage, onViewProfile }) => {
               lobbyState.rooms.map((room) => (
                 <div
                   key={room.id}
-                  className="flex justify-between items-center p-3 bg-slate-600 rounded-md"
+                  className="flex justify-between items-center p-3 bg-slate-600 rounded-md hover:bg-slate-500 transition-colors"
                 >
                   <div>
                     <p className="font-semibold">{room.name}</p>
-                    <p className="text-sm text-slate-300">
-                      {room.players.length} player(s)
-                    </p>
+                    <div className="flex items-center gap-3 text-sm text-slate-300">
+                      <span>{room.players.length} player(s)</span>
+                      <span
+                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          room.status === "in_game"
+                            ? "bg-red-200 text-red-800"
+                            : "bg-green-200 text-green-800"
+                        }`}
+                      >
+                        {room.status === "in_game" ? "In Game" : "Lobby"}
+                      </span>
+                    </div>
                   </div>
-                  <button
-                    onClick={() => handleJoinRoom(room.id)}
-                    className="btn btn-secondary"
-                  >
-                    Join
-                  </button>
+                  {room.status === "in_game" ? (
+                    <button
+                      onClick={() => handleSpectateGame(room.game_record_id)}
+                      className="btn btn-info"
+                    >
+                      Spectate
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleJoinRoom(room.id)}
+                      className="btn btn-secondary"
+                    >
+                      Join
+                    </button>
+                  )}
                 </div>
               ))
             ) : (

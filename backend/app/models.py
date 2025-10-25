@@ -46,8 +46,14 @@ class GameRecord(BaseModel):
     # This now stores a list of participants with their statuses, not just users.
     participants: List[GameParticipant]
     winner: Optional[User] = None
+    started_at: datetime
     ended_at: Optional[datetime] = None
     status: str = "in_progress" # 'in_progress', 'completed'
+
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.strftime('%Y-%m-%d %H:%M:%S')
+        }
 
 class UserCreate(BaseModel):
     username: str

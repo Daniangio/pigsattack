@@ -97,12 +97,18 @@ class GameInstance:
         """Resets round-specific state and moves to Phase 1."""
         self.state.add_log(f"--- Round Start ---")
         self.state.current_threats = []
+        
+        # Get active players *in the correct initiative order*
+        active_players = self.state.get_active_players_in_order()
+        
+        # Reset plans and defenses based on the ordered active player list
         self.state.player_plans = {
-            p.user_id: PlayerPlans() for p in self.state.get_active_players()
+            p.user_id: PlayerPlans() for p in active_players
         }
         self.state.player_defenses = {
-            p.user_id: PlayerDefense() for p in self.state.get_active_players()
+            p.user_id: PlayerDefense() for p in active_players
         }
+        # --- END BUGFIX ---
         
         for p in self.state.players.values():
             p.assigned_threat = None
@@ -139,7 +145,7 @@ class GameInstance:
 
     def _check_if_all_ready(self, phase: GamePhase) -> bool:
         """Checks if all active players are 'ready' for a given phase."""
-        active_pids = [p.user_id for p in self.state.get_active_players()]
+        active_pids = [p.user_id for p in self.state.get_active_players_in_order()]
         
         if not active_pids:
              return True # No active players, so "all" are ready
@@ -166,6 +172,11 @@ class GameInstance:
         if user_id not in self.state.player_plans:
             return False
         
+        player = self.state.players[user_id]
+        if player.last_round_lure and lure == player.last_round_lure:
+            self.state.add_log(f"Invalid plan: {player.username} cannot use the same lure card two rounds in a row.")
+            return False
+
         plans = self.state.player_plans[user_id]
         if plans.ready:
             return False
@@ -400,7 +411,7 @@ class GameInstance:
 
     def _resolve_wilderness(self):
         """Phase 1: Reveal Threat cards."""
-        num_threats = len(self.state.get_active_players())
+        num_threats = len(self.state.get_active_players_in_order())
         
         if num_threats == 0:
             self.state.add_log("No active players to reveal threats for.")
@@ -453,7 +464,7 @@ class GameInstance:
                 self.state.attraction_phase_state = "SECOND_PASS"
                 self.state.add_log("All matching lures resolved. Starting Second Pass.")
                 self.state.unassigned_player_ids = [
-                    p.user_id for p in self.state.get_active_players() 
+                    p.user_id for p in self.state.get_active_players_in_order()
                     if not p.assigned_threat
                 ]
 
@@ -475,7 +486,7 @@ class GameInstance:
         self.state.add_log("Resolving attraction...")
         self.state.attraction_phase_state = "FIRST_PASS"
         self.state.available_threat_ids = [t.id for t in self.state.current_threats]
-        self.state.unassigned_player_ids = [p.user_id for p in self.state.get_active_players()]
+        self.state.unassigned_player_ids = [p.user_id for p in self.state.get_active_players_in_order()]
         
         if not self.state.current_threats or not self.state.unassigned_player_ids:
             self.state.add_log("No threats or no active players. Skipping Attraction Phase.")
@@ -673,15 +684,17 @@ class GameInstance:
         """Phase 6: Base income, refill market, set new initiative."""
         self.state.add_log("Cleaning up...")
         
+        active_players = self.state.get_active_players_in_order()
+        
         # 1. Base Income
-        for player in self.state.get_active_players():
+        for player in active_players:
             drawn = self.state.scrap_pool.draw_random(1)
             for scrap in drawn:
                 player.scrap[scrap] += 1
         self.state.add_log("All active players gain 1 random scrap.")
 
         # 2. Refill Markets
-        num_market_cards = max(2, len(self.state.get_active_players()) - 1)
+        num_market_cards = max(2, len(active_players) - 1)
         while len(self.state.market.upgrade_market) < num_market_cards and self.state.upgrade_deck:
             self.state.market.upgrade_market.append(self.state.upgrade_deck.pop(0))
         while len(self.state.market.arsenal_market) < num_market_cards and self.state.arsenal_deck:
@@ -691,21 +704,23 @@ class GameInstance:
         schemers = []
         non_schemers = []
         
-        active_players_in_order = [
-            pid for pid in self.state.initiative_queue 
-            if self.state.players.get(pid) and self.state.players[pid].status == "ACTIVE"
-        ]
+        # --- We must read from the plans of the round that just ended.
+        # We also iterate over the *active_players* list which is already
+        # in the correct old initiative order.
+        plans_from_this_round = self.state.player_plans.copy()
         
-        for user_id in active_players_in_order:
-            plan = self.state.player_plans.get(user_id)
+        for player in active_players:
+            plan = plans_from_this_round.get(player.user_id)
             if plan and plan.action_card == SurvivorActionCard.SCHEME:
-                schemers.append(user_id)
+                player.last_round_lure = plan.lure_card # Update last used lure
+                schemers.append(player.user_id)
             else:
-                non_schemers.append(user_id)
+                non_schemers.append(player.user_id)
         
-        # New queue is [schemers (in old order)] + [non_schemers (in old order)]
-        # Rule: "If multiple players Scheme, their new order at the top...
-        # is determined by their old order."
+        # --- "LAST-IN, FIRST-OUT" ---
+        # Per your request, reverse the list of schemers so the
+        # last player in initiative to scheme becomes the first player.
+        schemers.reverse()
         self.state.initiative_queue = schemers + non_schemers
         
         if self.state.initiative_queue:
@@ -721,7 +736,7 @@ class GameInstance:
 
     def _check_for_game_over(self):
         """Checks if only one player remains active."""
-        active_players = self.state.get_active_players()
+        active_players = self.state.get_active_players_in_order()
         if len(active_players) <= 1:
             if self.state.phase != GamePhase.GAME_OVER:
                 self.state.winner = active_players[0] if active_players else None

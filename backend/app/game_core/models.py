@@ -149,6 +149,7 @@ class PlayerState(BaseModel):
     assigned_threat: Optional[ThreatCard] = None
     defense_result: Optional[str] = None # "KILL", "DEFEND", "FAIL"
     action_choice_pending: Optional[str] = None # e.g., "SCAVENGE", "FORTIFY"
+    last_round_lure: Optional[LureCard] = None
 
     def can_afford(self, cost: Dict[ScrapType, int]) -> bool:
         """Checks if the player has enough scrap for a given cost."""
@@ -204,9 +205,19 @@ class GameState(BaseModel):
             self.log = self.log[-50:]
         self.log.append(message)
 
-    def get_active_players(self) -> List[PlayerState]:
-        """Returns a list of all players with 'ACTIVE' status."""
-        return [p for p in self.players.values() if p.status == "ACTIVE"]
+    # get_active_players now iterates over the initiative_queue to guarantee order.
+    # It also no longer needs to be a method of GameState, but can be
+    # called by GameInstance, which passes in the correct state components.
+    def get_active_players_in_order(self) -> List[PlayerState]:
+        """
+        Returns a list of all 'ACTIVE' players, in initiative_queue order.
+        """
+        active_players = []
+        for pid in self.initiative_queue:
+            player = self.players.get(pid)
+            if player and player.status == "ACTIVE":
+                active_players.append(player)
+        return active_players
 
     def get_player_public_state(self, player_id: str) -> Dict[str, Any]:
         """
@@ -263,7 +274,7 @@ class GameState(BaseModel):
             "attraction_turn_player_id": self.attraction_turn_player_id,
             "available_threat_ids": self.available_threat_ids,
             "unassigned_player_ids": self.unassigned_player_ids,
-            "action_turn_player_id": self.action_turn_player_id, # Added this
+            "action_turn_player_id": self.action_turn_player_id,
         }
         
         return public_state
