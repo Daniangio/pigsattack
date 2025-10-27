@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useStore } from "../store";
 
 const ProfilePage = ({ onReturnToLobby }) => {
-  const { user, token, setView, setGameResult } = useStore();
+  const { user, token } = useStore();
   const [profileData, setProfileData] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -54,8 +54,10 @@ const ProfilePage = ({ onReturnToLobby }) => {
         throw new Error("Failed to fetch game details.");
       }
       const data = await response.json();
-      setGameResult(data);
-      setView("post_game");
+      useStore.setState({
+        gameResult: data,
+        view: "post_game",
+      });
     } catch (err) {
       console.error("Failed to fetch game record:", err);
       setError("Could not load game details.");
@@ -141,15 +143,6 @@ const ProfilePage = ({ onReturnToLobby }) => {
                         : "Loss"
                       : "In Progress"}
                   </span>
-                  <button
-                    className="text-xs text-indigo-300 hover:underline mt-1"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleViewGame(game.game_record_id);
-                    }}
-                  >
-                    View Details
-                  </button>
                 </div>
               </div>
             ))
