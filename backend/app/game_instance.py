@@ -711,9 +711,14 @@ class GameInstance:
         
         for player in active_players:
             plan = plans_from_this_round.get(player.user_id)
-            if plan and plan.action_card == SurvivorActionCard.SCHEME:
-                player.last_round_lure = plan.lure_card # Update last used lure
-                schemers.append(player.user_id)
+            if plan:
+                # Update last used cards for the next round's validation/display
+                player.last_round_lure = plan.lure_card
+                player.last_round_action = plan.action_card
+                if plan.action_card == SurvivorActionCard.SCHEME:
+                    schemers.append(player.user_id)
+                else:
+                    non_schemers.append(player.user_id)
             else:
                 non_schemers.append(player.user_id)
         

@@ -150,6 +150,7 @@ class PlayerState(BaseModel):
     defense_result: Optional[str] = None # "KILL", "DEFEND", "FAIL"
     action_choice_pending: Optional[str] = None # e.g., "SCAVENGE", "FORTIFY"
     last_round_lure: Optional[LureCard] = None
+    last_round_action: Optional[SurvivorActionCard] = None
 
     def can_afford(self, cost: Dict[ScrapType, int]) -> bool:
         """Checks if the player has enough scrap for a given cost."""
@@ -253,12 +254,7 @@ class GameState(BaseModel):
                 if pid == player_id:
                     redacted_players[pid] = player
                 else:
-                    redacted_p = player.model_copy()
-                    redacted_p.arsenal_hand = [
-                        ArsenalCard(id=f"hidden_{i}", name="Hidden", cost={}, effect="")
-                        for i in range(len(player.arsenal_hand))
-                    ]
-                    redacted_players[pid] = redacted_p
+                    redacted_players[pid] = player
             return redacted_players
 
         # Build the final payload
