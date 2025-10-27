@@ -6,10 +6,12 @@ import gameBackground from "../images/game-background.png"; // Load the backgrou
 import bloodyRagsCard from "../images/cards/lure-bloody-rags.png";
 import strangeNoisesCard from "../images/cards/lure-strange-noises.png";
 import fallenFruitCard from "../images/cards/lure-fallen-fruit.png";
+import unknownLureCard from "../images/cards/lure-unknown.png";
 import scavengeCard from "../images/cards/action-scavenge.png";
 import fortifyCard from "../images/cards/action-fortify.png";
 import armoryRunCard from "../images/cards/action-armory-run.png";
 import schemeCard from "../images/cards/action-scheme.png";
+import unknownCard from "../images/cards/action-unknown.png";
 
 // --- UI COMPONENTS ---
 import playerFrame from "../images/player-frame.png";
@@ -183,12 +185,14 @@ const PlayerCard = ({
   turnStatus,
   portrait,
   turnOrder,
+  plan,
   isViewing,
   onClick,
 }) => {
   if (!player) return null;
   const { scrap, hp, username, status } = player;
   const isInactive = status !== "ACTIVE";
+  const showPlan = plan && plan.ready;
 
   return (
     <div className="flex items-center gap-1 cursor-pointer" onClick={onClick}>
@@ -223,6 +227,40 @@ const PlayerCard = ({
             >
               {turnOrder}
             </span>
+          </div>
+
+          {/* --- Planned Cards --- */}
+          <div className="absolute -top left-1/2 -translate-x-1/2 z-20 flex items-center space-x-1">
+            {showPlan && plan.lure_card && (
+              <img
+                src={
+                  isSelf || plan.is_lure_revealed
+                    ? LURE_CARDS.find((c) => c.id === plan.lure_card)?.image
+                    : unknownLureCard
+                }
+                alt={plan.lure_card}
+                className="w-8 h-10 object-cover rounded-sm shadow-md"
+                title={`Lure: ${
+                  isSelf || plan.is_lure_revealed ? plan.lure_card : "Hidden"
+                }`}
+              />
+            )}
+            {showPlan && plan.action_card && (
+              <img
+                src={
+                  isSelf || plan.is_action_revealed
+                    ? ACTION_CARDS.find((c) => c.id === plan.action_card)?.image
+                    : unknownCard
+                }
+                alt={plan.action_card}
+                className="w-8 h-10 object-cover rounded-sm shadow-md"
+                title={`Action: ${
+                  isSelf || plan.is_action_revealed
+                    ? plan.action_card
+                    : "Hidden"
+                }`}
+              />
+            )}
           </div>
 
           {/* Turn Status Icon */}
@@ -1279,6 +1317,40 @@ const GamePage = ({ onLogout, sendMessage }) => {
     market,
   } = gameState;
 
+  // Add flags to player_plans if cards should be revealed to others
+  const augmentedPlayerPlans = useMemo(() => {
+    if (!player_plans) return {};
+    const newPlans = JSON.parse(JSON.stringify(player_plans)); // Deep copy
+
+    const attractionTurnIndex = initiative_queue.indexOf(
+      attraction_turn_player_id
+    );
+    const actionTurnIndex = initiative_queue.indexOf(action_turn_player_id);
+
+    initiative_queue.forEach((pid, index) => {
+      if (newPlans[pid]) {
+        // Lure Card Reveal Logic
+        const isLureRevealed =
+          phase === "ATTRACTION"
+            ? index <= attractionTurnIndex
+            : ["DEFENSE", "ACTION", "CLEANUP"].includes(phase);
+        newPlans[pid].is_lure_revealed = isLureRevealed;
+
+        // Action Card Reveal Logic
+        const isActionRevealed =
+          phase === "ACTION" ? index <= actionTurnIndex : phase === "CLEANUP";
+        newPlans[pid].is_action_revealed = isActionRevealed;
+      }
+    });
+    return newPlans;
+  }, [
+    player_plans,
+    phase,
+    action_turn_player_id,
+    attraction_turn_player_id,
+    initiative_queue,
+  ]);
+
   const getPlayerTurnStatus = (playerId) => {
     if (phase === "ATTRACTION") {
       if (playerId === attraction_turn_player_id) return "ACTIVE";
@@ -1394,6 +1466,7 @@ const GamePage = ({ onLogout, sendMessage }) => {
                 portrait={playerPortraitsMap[pid]}
                 turnStatus={getPlayerTurnStatus(pid)}
                 turnOrder={index + 1}
+                plan={augmentedPlayerPlans[pid]}
                 isViewing={isViewing}
                 onClick={() => setViewingPlayerId(pid)}
               />

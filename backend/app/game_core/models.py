@@ -231,7 +231,11 @@ class GameState(BaseModel):
                 if pid == player_id:
                     redacted_plans[pid] = plan
                 else:
-                    redacted_plans[pid] = PlayerPlans(ready=plan.ready)
+                    # The frontend now handles revealing cards. Send the data.
+                    # The frontend will only show the cards when the logic dictates.
+                    # For a non-ready player, the cards will be null anyway.
+                    redacted_plans[pid] = plan 
+
             return redacted_plans
             
         def get_redacted_defenses():
