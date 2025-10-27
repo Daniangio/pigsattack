@@ -200,17 +200,18 @@ class RoomManager:
         else:
             return
 
+        # --- Move surrendering player to spectators ---
+        # This allows them to receive game state updates as a spectator
+        # and prevents issues if they try to "spectate" from the post-game screen.
+        surrendering_player_obj = next((p for p in room.players if p.id == user.id), None)
+        if surrendering_player_obj:
+            room.players = [p for p in room.players if p.id != user.id]
+            room.spectators.append(surrendering_player_obj)
         # --- DELEGATE TO GAMEMANAGER ---
         # Tell the game instance to update the player's status
         await self.game_manager.handle_player_leave(user, room.game_record_id, PlayerStatus.SURRENDERED)
         # --- END DELEGATION ---
 
-        # Send the surrendered player to the post-game view with the current, in-progress record.
-        await manager.send_to_user(user.id, {
-            "type": "state_update",
-            "payload": {"view": "post_game", "gameResult": record.model_dump(mode="json"), "force": True}
-        })
-        # The game_state_update broadcast from handle_player_leave will update other players.
 
 
     async def end_game(self, room: Room, record: GameRecord, manager: ConnectionManager, winner: Optional[User]):
@@ -327,6 +328,17 @@ class RoomManager:
             await self.add_user_to_lobby(user, manager)
         elif requested_view == "profile":
             await manager.send_to_user(user.id, {"type": "state_update", "payload": {"view": "profile"}})
+        elif requested_view == "post_game":
+            # This is requested by a surrendered player who is spectating
+            room_id, room = self.find_room_by_user(user.id, include_spectators=True)
+            if room and room.game_record_id and room.game_record_id in fake_games_db:
+                record = fake_games_db[room.game_record_id]
+                await manager.send_to_user(user.id, {
+                    "type": "state_update",
+                    "payload": {"view": "post_game", "gameResult": record.model_dump(mode="json"), "force": True}
+                })
+            else:
+                print(f"Could not find game record for user {user.id} requesting post_game view.")
         else:
             print(f"Warning: Unhandled view request for '{requested_view}'")
 

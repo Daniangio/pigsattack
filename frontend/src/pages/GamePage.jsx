@@ -1233,6 +1233,10 @@ const GamePage = ({ onLogout, sendMessage }) => {
   const handleReturnToLobby = () => {
     sendMessage({ action: "return_to_lobby" });
   };
+  const handleViewResults = () => {
+    // Request to see the post_game view for the current game
+    sendMessage({ action: "request_view", payload: { view: "post_game" } });
+  };
   const handleLogout = () => onLogout();
 
   const self = useMemo(() => {
@@ -1308,10 +1312,16 @@ const GamePage = ({ onLogout, sendMessage }) => {
     });
   };
 
-  const isSpectator = !self;
-  const hasLeft = !isSpectator
-    ? self.status === "SURRENDERED" || self.status === "ELIMINATED"
-    : false;
+  // A "pure" spectator is someone who joined to watch and isn't in the player list at all.
+  // A player who has surrendered/been eliminated will still have a `self` object with a non-ACTIVE status.
+  const isPureSpectator = !self;
+
+  // A player has "left" if they were a player but are now out of the game.
+  const hasLeft =
+    self && (self.status === "SURRENDERED" || self.status === "ELIMINATED");
+
+  // A user is a spectator if they are a pure spectator OR if they have left the game.
+  const isSpectator = isPureSpectator || hasLeft;
 
   return (
     <div
@@ -1412,7 +1422,7 @@ const GamePage = ({ onLogout, sendMessage }) => {
 
         {/* Center Column (70%) */}
         <div className="w-[70%] h-full overflow-y-auto">
-          {isSpectator ? ( // Pure spectator from lobby
+          {isPureSpectator ? ( // Pure spectator from lobby
             <div className="text-center p-4 bg-gray-800 bg-opacity-70 rounded-lg">
               <h3 className="text-xl text-blue-300">You are spectating.</h3>
               <p className="text-gray-400 mb-4">
@@ -1426,17 +1436,26 @@ const GamePage = ({ onLogout, sendMessage }) => {
               </button>
             </div>
           ) : hasLeft ? ( // Player who has surrendered/been eliminated
-            <>
+            <div className="text-center p-4 bg-gray-800 bg-opacity-70 rounded-lg">
               <p className="text-lg text-yellow-300 mb-4">
-                You are {self.status.toLowerCase()}. You can watch.
+                You have been {self.status.toLowerCase()}. You can continue
+                watching.
               </p>
-              <button
-                onClick={handleReturnToLobby}
-                className="btn btn-primary text-lg px-6 py-2"
-              >
-                Return to Lobby
-              </button>
-            </>
+              <div className="flex justify-center gap-4 mt-4">
+                <button
+                  onClick={handleViewResults}
+                  className="btn btn-secondary text-lg px-6 py-2"
+                >
+                  View Results
+                </button>
+                <button
+                  onClick={handleReturnToLobby}
+                  className="btn btn-primary text-lg px-6 py-2"
+                >
+                  Return to Lobby
+                </button>
+              </div>
+            </div>
           ) : (
             <>
               {phase === "PLANNING" && (

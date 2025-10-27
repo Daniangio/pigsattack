@@ -66,11 +66,6 @@ const PostGamePage = ({ gameRecord, onReturnToLobby, sendMessage }) => {
         <button onClick={onReturnToLobby} className="btn btn-primary">
           Return to Lobby
         </button>
-        {status === "in_progress" && myStatus !== "ACTIVE" && (
-          <button onClick={handleSpectate} className="btn btn-info">
-            Spectate Game
-          </button>
-        )}
       </div>
     </div>
   );
