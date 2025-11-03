@@ -13,7 +13,9 @@ if TYPE_CHECKING:
 
 from .models import User, Room, GameParticipant, PlayerStatus
 from .game_instance import GameInstance
-from .game_core.models import GameState, PlayerState, GamePhase, LureCard, SurvivorActionCard, ScrapType
+# Note: We only import GamePhase for the GAME_OVER check.
+# The enums LureCard, SurvivorActionCard, ScrapType are no longer needed here.
+from .game_core.models import GameState, PlayerState, GamePhase
 from .routers import fake_games_db # Import the fake_db
 
 class GameManager:
@@ -66,30 +68,40 @@ class GameManager:
         
         try:
             if action == "submit_plan":
+                # --- FIX ---
+                # Changed user_id to player_id
+                # Pass raw strings for lure and action, as expected by GameInstance
                 action_success = game.submit_plan(
-                    user_id=user.id,
-                    lure=LureCard(payload["lure"]),
-                    action=SurvivorActionCard(payload["action"])
+                    player_id=user.id,
+                    lure=payload.get("lure"),
+                    action=payload.get("action")
                 )
                 
             elif action == "submit_defense":
-                scrap_spent_enum = {ScrapType(k): int(v) for k, v in payload.get("scrap_spent", {}).items()}
+                # --- FIX ---
+                # Changed user_id to player_id
+                # Pass the raw dict for scrap_spent, as expected by GameInstance
                 action_success = game.submit_defense(
-                    user_id=user.id,
-                    scrap_spent=scrap_spent_enum,
+                    player_id=user.id,
+                    scrap_spent=payload.get("scrap_spent", {}),
                     arsenal_ids=payload.get("arsenal_ids", [])
                 )
             
             elif action == "select_threat":
+                # --- FIX ---
+                # Changed user_id to player_id
                 action_success = game.select_threat(
-                    user_id=user.id,
+                    player_id=user.id,
                     threat_id=payload.get("threat_id")
                 )
             
             elif action == "submit_action_choice":
+                # --- FIX ---
+                # Changed user_id to player_id
+                # Unpack the payload as keyword arguments
                 action_success = game.submit_action_choice(
-                    user_id=user.id,
-                    choice=payload # e.g., {"choice_type": "SCAVENGE", "scraps": ["PARTS", "PARTS"]}
+                    player_id=user.id,
+                    **payload 
                 )
 
             else:
@@ -112,7 +124,7 @@ class GameManager:
             print(f"Error handling action {action} for game {game_id}: {e}")
             await self.conn_manager.send_to_user(user.id, {
                 "type": "error",
-                "payload": {"message": f"An error occurred: {e}"}
+                "payload": {"message": f"An error occurred: {str(e)}"}
             })
 
     async def handle_player_leave(self, user: User, game_id: str, status: PlayerStatus):
@@ -120,7 +132,9 @@ class GameManager:
         game = self.active_games.get(game_id)
         if not game:
             return
-            
+        
+        # --- FIX ---
+        # This method now exists in GameInstance
         game.handle_player_leave(user.id, status.value)
         
         if game.state.phase == GamePhase.GAME_OVER:
@@ -141,12 +155,15 @@ class GameManager:
         
         if specific_user_id:
             # Send state to only one user (e.g., a new spectator)
-            # Spectators get a "redacted" view as if they were a non-existent player
-            state_payload = game.get_state_for_player("spectator_view")
+            # --- FIX ---
+            # Called get_player_state (which exists) instead of get_state_for_player
+            state_payload = game.get_player_state("spectator_view")
             msg = {"type": "game_state_update", "payload": state_payload}
             await self.conn_manager.send_to_user(specific_user_id, msg)
         else:
             # Broadcast to all players in the game
+            # --- FIX ---
+            # Called get_all_player_states (which now exists)
             all_states = game.get_all_player_states()
             
             for user_id, state_payload in all_states.items():

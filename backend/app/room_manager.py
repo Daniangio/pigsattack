@@ -270,7 +270,7 @@ class RoomManager:
         if room and room.status == "in_game" and room.game_record_id and self.game_manager:
             # --- DELEGATE TO GAMEMANAGER ---
             print(f"User {user_id} disconnected from active game. Notifying GameManager.")
-            user_obj = next((p.user for p in room.players if p.id == user_id), None)
+            user_obj = next((p for p in room.players if p.id == user_id), None)
             if user_obj:
                 # Update persistent record
                 record = fake_games_db.get(room.game_record_id)

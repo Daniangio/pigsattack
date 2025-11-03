@@ -18,19 +18,19 @@ import playerFrame from "../images/player-frame.png";
 import scrapsParts from "../images/icons/scraps-parts.png";
 import scrapsWiring from "../images/icons/scraps-wiring.png";
 import scrapsPlates from "../images/icons/scraps-plates.png";
-import hpIcon from "../images/icons/hp.icon.png";
+// 'hpIcon' is no longer used, we will use an SVG for injuries
 import playerIcon1 from "../images/player-icon-1A.png";
 import playerIcon2 from "../images/player-icon-2.png";
 import playerIcon3 from "../images/player-icon-3.png";
 import playerIcon4 from "../images/player-icon-4.png";
 import playerIcon5 from "../images/player-icon-5.png";
 
-// --- DATA CONSTANTS ---
-const ACTION_CARD_DEFENSE = {
-  SCAVENGE: { PARTS: 0, WIRING: 2, PLATES: 0 },
-  FORTIFY: { PARTS: 0, WIRING: 0, PLATES: 2 },
-  ARMORY_RUN: { PARTS: 2, WIRING: 0, PLATES: 0 },
-  SCHEME: { PARTS: 1, WIRING: 1, PLATES: 1 },
+// --- v1.8 DATA CONSTANTS ---
+const BASE_DEFENSE_FROM_ACTION = {
+  SCAVENGE: { PARTS: 3, WIRING: 1, PLATES: 3 },
+  FORTIFY: { PARTS: 3, WIRING: 3, PLATES: 1 },
+  ARMORY_RUN: { PARTS: 1, WIRING: 3, PLATES: 3 },
+  SCHEME: { PARTS: 2, WIRING: 2, PLATES: 2 },
 };
 
 const LURE_CARDS = [
@@ -47,12 +47,43 @@ const ACTION_CARDS = [
 ];
 
 const SCRAP_TYPES = {
-  PARTS: { name: "Parts", color: "text-red-400", bg: "bg-red-900" },
-  WIRING: { name: "Wiring", color: "text-blue-400", bg: "bg-blue-900" },
-  PLATES: { name: "Plates", color: "text-green-400", bg: "bg-green-900" },
+  PARTS: {
+    name: "Parts",
+    color: "text-red-400",
+    bg: "bg-red-900",
+    border: "border-red-500",
+  },
+  WIRING: {
+    name: "Wiring",
+    color: "text-blue-400",
+    bg: "bg-blue-900",
+    border: "border-blue-500",
+  },
+  PLATES: {
+    name: "Plates",
+    color: "text-green-400",
+    bg: "bg-green-900",
+    border: "border-green-500",
+  },
 };
 
 // --- HELPER COMPONENTS ---
+
+// New v1.8 Injury Icon
+const InjuryIcon = () => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    className="h-full w-full"
+    viewBox="0 0 20 20"
+    fill="currentColor"
+  >
+    <path
+      fillRule="evenodd"
+      d="M10 18a8 8 0 100-16 8 8 0 000 16zM7 9a1 1 0 000 2h6a1 1 0 100-2H7z"
+      clipRule="evenodd"
+    />
+  </svg>
+);
 
 const TurnStatusIcon = ({ turnStatus, size = "h-4 w-4" }) => {
   const iconStyles = {
@@ -99,7 +130,7 @@ const PlayerStatusPill = ({ status }) => {
   const statusStyles = {
     ACTIVE: "bg-green-600 text-white",
     SURRENDERED: "bg-yellow-500 text-black",
-    ELIMINATED: "bg-red-700 text-white",
+    ELIMINATED: "bg-red-700 text-white", // Kept for history, though not used in v1.8
     DISCONNECTED: "bg-gray-500 text-white",
   };
   return (
@@ -190,7 +221,8 @@ const PlayerCard = ({
   onClick,
 }) => {
   if (!player) return null;
-  const { scrap, hp, username, status } = player;
+  // v1.8: Use 'injuries' instead of 'hp'
+  const { scrap, injuries, username, status } = player;
   const isInactive = status !== "ACTIVE";
   const showPlan = plan && plan.ready;
 
@@ -201,7 +233,7 @@ const PlayerCard = ({
           className={`relative w-32 h-32 flex-shrink-0 transition-all duration-200 ${
             isInactive ? "opacity-50" : ""
           } ${
-            isViewing // Updated logic
+            isViewing
               ? "ring-4 ring-yellow-300 shadow-lg"
               : isSelf
               ? "shadow-[0_0_12px_2px_rgba(59,130,246,0.7)]"
@@ -281,12 +313,12 @@ const PlayerCard = ({
           </div>
         </div>
       </div>
-      {/* HP and Scrap Counts */}
+      {/* v1.8: Injuries and Scrap Counts */}
       <div className="flex flex-col items-center justify-center space-y-1">
         <ScrapIcon
-          image={hpIcon}
-          count={hp}
-          textColor="text-red-500"
+          icon={<InjuryIcon />} // Use new SVG icon
+          count={injuries}
+          textColor="text-yellow-400"
           size="w-7 h-7"
         />
         {[
@@ -301,6 +333,7 @@ const PlayerCard = ({
   );
 };
 
+// v1.8: ThreatCard updated to show resistance/immunity
 const ThreatCard = ({
   threat,
   onClick,
@@ -331,6 +364,24 @@ const ThreatCard = ({
     opacityStyle = "opacity-100";
   }
 
+  const KeywordPill = ({ type, scrapType }) => {
+    const isImmune = type === "Immune";
+    const text = isImmune
+      ? `Immune: ${SCRAP_TYPES[scrapType].name}`
+      : `Resist: ${SCRAP_TYPES[scrapType].name}`;
+    const colors = isImmune
+      ? "bg-purple-800 text-purple-100 border-purple-600"
+      : `bg-opacity-50 ${SCRAP_TYPES[scrapType].bg} ${SCRAP_TYPES[scrapType].color} ${SCRAP_TYPES[scrapType].border}`;
+
+    return (
+      <span
+        className={`px-1.5 py-0.5 text-[10px] font-semibold rounded-full border ${colors}`}
+      >
+        {text}
+      </span>
+    );
+  };
+
   return (
     <div
       className={`${baseStyle} ${borderStyle} ${cursorStyle} ${opacityStyle} ${positionStyle}`}
@@ -344,6 +395,19 @@ const ThreatCard = ({
         <p className="text-xs text-gray-300 mb-2 italic">
           &ldquo;{threat.ability || "No special ability."}&rdquo;
         </p>
+        {/* v1.8: Resistance/Immunity Display */}
+        <div className="flex flex-wrap gap-1 mb-2">
+          {threat.immune.map((scrapType) => (
+            <KeywordPill key={scrapType} type="Immune" scrapType={scrapType} />
+          ))}
+          {threat.resistant.map((scrapType) => (
+            <KeywordPill
+              key={scrapType}
+              type="Resistant"
+              scrapType={scrapType}
+            />
+          ))}
+        </div>
       </div>
       <div className="flex justify-around text-center p-1.5 bg-black bg-opacity-20 rounded mt-auto">
         <div>
@@ -365,12 +429,14 @@ const ThreatCard = ({
 
 const ScrapIcon = ({
   image,
+  icon, // Pass SVG icon here
   count,
   textColor = "text-white",
   size = "w-8 h-8",
 }) => (
   <div className={`relative ${size}`}>
-    <img src={image} alt="scrap icon" className="w-full h-full" />
+    {image && <img src={image} alt="scrap icon" className="w-full h-full" />}
+    {icon && <div className={`w-full h-full ${textColor}`}>{icon}</div>}
     <div className="absolute -top-1 -right-1 bg-black bg-opacity-70 rounded-full w-5 h-5 flex items-center justify-center">
       <span
         className={`${textColor} font-bold text-xs`}
@@ -414,6 +480,12 @@ const MarketCard = ({ card, cardType, onClick, isSelectable, isDimmed }) => {
         <p className="text-[10px] leading-tight text-gray-300 mb-1.5 italic">
           &ldquo;{card.effect}&rdquo;
         </p>
+        {/* v1.8: Show charges */}
+        {card.charges && (
+          <p className="text-xs font-bold text-yellow-300">
+            Charges: {card.charges}
+          </p>
+        )}
       </div>
       <div className="flex justify-start items-center space-x-1.5 p-1 bg-black bg-opacity-20 rounded mt-auto">
         <span className="text-gray-400 text-[10px] font-semibold">Cost:</span>
@@ -435,6 +507,7 @@ const MarketCard = ({ card, cardType, onClick, isSelectable, isDimmed }) => {
 };
 
 // --- Owned Card Component ---
+// v1.8: Updated to show charges
 const OwnedCard = ({ card, cardType }) => {
   if (!card) return null;
   const cardColor =
@@ -453,6 +526,12 @@ const OwnedCard = ({ card, cardType }) => {
       <p className="text-[10px] leading-tight text-gray-300 mb-1.5 italic">
         &ldquo;{card.effect}&rdquo;
       </p>
+      {/* v1.8: Show charges */}
+      {card.charges != null && (
+        <p className="text-xs font-bold text-yellow-300">
+          Charges: {card.charges}
+        </p>
+      )}
       {card.name !== "Hidden" && ( // Don't show cost for hidden cards
         <div className="flex justify-start items-center space-x-1 p-1 bg-black bg-opacity-20 rounded mt-auto">
           <span className="text-gray-400 text-[10px] font-semibold">Cost:</span>
@@ -521,10 +600,11 @@ const ThreatsPanel = ({
 };
 
 // --- Market Panel ---
+// v1.8: Updated to handle INTERMISSION phase
 const MarketPanel = ({
   market,
   myTurn,
-  choiceType,
+  choiceType, // "FORTIFY", "ARMORY_RUN", or "INTERMISSION"
   onCardSelect,
   playerScrap,
 }) => {
@@ -560,7 +640,8 @@ const PlayerAssets = ({ player, isSelf, onReturn, phase }) => {
 
   // Show the threat on another player's board ONLY during the DEFENSE phase.
   // During the ACTION phase, we want to see their assets, not the threat they already dealt with.
-  const shouldShowThreat = !isSelf && attractedThreat && phase === "DEFENSE";
+  const shouldShowThreat =
+    !isSelf && attractedThreat && phase === "DEFENSE" && !player.defense_result;
 
   const mainContent = (
     <>
@@ -650,31 +731,28 @@ const PlayerArsenal = ({ player }) => (
   </div>
 );
 
+// v1.8: Trophies are now a list of strings (threat names). Just show a count.
 const PlayerTrophies = ({ player }) => {
-  const trophyCounts = player.trophies.reduce((acc, trophy) => {
-    acc[trophy] = (acc[trophy] || 0) + 1;
-    return acc;
-  }, {});
+  const trophyCount = player.trophies.length;
 
   return (
     <div className="flex-shrink-0">
       <h4 className="text-sm font-bold text-gray-400 mb-2 text-center">
         Trophies
       </h4>
-      <div className="flex gap-4 p-3 rounded min-h-[140px] items-center bg-black bg-opacity-20">
-        {Object.keys(trophyCounts).length > 0 ? (
-          Object.entries(trophyCounts).map(([lure, count]) => (
-            <div key={lure} className="flex flex-col items-center">
-              <img
-                src={LURE_CARDS.find((c) => c.id === lure)?.image}
-                alt={lure}
-                className="w-12 h-16 object-cover rounded-md shadow-md"
-              />
-              <span className="mt-1 text-lg font-bold text-yellow-300">
-                x{count}
-              </span>
-            </div>
-          ))
+      <div className="flex gap-4 p-3 rounded min-h-[140px] items-center justify-center bg-black bg-opacity-20">
+        {trophyCount > 0 ? (
+          <div className="flex flex-col items-center text-yellow-300">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-12 w-12"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 00-1.414 1.414L10 10.414v2.586a1 1 0 102 0v-2.586l6.293-6.293a1 1 0 00-1.414-1.414L13 7.586V5a1 1 0 00-2 0v2.586l-1.293-1.293A1 1 0 008 6.586V5a1 1 0 00-2 0v1.586l-1.293-1.293A1 1 0 003.293 6.707L6 9.414V11a1 1 0 102 0V9.414l-1.293-1.293A1 1 0 005 7.414V5a1 1 0 10-2 0v2.414l-2.707 2.707A1 1 0 001 11.536V12a1 1 0 102 0v-.464l2.293-2.293A1 1 0 006 8.536V11a1 1 0 102 0V8.536l2.293-2.293A1 1 0 0011 5.536V3z" />
+            </svg>
+            <span className="mt-1 text-2xl font-bold">x{trophyCount}</span>
+          </div>
         ) : (
           <p className="text-gray-500 text-sm italic px-2">None</p>
         )}
@@ -739,6 +817,7 @@ const ConfirmationModal = ({ title, message, onConfirm, onCancel }) => (
 );
 
 // --- Market Column Components ---
+// v1.8: Updated logic to handle INTERMISSION
 const UpgradesMarket = ({
   upgrade_market,
   myTurn,
@@ -746,9 +825,6 @@ const UpgradesMarket = ({
   onCardSelect,
   playerScrap,
 }) => {
-  // Helper function to check affordability
-  const isMyTurnToBuy =
-    myTurn && (choiceType === "FORTIFY" || choiceType === "ARMORY_RUN");
   const canAfford = (cardCost) => {
     if (!playerScrap || !cardCost) return false;
     for (const [scrapType, cost] of Object.entries(cardCost)) {
@@ -759,7 +835,13 @@ const UpgradesMarket = ({
     return true;
   };
 
-  const isMyTurnToBuyUpgrades = myTurn && choiceType === "FORTIFY";
+  const isMyTurnToBuyUpgrades =
+    myTurn && (choiceType === "FORTIFY" || choiceType === "INTERMISSION");
+  const isMyTurnToBuy =
+    myTurn &&
+    (choiceType === "FORTIFY" ||
+      choiceType === "ARMORY_RUN" ||
+      choiceType === "INTERMISSION");
 
   return (
     <div className="p-3 bg-gray-800 bg-opacity-70 rounded-lg shadow-lg h-full flex items-center gap-4">
@@ -771,6 +853,10 @@ const UpgradesMarket = ({
           const isAffordable = canAfford(card.cost);
           const isSelectable = isMyTurnToBuyUpgrades && isAffordable;
           const isDimmed = isMyTurnToBuy && !isSelectable;
+          const clickAction =
+            choiceType === "INTERMISSION"
+              ? () => onCardSelect("INTERMISSION", "UPGRADE", card.id)
+              : () => onCardSelect("FORTIFY", null, card.id);
 
           return (
             <MarketCard
@@ -779,7 +865,7 @@ const UpgradesMarket = ({
               cardType="UPGRADE"
               isSelectable={isSelectable}
               isDimmed={isDimmed}
-              onClick={() => isSelectable && onCardSelect("FORTIFY", card.id)}
+              onClick={() => isSelectable && clickAction()}
             />
           );
         })}
@@ -795,9 +881,6 @@ const ArsenalMarket = ({
   onCardSelect,
   playerScrap,
 }) => {
-  // Helper function to check affordability
-  const isMyTurnToBuy =
-    myTurn && (choiceType === "FORTIFY" || choiceType === "ARMORY_RUN");
   const canAfford = (cardCost) => {
     if (!playerScrap || !cardCost) return false;
     for (const [scrapType, cost] of Object.entries(cardCost)) {
@@ -808,7 +891,13 @@ const ArsenalMarket = ({
     return true;
   };
 
-  const isMyTurnToBuyArsenal = myTurn && choiceType === "ARMORY_RUN";
+  const isMyTurnToBuyArsenal =
+    myTurn && (choiceType === "ARMORY_RUN" || choiceType === "INTERMISSION");
+  const isMyTurnToBuy =
+    myTurn &&
+    (choiceType === "FORTIFY" ||
+      choiceType === "ARMORY_RUN" ||
+      choiceType === "INTERMISSION");
 
   return (
     <div className="p-3 bg-gray-800 bg-opacity-70 rounded-lg shadow-lg h-full flex items-center gap-4">
@@ -820,6 +909,10 @@ const ArsenalMarket = ({
           const isAffordable = canAfford(card.cost);
           const isSelectable = isMyTurnToBuyArsenal && isAffordable;
           const isDimmed = isMyTurnToBuy && !isSelectable;
+          const clickAction =
+            choiceType === "INTERMISSION"
+              ? () => onCardSelect("INTERMISSION", "ARSENAL", card.id)
+              : () => onCardSelect("ARMORY_RUN", null, card.id);
 
           return (
             <MarketCard
@@ -828,9 +921,7 @@ const ArsenalMarket = ({
               cardType="ARSENAL"
               isSelectable={isSelectable}
               isDimmed={isDimmed}
-              onClick={() =>
-                isSelectable && onCardSelect("ARMORY_RUN", card.id)
-              }
+              onClick={() => isSelectable && clickAction()}
             />
           );
         })}
@@ -842,11 +933,26 @@ const ArsenalMarket = ({
 // --- ACTION PANEL COMPONENTS ---
 
 const PlanningPhaseActions = ({ sendGameAction, player, playerPlans }) => {
-  const [lure, setLure] = useState("BLOODY_RAGS");
-  const [action, setAction] = useState("SCAVENGE");
+  const [lure, setLure] = useState(null);
+  const [action, setAction] = useState(null);
   const handleSubmit = () => {
-    sendGameAction("submit_plan", { lure, action });
+    if (lure && action) {
+      sendGameAction("submit_plan", { lure, action });
+    }
   };
+
+  // Auto-select first available if none selected
+  useEffect(() => {
+    if (!lure) {
+      const firstAvailableLure = LURE_CARDS.find(
+        (c) => c.id !== player.last_round_lure
+      );
+      if (firstAvailableLure) setLure(firstAvailableLure.id);
+    }
+    if (!action) {
+      setAction(ACTION_CARDS[0].id);
+    }
+  }, [player.last_round_lure, lure, action]);
 
   if (!playerPlans || !player) {
     return (
@@ -874,7 +980,7 @@ const PlanningPhaseActions = ({ sendGameAction, player, playerPlans }) => {
         </p>
         <div className="mb-3">
           <label className="block text-gray-300 mb-2 font-semibold text-sm">
-            Choose a Lure Card
+            Choose a Lure Card (Cannot repeat last round's)
           </label>
           <div className="flex justify-center space-x-2 sm:space-x-4">
             {LURE_CARDS.map((card) => (
@@ -926,6 +1032,7 @@ const PlanningPhaseActions = ({ sendGameAction, player, playerPlans }) => {
 
       <button
         onClick={handleSubmit}
+        disabled={!lure || !action}
         className="w-full btn btn-primary text-lg mt-3"
       >
         Submit Plan
@@ -934,6 +1041,7 @@ const PlanningPhaseActions = ({ sendGameAction, player, playerPlans }) => {
   );
 };
 
+// v1.8: AttractionPhaseActions base defense calculation updated
 const AttractionPhaseActions = ({
   sendGameAction,
   player,
@@ -960,29 +1068,18 @@ const AttractionPhaseActions = ({
   }
   const myLure = myPlan.lure_card;
 
+  // v1.8: Base defense is from CHOSEN action card
   const baseDefense = useMemo(() => {
-    if (!player || !myPlan) {
+    if (!player || !myPlan || !myPlan.action_card) {
       return { PARTS: 0, WIRING: 0, PLATES: 0 };
     }
-    const allCards = ["SCAVENGE", "FORTIFY", "ARMORY_RUN", "SCHEME"];
-    const usedAction = myPlan.action_card;
-    const hasMasterSchemer = player.upgrades.some(
-      (u) => u.special_effect_id === "MASTER_SCHEMER"
-    );
-    const cardDefenseValues = {
-      ...ACTION_CARD_DEFENSE,
-      SCHEME: hasMasterSchemer
-        ? { PARTS: 2, WIRING: 2, PLATES: 2 }
-        : { PARTS: 1, WIRING: 1, PLATES: 1 },
+    const chosenAction = myPlan.action_card;
+    const cardDefense = BASE_DEFENSE_FROM_ACTION[chosenAction] || {
+      PARTS: 0,
+      WIRING: 0,
+      PLATES: 0,
     };
-    const unusedCards = allCards.filter((c) => c !== usedAction);
-    const cardDefense = { PARTS: 0, WIRING: 0, PLATES: 0 };
-    unusedCards.forEach((cardName) => {
-      const defense = cardDefenseValues[cardName];
-      cardDefense.PARTS += defense.PARTS;
-      cardDefense.WIRING += defense.WIRING;
-      cardDefense.PLATES += defense.PLATES;
-    });
+
     const upgradeDefense = { PARTS: 0, WIRING: 0, PLATES: 0 };
     player.upgrades.forEach((upgrade) => {
       if (upgrade.permanent_defense) {
@@ -990,6 +1087,7 @@ const AttractionPhaseActions = ({
         upgradeDefense.WIRING += upgrade.permanent_defense.WIRING || 0;
         upgradeDefense.PLATES += upgrade.permanent_defense.PLATES || 0;
       }
+      // TODO: Handle Scrap Repeater
     });
     return {
       PARTS: cardDefense.PARTS + upgradeDefense.PARTS,
@@ -1036,7 +1134,7 @@ const AttractionPhaseActions = ({
         <h4 className="text-base text-white font-semibold">
           Current Base Defense
         </h4>
-        <p className="text-gray-200 text-xs">(from cards + upgrades)</p>
+        <p className="text-gray-200 text-xs">(from chosen action + upgrades)</p>
         <p className="text-lg font-semibold flex justify-center space-x-4">
           <span className="text-red-400">Fe: {baseDefense.PARTS}</span>
           <span className="text-blue-400">Cu: {baseDefense.WIRING}</span>
@@ -1059,6 +1157,7 @@ const AttractionPhaseActions = ({
   );
 };
 
+// v1.8: DefensePhaseActions completely rewritten
 const DefensePhaseActions = ({
   sendGameAction,
   defenseState,
@@ -1070,29 +1169,18 @@ const DefensePhaseActions = ({
   const [wiring, setWiring] = useState(0);
   const [plates, setPlates] = useState(0);
 
+  // 1. Get Base Defense (from chosen action + permanent upgrades)
   const baseDefense = useMemo(() => {
-    if (!player || !playerPlans) {
+    if (!player || !playerPlans || !playerPlans.action_card) {
       return { PARTS: 0, WIRING: 0, PLATES: 0 };
     }
-    const allCards = ["SCAVENGE", "FORTIFY", "ARMORY_RUN", "SCHEME"];
-    const usedAction = playerPlans.action_card;
-    const hasMasterSchemer = player.upgrades.some(
-      (u) => u.special_effect_id === "MASTER_SCHEMER"
-    );
-    const cardDefenseValues = {
-      ...ACTION_CARD_DEFENSE,
-      SCHEME: hasMasterSchemer
-        ? { PARTS: 2, WIRING: 2, PLATES: 2 }
-        : { PARTS: 1, WIRING: 1, PLATES: 1 },
+    const chosenAction = playerPlans.action_card;
+    const cardDefense = BASE_DEFENSE_FROM_ACTION[chosenAction] || {
+      PARTS: 0,
+      WIRING: 0,
+      PLATES: 0,
     };
-    const unusedCards = allCards.filter((c) => c !== usedAction);
-    const cardDefense = { PARTS: 0, WIRING: 0, PLATES: 0 };
-    unusedCards.forEach((cardName) => {
-      const defense = cardDefenseValues[cardName];
-      cardDefense.PARTS += defense.PARTS;
-      cardDefense.WIRING += defense.WIRING;
-      cardDefense.PLATES += defense.PLATES;
-    });
+
     const upgradeDefense = { PARTS: 0, WIRING: 0, PLATES: 0 };
     player.upgrades.forEach((upgrade) => {
       if (upgrade.permanent_defense) {
@@ -1100,6 +1188,7 @@ const DefensePhaseActions = ({
         upgradeDefense.WIRING += upgrade.permanent_defense.WIRING || 0;
         upgradeDefense.PLATES += upgrade.permanent_defense.PLATES || 0;
       }
+      // TODO: Handle Scrap Repeater
     });
     return {
       PARTS: cardDefense.PARTS + upgradeDefense.PARTS,
@@ -1108,18 +1197,71 @@ const DefensePhaseActions = ({
     };
   }, [player, playerPlans]);
 
+  // 2. Calculate Scrap Value (factoring in threat and upgrades)
+  const getScrapValue = (scrapType, threat, upgrades) => {
+    if (!threat) return 2; // Default if no threat
+    if (threat.immune.includes(scrapType)) return 0;
+
+    let value = threat.resistant.includes(scrapType) ? 1 : 2;
+
+    // Check for upgrades
+    if (scrapType === "PARTS") {
+      if (
+        value === 1 &&
+        upgrades.some((u) => u.special_effect_id === "PIERCING_JAWS")
+      ) {
+        value = 2; // Ignores resistance
+      }
+      if (upgrades.some((u) => u.special_effect_id === "SERRATED_PARTS")) {
+        value += 1;
+      }
+    } else if (scrapType === "WIRING") {
+      if (
+        value === 1 &&
+        upgrades.some((u) => u.special_effect_id === "FOCUSED_WIRING")
+      ) {
+        value = 2;
+      }
+      if (upgrades.some((u) => u.special_effect_id === "HIGH_VOLTAGE_WIRE")) {
+        value += 1;
+      }
+    } else if (scrapType === "PLATES") {
+      if (
+        value === 1 &&
+        upgrades.some((u) => u.special_effect_id === "REINFORCED_PLATING")
+      ) {
+        value = 2;
+      }
+      if (upgrades.some((u) => u.special_effect_id === "LAYERED_PLATING")) {
+        value += 1;
+      }
+    }
+    return value;
+  };
+
+  const scrapValues = useMemo(() => {
+    return {
+      PARTS: getScrapValue("PARTS", threat, player.upgrades),
+      WIRING: getScrapValue("WIRING", threat, player.upgrades),
+      PLATES: getScrapValue("PLATES", threat, player.upgrades),
+    };
+  }, [threat, player.upgrades]);
+
+  // 3. Calculate Total Defense
   const totalDefense = useMemo(() => {
     const spentParts = Number(parts) || 0;
     const spentWiring = Number(wiring) || 0;
     const spentPlates = Number(plates) || 0;
 
+    // TODO: Add Arsenal Card logic
     return {
-      PARTS: baseDefense.PARTS + spentParts * 2,
-      WIRING: baseDefense.WIRING + spentWiring * 2,
-      PLATES: baseDefense.PLATES + spentPlates * 2,
+      PARTS: baseDefense.PARTS + spentParts * scrapValues.PARTS,
+      WIRING: baseDefense.WIRING + spentWiring * scrapValues.WIRING,
+      PLATES: baseDefense.PLATES + spentPlates * scrapValues.PLATES,
     };
-  }, [baseDefense, parts, wiring, plates]);
+  }, [baseDefense, parts, wiring, plates, scrapValues]);
 
+  // 4. Determine Outcome (v1.8 rules)
   const defenseOutcome = useMemo(() => {
     if (!threat) return { text: "N/A", style: "bg-gray-700" };
 
@@ -1127,21 +1269,28 @@ const DefensePhaseActions = ({
     const meetsCunning = totalDefense.WIRING >= threat.cunning;
     const meetsMass = totalDefense.PLATES >= threat.mass;
 
-    if (meetsFerocity && meetsCunning && meetsMass) {
+    const highestStat = Math.max(threat.ferocity, threat.cunning, threat.mass);
+    // TODO: Handle "Lure to Weakness" Arsenal card
+    let meetsHighest = false;
+    if (meetsFerocity && threat.ferocity === highestStat) meetsHighest = true;
+    if (meetsCunning && threat.cunning === highestStat) meetsHighest = true;
+    if (meetsMass && threat.mass === highestStat) meetsHighest = true;
+
+    if (meetsHighest) {
       return {
         text: "KILL",
         style: "bg-green-700 text-green-100",
       };
     }
-    if (!meetsFerocity && !meetsCunning && !meetsMass) {
+    if (meetsFerocity || meetsCunning || meetsMass) {
       return {
-        text: "FAIL",
-        style: "bg-red-800 text-red-100",
+        text: "DEFEND",
+        style: "bg-blue-700 text-blue-100",
       };
     }
     return {
-      text: "DEFEND",
-      style: "bg-blue-700 text-blue-100",
+      text: "FAIL",
+      style: "bg-red-800 text-red-100",
     };
   }, [totalDefense, threat]);
 
@@ -1196,7 +1345,7 @@ const DefensePhaseActions = ({
           Spend scrap to bolster your defenses.
         </p>
         <p className="text-xs text-gray-400">
-          Your total defense must meet or exceed the threat's stats to survive.
+          Meet one stat to DEFEND. Meet the highest stat to KILL.
         </p>
       </div>
 
@@ -1230,12 +1379,12 @@ const DefensePhaseActions = ({
       </div>
 
       <p className="text-gray-300 pt-3 border-t border-gray-600 text-sm">
-        Spend Scrap to defend (1 Scrap = +2 Defense):
+        Spend Scrap to defend:
       </p>
       <div className="flex flex-col sm:flex-row justify-around space-y-3 sm:space-y-0 sm:space-x-2">
         <div className="flex-1 text-center sm:text-left">
           <label className="block text-red-400 text-sm">
-            Parts (vs Ferocity)
+            Parts (+{scrapValues.PARTS} / scrap)
           </label>
           <input
             type="number"
@@ -1249,7 +1398,7 @@ const DefensePhaseActions = ({
         </div>
         <div className="flex-1 text-center sm:text-left">
           <label className="block text-blue-400 text-sm">
-            Wiring (vs Cunning)
+            Wiring (+{scrapValues.WIRING} / scrap)
           </label>
           <input
             type="number"
@@ -1266,7 +1415,7 @@ const DefensePhaseActions = ({
         </div>
         <div className="flex-1 text-center sm:text-left">
           <label className="block text-green-400 text-sm">
-            Plates (vs Mass)
+            Plates (+{scrapValues.PLATES} / scrap)
           </label>
           <input
             type="number"
@@ -1293,12 +1442,18 @@ const DefensePhaseActions = ({
 };
 
 // --- Scavenge Choice Modal ---
-const ScavengeChoiceModal = ({ onConfirm }) => {
+// v1.8: Updated to check for Scavenger's Eye
+const ScavengeChoiceModal = ({ onConfirm, player }) => {
+  const hasScavEye = player.upgrades.some(
+    (u) => u.special_effect_id === "SCAVENGERS_EYE"
+  );
+  const scrapToChoose = hasScavEye ? 3 : 2;
+
   const [selection, setSelection] = useState([]);
-  const canConfirm = selection.length === 2;
+  const canConfirm = selection.length === scrapToChoose;
 
   const handleSelect = (scrapType) => {
-    if (selection.length < 2) {
+    if (selection.length < scrapToChoose) {
       setSelection([...selection, scrapType]);
     }
   };
@@ -1319,25 +1474,28 @@ const ScavengeChoiceModal = ({ onConfirm }) => {
         <h3 className="text-xl font-semibold text-white mb-4">
           Action: SCAVENGE
         </h3>
-        <p className="text-gray-300 mb-4">Choose 2 scrap from the supply:</p>
+        <p className="text-gray-300 mb-4">
+          Choose {scrapToChoose} scrap from the supply
+          {hasScavEye && " (Scavenger's Eye)"}:
+        </p>
         <div className="flex justify-center space-x-4 mb-4">
           <button
             onClick={() => handleSelect("PARTS")}
-            disabled={!canConfirm && selection.length >= 2}
+            disabled={!canConfirm && selection.length >= scrapToChoose}
             className="btn btn-danger px-4 py-2"
           >
             Parts (Red)
           </button>
           <button
             onClick={() => handleSelect("WIRING")}
-            disabled={!canConfirm && selection.length >= 2}
+            disabled={!canConfirm && selection.length >= scrapToChoose}
             className="btn btn-info px-4 py-2"
           >
             Wiring (Blue)
           </button>
           <button
             onClick={() => handleSelect("PLATES")}
-            disabled={!canConfirm && selection.length >= 2}
+            disabled={!canConfirm && selection.length >= scrapToChoose}
             className="btn btn-success px-4 py-2"
           >
             Plates (Green)
@@ -1377,6 +1535,21 @@ const ActionPhaseActions = ({ sendGameAction, player, gameState }) => {
   const isMyTurn = player.user_id === action_turn_player_id;
   const myChoice = player.action_choice_pending;
 
+  // v1.8: Check for "action_prevented" flag
+  if (isMyTurn && player.action_prevented) {
+    return (
+      <div className="space-y-3 p-3 bg-gray-700 bg-opacity-80 rounded-lg">
+        <div className="text-center p-2 bg-black bg-opacity-25 rounded-lg">
+          <p className="text-lg text-red-500">Your Action was Prevented!</p>
+          <p className="text-sm text-gray-200">
+            A threat's "On Fail" ability prevented you from taking your (
+            {myChoice}) action this round.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const handleScavengeConfirm = (scraps) => {
     sendGameAction("submit_action_choice", {
       choice_type: "SCAVENGE",
@@ -1397,7 +1570,10 @@ const ActionPhaseActions = ({ sendGameAction, player, gameState }) => {
   return (
     <div className="space-y-3 p-3 bg-gray-700 bg-opacity-80 rounded-lg">
       {myChoice === "SCAVENGE" && isMyTurn && (
-        <ScavengeChoiceModal onConfirm={handleScavengeConfirm} />
+        <ScavengeChoiceModal
+          onConfirm={handleScavengeConfirm}
+          player={player}
+        />
       )}
 
       <div className="text-center p-2 bg-black bg-opacity-25 rounded-lg">
@@ -1419,13 +1595,63 @@ const ActionPhaseActions = ({ sendGameAction, player, gameState }) => {
       {isMyTurn && (myChoice === "FORTIFY" || myChoice === "ARMORY_RUN") && (
         <div className="pt-3 border-t border-gray-600 text-center">
           <p className="text-gray-300 mb-2">
-            Select a card from the market or take the fallback.
+            Select a card from the market (panel on left) or take the fallback.
           </p>
           <button
             onClick={() => handleFallback(myChoice)}
             className="btn btn-warning"
           >
             Fallback: Draw 2 Random Scrap
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// --- v1.8: New Intermission Phase Panel ---
+const IntermissionPhaseActions = ({ sendGameAction, player, gameState }) => {
+  const { intermission_turn_player_id, players } = gameState;
+  const isMyTurn = player.user_id === intermission_turn_player_id;
+  const myChoice = player.action_choice_pending;
+
+  const handleSkip = () => {
+    sendGameAction("submit_action_choice", {
+      choice_type: "INTERMISSION",
+      card_id: null,
+    });
+  };
+
+  const currentPlayerName =
+    players[intermission_turn_player_id]?.username || "A player";
+
+  return (
+    <div className="space-y-3 p-3 bg-gray-700 bg-opacity-80 rounded-lg">
+      <div className="text-center p-2 bg-black bg-opacity-25 rounded-lg">
+        {isMyTurn ? (
+          <>
+            <p className="text-lg text-blue-300 animate-pulse">
+              It's your Intermission turn!
+            </p>
+            <p className="text-sm text-gray-200">
+              You may buy one card from the market.
+            </p>
+            <p className="text-xs text-gray-400">Phase: INTERMISSION</p>
+          </>
+        ) : (
+          <p className="text-lg text-yellow-300">
+            Waiting for {currentPlayerName} to take their intermission action...
+          </p>
+        )}
+      </div>
+
+      {isMyTurn && (
+        <div className="pt-3 border-t border-gray-600 text-center">
+          <p className="text-gray-300 mb-2">
+            Select a card from the market (panel on left) or skip.
+          </p>
+          <button onClick={handleSkip} className="btn btn-secondary">
+            Skip Action
           </button>
         </div>
       )}
@@ -1443,17 +1669,39 @@ const GamePage = ({ onLogout, sendMessage }) => {
   const [selectedThreatId, setSelectedThreatId] = useState(null);
   const [isLogCollapsed, setIsLogCollapsed] = useState(false);
 
+  // --- *** FIX *** ---
+  // DERIVED STATE (self, plans, defense)
+  // MUST be declared before any useEffects or handlers that use them.
+  const self = useMemo(() => {
+    return gameState?.players ? gameState.players[user.id] : null;
+  }, [gameState, user.id]);
+
+  const selfPlans = useMemo(() => {
+    return gameState?.player_plans ? gameState.player_plans[user.id] : null;
+  }, [gameState, user.id]);
+
+  const selfDefense = useMemo(() => {
+    return gameState?.player_defenses
+      ? gameState.player_defenses[user.id]
+      : null;
+  }, [gameState, user.id]);
+  // --- *** END FIX *** ---
+
   // NEW: Stable portrait mapping
   const playerPortraitsMap = useMemo(() => {
     if (!gameState?.players) return {};
-    const playerIds = Object.keys(gameState.players);
+
+    // Get player IDs and sort them alphabetically.
+    // This ensures that each player ID is *always* mapped to the same icon
+    // index, regardless of turn order (initiative_queue).
+    const playerIds = Object.keys(gameState.players).sort();
+
     const portraits = {};
     playerIds.forEach((pid, index) => {
       portraits[pid] = playerPortraits[index % playerPortraits.length];
     });
     return portraits;
-    // This dependency array ensures the map is created once when players are loaded.
-  }, [gameState?.players && Object.keys(gameState.players).join(",")]);
+  }, [gameState?.players]); // Re-calculate only if the players object itself changes (e.g., on load)
 
   // NEW: Effect to set viewing player to self on load
   useEffect(() => {
@@ -1466,10 +1714,23 @@ const GamePage = ({ onLogout, sendMessage }) => {
       if (["FORTIFY", "ARMORY_RUN"].includes(self.action_choice_pending)) {
         setActivePanel("market");
       }
-    } else if (gameState?.phase === "PLANNING") {
+    } else if (
+      gameState?.phase === "INTERMISSION" &&
+      self?.action_choice_pending === "INTERMISSION"
+    ) {
+      setActivePanel("market");
+    } else if (
+      gameState?.phase === "PLANNING" ||
+      gameState?.phase === "ATTRACTION"
+    ) {
       setActivePanel("threats");
     }
-  }, [user?.id, viewingPlayerId]);
+  }, [
+    user?.id,
+    viewingPlayerId,
+    gameState?.phase,
+    self?.action_choice_pending,
+  ]);
 
   const sendGameAction = (action, data) => {
     sendMessage({
@@ -1477,7 +1738,6 @@ const GamePage = ({ onLogout, sendMessage }) => {
       payload: {
         game_action: action,
         data: data,
-        selected_threat_id: selectedThreatId, // for attraction phase
       },
     });
   };
@@ -1495,32 +1755,32 @@ const GamePage = ({ onLogout, sendMessage }) => {
   };
   const handleLogout = () => onLogout();
 
-  const self = useMemo(() => {
-    return gameState?.players ? gameState.players[user.id] : null;
-  }, [gameState, user.id]);
+  if (!gameState || !user) {
+    return (
+      <div
+        className="flex justify-center items-center min-h-screen bg-gray-900 text-white bg-cover bg-top bg-fixed"
+        style={{ backgroundImage: `url(${gameBackground})` }}
+      >
+        Loading game state...
+      </div>
+    );
+  }
 
-  const selfPlans = useMemo(() => {
-    return gameState?.player_plans ? gameState.player_plans[user.id] : null;
-  }, [gameState, user.id]);
+  // Spectator / eliminated logic
+  const isPureSpectator = !self;
+  const hasLeft = self && self.status !== "ACTIVE";
+  const isSpectator = isPureSpectator || hasLeft;
 
-  const selfDefense = useMemo(() => {
-    return gameState?.player_defenses
-      ? gameState.player_defenses[user.id]
-      : null;
-  }, [gameState, user.id]);
-
-  if (!gameState || !user || !self) {
-    // Added !self to handle spectator case gracefully
-    if (!gameState || !user) {
-      return (
-        <div
-          className="flex justify-center items-center min-h-screen bg-gray-900 text-white bg-cover bg-top bg-fixed"
-          style={{ backgroundImage: `url(${gameBackground})` }}
-        >
-          Loading game state...
-        </div>
-      );
-    }
+  if (!self && !isSpectator) {
+    // Gracefully handle case where user is not a player but not yet marked as spectator
+    return (
+      <div
+        className="flex justify-center items-center min-h-screen bg-gray-900 text-white bg-cover bg-top bg-fixed"
+        style={{ backgroundImage: `url(${gameBackground})` }}
+      >
+        Loading player data...
+      </div>
+    );
   }
 
   const {
@@ -1530,9 +1790,12 @@ const GamePage = ({ onLogout, sendMessage }) => {
     current_threats,
     attraction_turn_player_id,
     action_turn_player_id,
+    intermission_turn_player_id, // v1.8
     player_plans,
     player_defenses,
     market,
+    era, // v1.8
+    round, // v1.8
   } = gameState;
   const canConfirmThreat = selectedThreatId !== null;
 
@@ -1552,12 +1815,14 @@ const GamePage = ({ onLogout, sendMessage }) => {
         const isLureRevealed =
           phase === "ATTRACTION"
             ? index <= attractionTurnIndex
-            : ["DEFENSE", "ACTION", "CLEANUP"].includes(phase);
+            : ["DEFENSE", "ACTION", "CLEANUP", "INTERMISSION"].includes(phase);
         newPlans[pid].is_lure_revealed = isLureRevealed;
 
         // Action Card Reveal Logic
         const isActionRevealed =
-          phase === "ACTION" ? index <= actionTurnIndex : phase === "CLEANUP";
+          phase === "ACTION"
+            ? index <= actionTurnIndex
+            : ["CLEANUP", "INTERMISSION"].includes(phase);
         newPlans[pid].is_action_revealed = isActionRevealed;
       }
     });
@@ -1574,7 +1839,8 @@ const GamePage = ({ onLogout, sendMessage }) => {
     const assignments = {};
     if (!gameState.players) return assignments;
     Object.values(gameState.players).forEach((p) => {
-      if (p.assigned_threat) {
+      if (p.assigned_threat && p.defense_result !== "KILL") {
+        // Don't show assignment if killed
         assignments[p.assigned_threat.id] = p.username;
       }
     });
@@ -1591,9 +1857,12 @@ const GamePage = ({ onLogout, sendMessage }) => {
     const available = current_threats.filter((t) =>
       gameState.available_threat_ids.includes(t.id)
     );
+    const matching = available.filter((t) => t.lure === myPlan.lure_card);
+
     if (gameState.attraction_phase_state === "FIRST_PASS") {
-      return available.filter((t) => t.lure === myPlan.lure_card);
+      return matching;
     } else {
+      // Second pass: can take any, but must take one if available
       return available;
     }
   }, [
@@ -1606,17 +1875,29 @@ const GamePage = ({ onLogout, sendMessage }) => {
     gameState.attraction_phase_state,
   ]);
 
+  // v1.8: Logic for what threats to show.
   const threatsToShow = useMemo(() => {
     const viewingPlayer = viewingPlayerId && gameState.players[viewingPlayerId];
 
-    // If we are viewing a player (including self) who has an assigned threat,
-    // only show that specific threat in the panel.
-    if (viewingPlayer && viewingPlayer.assigned_threat) {
+    // If we are viewing a player (including self) who has an assigned threat
+    // AND it's the defense phase, only show their threat.
+    if (
+      viewingPlayer &&
+      viewingPlayer.assigned_threat &&
+      phase === "DEFENSE" &&
+      !viewingPlayer.defense_result
+    ) {
       return [viewingPlayer.assigned_threat];
     }
-    // Otherwise, show all threats currently in play.
-    return current_threats;
-  }, [viewingPlayerId, gameState.players, current_threats]);
+    // Otherwise, show all *unassigned* threats
+    return current_threats.filter((t) => !threatAssignments[t.id]);
+  }, [
+    viewingPlayerId,
+    gameState.players,
+    current_threats,
+    phase,
+    threatAssignments,
+  ]);
 
   const getPlayerTurnStatus = (playerId) => {
     if (phase === "ATTRACTION") {
@@ -1626,11 +1907,16 @@ const GamePage = ({ onLogout, sendMessage }) => {
     }
     if (phase === "ACTION") {
       if (playerId === action_turn_player_id) return "ACTIVE";
-      // Find index in queue
       const myIndex = initiative_queue.indexOf(playerId);
       const turnIndex = initiative_queue.indexOf(action_turn_player_id);
-      if (turnIndex === -1) return "PENDING"; // Turn hasn't started
+      if (turnIndex === -1) return "PENDING";
       return myIndex < turnIndex ? "WAITING" : "PENDING";
+    }
+    // v1.8: Intermission
+    if (phase === "INTERMISSION") {
+      if (playerId === intermission_turn_player_id) return "ACTIVE";
+      const hasActed = gameState.intermission_players_acted.includes(playerId);
+      return hasActed ? "WAITING" : "PENDING";
     }
     if (phase === "PLANNING") {
       const plan = player_plans[playerId];
@@ -1644,11 +1930,21 @@ const GamePage = ({ onLogout, sendMessage }) => {
     return "NONE";
   };
 
-  const handleMarketCardSelect = (choiceType, cardId) => {
-    sendGameAction("submit_action_choice", {
-      choice_type: choiceType,
-      card_id: cardId,
-    });
+  const handleMarketCardSelect = (choiceType, marketType, cardId) => {
+    // v1.8: Handle Intermission
+    if (choiceType === "INTERMISSION") {
+      sendGameAction("submit_action_choice", {
+        choice_type: "INTERMISSION",
+        market_type: marketType, // "UPGRADE" or "ARSENAL"
+        card_id: cardId,
+      });
+    } else {
+      // Handle Fortify/Armory Run
+      sendGameAction("submit_action_choice", {
+        choice_type: choiceType,
+        card_id: cardId,
+      });
+    }
   };
 
   const handleThreatSelect = (threatId) => {
@@ -1657,22 +1953,7 @@ const GamePage = ({ onLogout, sendMessage }) => {
     }
   };
 
-  // A "pure" spectator is someone who joined to watch and isn't in the player list at all.
-  // A player who has surrendered/been eliminated will still have a `self` object with a non-ACTIVE status.
-  const isPureSpectator = !self;
-
-  // A player has "left" if they were a player but are now out of the game.
-  const hasLeft =
-    self && (self.status === "SURRENDERED" || self.status === "ELIMINATED");
-
-  // A user is a spectator if they are a pure spectator OR if they have left the game.
-  const isSpectator = isPureSpectator || hasLeft;
-
-  const showMarketPanel =
-    !isSpectator &&
-    phase === "ACTION" &&
-    (self.action_choice_pending === "FORTIFY" ||
-      self.action_choice_pending === "ARMORY_RUN");
+  const eraNames = { 1: "Day", 2: "Twilight", 3: "Night" };
 
   return (
     <div
@@ -1688,7 +1969,7 @@ const GamePage = ({ onLogout, sendMessage }) => {
       {showSurrenderModal && (
         <ConfirmationModal
           title="Confirm Surrender"
-          message="Are you sure you want to surrender? This action cannot be undone."
+          message="Are you sure you want to surrender? You will be able to spectate, but cannot win."
           onConfirm={handleSurrender}
           onCancel={() => setShowSurrenderModal(false)}
         />
@@ -1712,8 +1993,14 @@ const GamePage = ({ onLogout, sendMessage }) => {
             Wild Pigs Will Attack!
           </h1>
         </div>
+        {/* v1.8: Era/Round Display */}
+        <div className="flex-grow text-center">
+          <span className="text-xl font-bold text-yellow-300 bg-black bg-opacity-50 px-4 py-1 rounded">
+            Era: {eraNames[era]} | Round: {round} / 5
+          </span>
+        </div>
         <div className="space-x-2">
-          {!isSpectator && !hasLeft && (
+          {!isSpectator && (
             <button
               onClick={() => setShowSurrenderModal(true)}
               className="btn btn-warning btn-sm"
@@ -1736,11 +2023,13 @@ const GamePage = ({ onLogout, sendMessage }) => {
         style={{ height: "25vh" }}
       >
         {initiative_queue.map((pid, index) => {
+          const player = gameState.players[pid];
+          if (!player) return null; // Handle player leaving
           const isViewing = pid === viewingPlayerId;
           return (
             <React.Fragment key={pid}>
               <PlayerCard
-                player={gameState.players[pid]}
+                player={player}
                 isSelf={pid === user.id}
                 portrait={playerPortraitsMap[pid]}
                 turnStatus={getPlayerTurnStatus(pid)}
@@ -1802,8 +2091,7 @@ const GamePage = ({ onLogout, sendMessage }) => {
           ) : hasLeft ? (
             <div className="text-center p-4 bg-gray-800 bg-opacity-70 rounded-lg">
               <p className="text-lg text-yellow-300 mb-4">
-                You have been {self.status.toLowerCase()}. You can continue
-                watching.
+                You have {self.status.toLowerCase()}. You can continue watching.
               </p>
               <div className="flex justify-center gap-4 mt-4">
                 <button
@@ -1836,7 +2124,10 @@ const GamePage = ({ onLogout, sendMessage }) => {
                 {activePanel === "market" && (
                   <MarketPanel
                     market={market}
-                    myTurn={self.user_id === action_turn_player_id}
+                    myTurn={
+                      self.user_id === action_turn_player_id ||
+                      self.user_id === intermission_turn_player_id
+                    }
                     choiceType={self.action_choice_pending}
                     onCardSelect={handleMarketCardSelect}
                     playerScrap={self.scrap}
@@ -1872,6 +2163,14 @@ const GamePage = ({ onLogout, sendMessage }) => {
                 )}
                 {phase === "ACTION" && (
                   <ActionPhaseActions
+                    sendGameAction={sendGameAction}
+                    player={self}
+                    gameState={gameState}
+                  />
+                )}
+                {/* v1.8: Intermission */}
+                {phase === "INTERMISSION" && (
+                  <IntermissionPhaseActions
                     sendGameAction={sendGameAction}
                     player={self}
                     gameState={gameState}
