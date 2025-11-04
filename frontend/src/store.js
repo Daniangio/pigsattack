@@ -66,21 +66,28 @@ export const useStore = create((set, get) => ({
 
   handleStateUpdate: (payload) => {
     set((state) => {
-      // --- FIX for Race Condition ---
-      // If we are currently in a game (gameState is not null),
-      // we must *ignore* any 'state_update' messages, as they
-      // are stale messages from the lobby/room we already left.
-      // The only message that can update us now is 'game_state_update'
-      // or an action that clears the game (like logout).
+      // --- FIX for Bug 1: Allow navigation *out* of game ---
+      // If a new view is 'lobby' or 'auth', it's a navigation
+      // command that should *always* be obeyed, and it should
+      // clear the game state.
+      if (payload.view && payload.view !== "game") {
+        console.warn(
+          `Force navigating to ${payload.view}, clearing game state.`
+        );
+        return { ...state, ...payload, gameState: null, gameResult: null };
+      }
+
+      // Original race condition fix:
+      // If we are in a game, ignore stale lobby/room updates.
       if (state.gameState) {
         console.warn("Ignoring stale 'state_update' while in game.");
         return state; // Ignore the update
       }
+      // --- END FIX ---
 
       // If we are not in a game, process the update.
       return { ...state, ...payload };
     });
-    // --- END FIX ---
   },
 
   handleGameStateUpdate: (payload) => {

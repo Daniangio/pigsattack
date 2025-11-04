@@ -5,6 +5,7 @@ and the individual GameInstance objects.
 """
 
 from typing import Dict, List, Optional, Any
+# --- FIX: Reverted to relative imports ---
 from .connection_manager import ConnectionManager
 # Use TYPE_CHECKING to avoid circular import at runtime
 from typing import TYPE_CHECKING
@@ -88,7 +89,7 @@ class GameManager:
                 )
             
             elif action == "submit_action_choice":
-                # 'payload' is now the choice_payload, since 'action'
+                # FIX: 'payload' is now the choice_payload, since 'action'
                 # was a separate argument.
                 choice_payload = payload
                 action_success = game.submit_action_choice(
@@ -98,7 +99,7 @@ class GameManager:
 
             elif action == "buy_market_card":
                 action_success = game.buy_market_card(
-                    player_id=user.id,
+                    user_id=user.id,
                     card_id=payload.get("card_id"),
                     card_type=payload.get("card_type")
                 )
@@ -110,6 +111,8 @@ class GameManager:
             
             elif action == "surrender":
                 print(f"User {user.username} is surrendering in {game_id}.")
+                # This action is handled by room_manager, but we can
+                # tell the game instance immediately.
                 game.surrender_player(user.id)
                 action_success = True # The action was processed
             
@@ -165,14 +168,27 @@ class GameManager:
             game.surrender_player(user.id)
         
         # Broadcast the updated state (e.g., player is_connected = False)
+        # This broadcast will now correctly reach the surrendered player.
         await self.broadcast_game_state(game_id)
         
         # Check if the game should end (e.g., all players disconnected/surrendered)
         if game.state.phase != GamePhase.GAME_OVER:
             active_players = game.state.get_active_players_in_order()
+            
+            # --- FIX: Check for 0 or 1 active players ---
             if not active_players:
                 print(f"Game {game_id} has no active players. Ending game.")
+                # No winner in this case
+                game.state.phase = GamePhase.GAME_OVER # Manually set phase
                 await self.end_game(game_id)
+            elif len(active_players) == 1:
+                winner = active_players[0]
+                print(f"Game {game_id} has only one active player left ({winner.username}). Ending game.")
+                # Set the winner and end the game
+                game.state.winner = winner
+                game.state.phase = GamePhase.GAME_OVER
+                await self.end_game(game_id)
+            # --- END FIX ---
 
     async def broadcast_game_state(self, game_id: str, 
                                  specific_user_id: Optional[str] = None,
@@ -185,26 +201,61 @@ class GameManager:
             print(f"Cannot broadcast state: Game {game_id} not found.")
             return
 
+        if not self.room_manager:
+            print(f"Error: RoomManager not set in GameManager. Cannot broadcast.")
+            return
+
+        # --- REFACTORED BROADCAST LOGIC ---
+        
         if specific_user_id:
-            # Send to just one user (e.g., on reconnect)
+            # Send to just one user (e.g., on reconnect or spectator join)
             state_payload = game.get_state(specific_user_id)
             msg = {"type": "game_state_update", "payload": state_payload}
             await self.conn_manager.send_to_user(specific_user_id, msg)
-        else:
-            # Send to all users in the game
-            all_states = game.get_all_player_states()
+            return
+
+        # Find the room to get ALL recipients (players + spectators)
+        room: Optional[Room] = None
+        for r in self.room_manager.rooms.values():
+            if r.game_record_id == game_id:
+                room = r
+                break
+        
+        if not room:
+            print(f"Error: Room for game {game_id} not found. Cannot broadcast.")
+            return
+
+        # Get all states
+        all_states = game.get_all_player_states()
+        
+        # Get all recipients
+        player_ids = {p.id for p in room.players}
+        spectator_ids = {s.id for s in room.spectators}
+        all_recipients = player_ids.union(spectator_ids)
+
+        spectator_payload = None # Lazy-load spectator state
+
+        for user_id in all_recipients:
+            if user_id == exclude_user_id:
+                continue
+
+            payload_to_send = None
+            if user_id in all_states:
+                # This user is a player (active, surrendered, etc.)
+                payload_to_send = all_states[user_id]
+            else:
+                # This user is a pure spectator
+                if spectator_payload is None:
+                    # "spectator" is a magic string for get_state
+                    spectator_payload = game.get_state("spectator") 
+                payload_to_send = spectator_payload
             
-            for user_id, state_payload in all_states.items():
-                if user_id == "spectator":
-                    # TODO: Broadcast to spectators
-                    pass
-                elif user_id == exclude_user_id:
-                    continue # Skip this user
-                else:
-                    player_in_game = game.state.get_player(user_id)
-                    if player_in_game and player_in_game.is_connected:
-                        msg = {"type": "game_state_update", "payload": state_payload}
-                        await self.conn_manager.send_to_user(user_id, msg)
+            if payload_to_send:
+                msg = {"type": "game_state_update", "payload": payload_to_send}
+                await self.conn_manager.send_to_user(user_id, msg)
+
+        # --- END REFACTORED LOGIC ---
+
 
     async def end_game(self, game_id: str):
         """
@@ -243,10 +294,9 @@ class GameManager:
         
         if not room:
             print(f"Error: Room for game {game_id} not found in RoomManager.")
-            # Don't delete from active_games, RoomManager needs to
-            # end it first. This case shouldn't happen.
-            return
-
+            # We can still proceed to clean up the game instance
+            # and record, but we can't broadcast to the room.
+        
         # 4. Find the server-level User object for the winner
         winner_user: Optional[User] = None
         if winner_state:
@@ -262,7 +312,7 @@ class GameManager:
         # 5. Tell RoomManager to end the game
         # RoomManager will update the room, record, and broadcast
         await self.room_manager.end_game(
-            room=room,
+            room=room, # Pass room, even if None (end_game handles it)
             record=record,
             manager=self.conn_manager,
             winner=winner_user
@@ -272,4 +322,3 @@ class GameManager:
         if game_id in self.active_games:
             del self.active_games[game_id]
             print(f"GameInstance {game_id} removed from active games.")
-

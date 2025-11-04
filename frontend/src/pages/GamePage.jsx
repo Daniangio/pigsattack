@@ -692,55 +692,69 @@ const CurrentPlanDisplay = ({
     let actionId = null;
     let newTitle = "Current Plan";
 
-    switch (phase) {
-      case "WILDERNESS":
+    // --- FIX: Logic updated to handle isSelf ---
+    if (isSelf && playerPlan) {
+      // If it's me, I always see my plan
+      lureId = playerPlan.lure;
+      actionId = playerPlan.action;
+      newTitle = "Your Plan";
+
+      if (phase === "PLANNING" && !player.plan_submitted) {
         newTitle = "Planning...";
-        break;
-      case "PLANNING":
-        if (player.plan_submitted) {
-          lureId = "UNKNOWN_LURE";
-          actionId = "UNKNOWN_ACTION";
-          newTitle = "Planned";
-        } else {
+        lureId = null;
+        actionId = null;
+      } else if (phase === "PLANNING" && player.plan_submitted) {
+        newTitle = "Planned"; // Keep cards visible
+      }
+    } else {
+      // Logic for viewing other players
+      switch (phase) {
+        case "WILDERNESS":
           newTitle = "Planning...";
-        }
-        break;
-      case "ATTRACTION":
-      case "DEFENSE":
-        if (playerPlan) {
-          lureId = playerPlan.lure;
-          actionId = isSelf ? playerPlan.action : "UNKNOWN_ACTION"; // <-- FIX
-        } else {
-          // Handle case where player might not have a plan (e.g., joined late? Or plan not received yet)
-          actionId = "UNKNOWN_ACTION";
-        }
-        newTitle = "Current Plan";
-        break;
-      case "ACTION":
-        if (playerPlan) {
-          lureId = playerPlan.lure;
-          // Show action if it's their turn, their turn has passed, OR it's their own board
-          if (isSelf || turnStatus === "ACTIVE" || turnStatus === "WAITING") {
-            // <-- FIX
-            actionId = playerPlan.action;
-          } else {
+          break;
+        case "PLANNING":
+          if (player.plan_submitted) {
+            lureId = "UNKNOWN_LURE";
             actionId = "UNKNOWN_ACTION";
+            newTitle = "Planned";
+          } else {
+            newTitle = "Planning...";
           }
-        }
-        newTitle = "Current Action";
-        break;
-      case "CLEANUP":
-      case "INTERMISSION":
-      case "GAME_OVER":
-        if (playerPlan) {
-          lureId = playerPlan.lure;
-          actionId = playerPlan.action;
-        }
-        newTitle = "Revealed Plan";
-        break;
-      default:
-        newTitle = "Current Plan";
+          break;
+        case "ATTRACTION":
+        case "DEFENSE":
+          if (playerPlan) {
+            lureId = playerPlan.lure;
+          }
+          actionId = "UNKNOWN_ACTION";
+          newTitle = "Current Plan";
+          break;
+        case "ACTION":
+          if (playerPlan) {
+            lureId = playerPlan.lure;
+            // Show action if it's their turn or their turn has passed
+            if (turnStatus === "ACTIVE" || turnStatus === "WAITING") {
+              actionId = playerPlan.action;
+            } else {
+              actionId = "UNKNOWN_ACTION";
+            }
+          }
+          newTitle = "Current Action";
+          break;
+        case "CLEANUP":
+        case "INTERMISSION":
+        case "GAME_OVER":
+          if (playerPlan) {
+            lureId = playerPlan.lure;
+            actionId = playerPlan.action;
+          }
+          newTitle = "Revealed Plan";
+          break;
+        default:
+          newTitle = "Current Plan";
+      }
     }
+    // --- END FIX ---
 
     setLureCard(
       lureId
@@ -761,7 +775,7 @@ const CurrentPlanDisplay = ({
         : null
     );
     setTitle(newTitle);
-  }, [player.plan_submitted, playerPlan, phase, turnStatus, isSelf]); // <-- FIX: Add isSelf
+  }, [player.plan_submitted, playerPlan, phase, turnStatus, isSelf]);
 
   if (!lureCard && !actionCard) {
     return (
@@ -899,16 +913,8 @@ const PlayerAssets = ({
   if (!player) return null;
 
   // --- *** FIX *** ---
-  // Remove the logic that shows the threat instead of the board
-  // const attractedThreat = player.attracted_threat;
-  // const showThreatInsteadOfBoard =
-  //   !isSelf &&
-  //   attractedThreat &&
-  //   (phase === "DEFENSE" ||
-  //     phase === "ACTION" ||
-  //     phase === "CLEANUP" ||
-  //     phase === "INTERMISSION" ||
-  //     phase === "GAME_OVER");
+  // Removed the conditional logic that showed the threat.
+  // The panel now *always* shows the player's board.
 
   return (
     <div className="w-full h-full flex items-center gap-6 overflow-x-auto px-4">
@@ -1966,12 +1972,12 @@ const IntermissionPhaseActions = ({ sendGameAction, player, gameState }) => {
   );
 };
 
+// --- *** REFACTORED GameHeader *** ---
 const GameHeader = ({
   round,
   era,
   phase,
   onSurrender,
-  onLogout,
   isSpectator,
   hasLeft,
   onReturnToLobby,
@@ -2004,24 +2010,23 @@ const GameHeader = ({
           Surrender
         </button>
       )}
-      {phase === "GAME_OVER" && (
+      {/* --- FIX: Show Back to Lobby if game is over OR user is a spectator/has left --- */}
+      {(phase === "GAME_OVER" || isSpectator || hasLeft) && (
         <button onClick={onReturnToLobby} className="btn btn-primary btn-sm">
           Back to Lobby
         </button>
       )}
-      <button onClick={onLogout} className="btn btn-danger btn-sm">
-        Logout
-      </button>
+      {/* --- FIX: Removed Logout Button --- */}
     </div>
   </div>
 );
 
 // --- MAIN GAME PAGE COMPONENT ---
 const GamePage = ({ onLogout }) => {
-  // --- FIX: `sendMessage` is no longer a prop
   const { user, gameState } = useStore();
   const [showSurrenderModal, setShowSurrenderModal] = useState(false);
-  const [showLogoutModal, setShowLogoutModal] = useState(false);
+  // --- FIX: Removed Logout Modal ---
+  // const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [viewingPlayerId, setViewingPlayerId] = useState(null);
   const [activePanel, setActivePanel] = useState("threats");
   const [selectedThreatId, setSelectedThreatId] = useState(null);
@@ -2110,6 +2115,8 @@ const GamePage = ({ onLogout }) => {
     const sendMessage = useStore.getState().sendMessage;
     if (sendMessage) {
       try {
+        // --- FIX: This should be "return_to_lobby" not "leave_room"
+        // "leave_room" is for pre-game. "return_to_lobby" is for post-game/surrender.
         sendMessage({ action: "return_to_lobby" });
       } catch (error) {
         console.error("Failed to return to lobby:", error);
@@ -2119,13 +2126,18 @@ const GamePage = ({ onLogout }) => {
   // --- *** END OF FIX *** ---
   // ---
 
-  const handleLogout = () => onLogout();
+  // --- FIX: Removed handleLogout ---
+  // const handleLogout = () => onLogout();
 
   // Get the sendMessage function *just for the loading check*
   // We use a selector here so the component re-renders when it changes
   const sendMessageForLoadingCheck = useStore((state) => state.sendMessage);
 
-  if (!gameState || !user || !self || !sendMessageForLoadingCheck) {
+  // --- FIX: Removed `!self` from the loading check. ---
+  // A "pure spectator" will have `self` as null, but we still
+  // need to render the page for them. The `isSpectator` flag
+  // correctly handles what to show them.
+  if (!gameState || !user || !sendMessageForLoadingCheck) {
     // Show a robust loading state
     return (
       <div
@@ -2205,9 +2217,11 @@ const GamePage = ({ onLogout }) => {
     const viewingPlayer = viewingPlayerId && gameState.players[viewingPlayerId];
     if (viewingPlayer && viewingPlayer.attracted_threat) {
       // Always show your own threat if you have one
-      if (viewingPlayer.user_id === self.user_id) {
+      // --- FIX for Bug 2: Use optional chaining on self ---
+      if (viewingPlayer.user_id === self?.user_id) {
         return [viewingPlayer.attracted_threat];
       }
+      // --- END FIX ---
       // Only show other's threats if phase is past attraction
       if (!["WILDERNESS", "PLANNING", "ATTRACTION"].includes(phase)) {
         return [viewingPlayer.attracted_threat];
@@ -2220,7 +2234,7 @@ const GamePage = ({ onLogout }) => {
     gameState.players,
     current_threats,
     phase,
-    self.user_id,
+    self?.user_id, // --- FIX for Bug 2: Use optional chaining here too
   ]);
 
   const getPlayerTurnStatus = (playerId) => {
@@ -2315,15 +2329,7 @@ const GamePage = ({ onLogout }) => {
           confirmText="Surrender"
         />
       )}
-      {showLogoutModal && (
-        <ConfirmationModal
-          title="Confirm Logout"
-          message="Are you sure you want to logout and leave the game?"
-          onConfirm={handleLogout}
-          onCancel={() => setShowLogoutModal(false)}
-          confirmText="Logout"
-        />
-      )}
+      {/* --- FIX: Removed Logout Modal --- */}
 
       <header className="flex-shrink-0" style={{ height: "10vh" }}>
         <GameHeader
@@ -2331,7 +2337,7 @@ const GamePage = ({ onLogout }) => {
           era={era}
           phase={phase}
           onSurrender={() => setShowSurrenderModal(true)}
-          onLogout={() => setShowLogoutModal(true)}
+          // --- FIX: Pass spectator/left status ---
           isSpectator={isPureSpectator} // Only true if never a player
           hasLeft={hasLeft} // True if was a player but left
           onReturnToLobby={handleReturnToLobby}
