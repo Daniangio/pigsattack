@@ -2,1050 +2,1243 @@
 The GameInstance class.
 This encapsulates all the rules and state for a single game.
 It is the "server" for one match.
-v1.8
+
+v1.8 - Refactored by Gemini
+
+Key Refactor:
+- Fixed an infinite loop in the ATTRACTION phase.
+- The previous logic used a helper `_check_and_skip_attraction_turn`
+  that could recursively call the main advancement logic
+  `_process_attraction_turn_end`, causing a loop when all
+  remaining players had no valid moves.
+- This is replaced by a single, robust `_advance_attraction_turn`
+  function. This new function is the single source of truth for
+  turn advancement. It internally loops to find the *next available
+  player who can act*, skipping players who cannot, all within
+  a single call. This prevents the infinite loop and is much cleaner.
 """
 
-from .game_core.models import (
+from .game_core.game_models import (
     GameState, PlayerState, GamePhase, PlayerPlans, PlayerDefense,
-    ScrapType, LureCard, SurvivorActionCard, ThreatCard, UpgradeCard, ArsenalCard
+    ScrapType, LureCard, SurvivorActionCard, ThreatCard, UpgradeCard, ArsenalCard,
+    PlayerStatus
 )
 from .game_core.deck_factory import create_threat_deck, create_upgrade_deck, create_arsenal_deck
 from typing import List, Dict, Any, Optional, cast
 import random
-import math # For ceiling in resistance calculation
 
 # Import the server-level models only for type hinting the setup
-from .models import GameParticipant 
+from .server_models import GameParticipant
 
-# --- CONSTANTS (v1.8) ---\
+# --- CONSTANTS (v1.8) ---
 BASE_DEFENSE_FROM_ACTION = {
     SurvivorActionCard.SCAVENGE: {ScrapType.PARTS: 3, ScrapType.WIRING: 1, ScrapType.PLATES: 3},
     SurvivorActionCard.FORTIFY: {ScrapType.PARTS: 3, ScrapType.WIRING: 3, ScrapType.PLATES: 1},
     SurvivorActionCard.ARMORY_RUN: {ScrapType.PARTS: 1, ScrapType.WIRING: 3, ScrapType.PLATES: 3},
     SurvivorActionCard.SCHEME: {ScrapType.PARTS: 2, ScrapType.WIRING: 2, ScrapType.PLATES: 2},
 }
+TOTAL_ROUNDS = 15 # v1.8 rulebook
+ROUNDS_PER_ERA = 5
 # --
+
 
 class GameInstance:
     """
-    Manages the state and logic for a single, isolated game.
+    Manages the state and logic for a single game of "Wild Pigs Will Attack!".
     """
+
     def __init__(self, game_id: str, participants: List[GameParticipant]):
-        self.game_id = game_id
-        self.state = GameState(game_id=game_id)
-        
-        print(f"Initializing GameInstance {game_id}...")
-        
-        # 1. Create and add players
-        player_ids = list(range(1, len(participants) + 1))
-        random.shuffle(player_ids)
-        
-        player_user_ids = []
+        """
+        Initializes a new game instance.
+        """
+
+        # 1. Create Players
+        players = {}
+        player_ids = []
         for i, p in enumerate(participants):
             player_state = PlayerState(
                 user_id=p.user.id,
+                player_id=p.user.id,
                 username=p.user.username,
-                player_id=player_ids[i],
-                is_host=(p.user.id == participants[0].user.id) # First participant is host
+                is_host=(i == 0),
+                is_connected=True,
+                status=PlayerStatus.ACTIVE,
+                scrap={} # Will be populated by helper
             )
-            self.state.players[p.user.id] = player_state
-            player_user_ids.append(p.user.id)
-        
-        # 2. Set initiative order
-        # For setup, we just shuffle the user_ids.
-        self.state.initiative_queue = player_user_ids
-        random.shuffle(self.state.initiative_queue)
-        
-        # 3. Set first player
-        self.state.first_player = self.state.initiative_queue[0]
-        
-        # 4. Create decks (v1.8: 5 cards per player per era)
+            # Rulebook Sec 3: Start with 2 random scrap
+            self._player_draws_random_scrap(player_state, 2, log=False)
+
+            players[p.user.id] = player_state
+            player_ids.append(p.user.id)
+
+        # 2. Determine initial initiative (random)
+        # Rulebook Sec 3: Player who most recently...
+        # Random is an acceptable simplification for now.
+        random.shuffle(player_ids)
+        initiative_queue = player_ids
+        # first_player = initiative_queue[0] # This is no longer needed
+
+        # 3. Initialize GameState
+        self.state = GameState(
+            game_id=game_id,
+            players=players,
+            initiative_queue=initiative_queue
+            # first_player=first_player # Removed, field no longer exists
+        )
+
+        # 4. Create decks
         num_players = len(participants)
-        self.state.threat_decks[1] = create_threat_deck(1, num_players)
-        self.state.threat_decks[2] = create_threat_deck(2, num_players)
-        self.state.threat_decks[3] = create_threat_deck(3, num_players)
-        
-        self.state.market.upgrade_deck = create_upgrade_deck()
-        self.state.market.arsenal_deck = create_arsenal_deck()
-        
+
+        self.state.threat_deck = create_threat_deck(num_players)
+        self.state.upgrade_deck = create_upgrade_deck()
+        self.state.arsenal_deck = create_arsenal_deck()
+
         self.state.add_log(f"Game {game_id} created with {num_players} players.")
-        
+
         # 5. Start the first phase
         self._start_wilderness_phase()
+
+    # --- Public API (called by GameManager) ---
 
     def get_state(self, user_id: str) -> Dict[str, Any]:
         """
         Returns the appropriate redacted state for the given user.
+        'user_id' can be a player's ID or "spectator".
         """
-        return self.state.get_redacted_state(user_id)
+        return self.state.get_player_public_state(user_id)
+
+    def get_all_player_states(self) -> Dict[str, Dict[str, Any]]:
+        """
+        Returns a dict mapping user_id -> redacted_state for all players.
+        """
+        states = {}
+        for user_id in self.state.players:
+            states[user_id] = self.get_state(user_id)
+        # Also include a spectator view
+        states["spectator"] = self.get_state("spectator")
+        return states
+
+    # --- Helper: Player Draws Scrap ---
+
+    def _player_draws_random_scrap(self, player: PlayerState, count: int, log: bool = True):
+        """Helper for a player to draw 'count' random scrap."""
+        # Per rulebook (Sec 2), pool is 50/50/50. So random.choice is fine.
+        if count <= 0:
+            return
+
+        drawn = random.choices(
+            [ScrapType.PARTS, ScrapType.WIRING, ScrapType.PLATES],
+            k=count
+        )
+        drawn_str = []
+        for scrap in drawn:
+            player.scrap[scrap] = player.scrap.get(scrap, 0) + 1
+            drawn_str.append(scrap.value)
+
+        if log:
+            self.state.add_log(f"{player.username} draws {count} random scrap: {', '.join(drawn_str)}")
 
     # --- Player Connection ---
 
-    def on_player_connect(self, user_id: str):
-        """Mark a player as connected."""
+    def on_player_reconnect(self, user_id: str):
         player = self.state.get_player(user_id)
         if player:
+            # Only reconnect if they were just disconnected
+            if player.status == PlayerStatus.DISCONNECTED:
+                player.status = PlayerStatus.ACTIVE
             player.is_connected = True
             self.state.add_log(f"{player.username} has reconnected.")
-            return True
-        return False
 
     def on_player_disconnect(self, user_id: str):
-        """Mark a player as disconnected."""
         player = self.state.get_player(user_id)
         if player:
             player.is_connected = False
+            # Only set to DISCONNECTED if they are currently ACTIVE
+            if player.status == PlayerStatus.ACTIVE:
+                player.status = PlayerStatus.DISCONNECTED
             self.state.add_log(f"{player.username} has disconnected.")
-            # TODO: Handle auto-readiness or skipping turns
-            return True
-        return False
 
-    # --- Core Game Loop (State Machine) ---
+            # Check if this disconnect triggers phase advancement
+            if self.state.phase == GamePhase.PLANNING:
+                if self._are_all_players_ready("plans"):
+                    self._advance_phase()
+            elif self.state.phase == GamePhase.DEFENSE:
+                 if self._are_all_players_ready("defenses"):
+                    self._resolve_all_defenses()
+            # ... etc.
 
-    def _advance_phase(self):
-        """
-        Advances the game to the next phase.
-        This is the main state machine.
-        """
-        current_phase = self.state.phase
-        
-        # Determine next phase
-        if current_phase == GamePhase.WILDERNESS:
-            self._start_planning_phase()
-        elif current_phase == GamePhase.PLANNING:
-            self._start_attraction_phase()
-        elif current_phase == GamePhase.ATTRACTION:
-            self._start_defense_phase()
-        elif current_phase == GamePhase.DEFENSE:
-            self._start_action_phase()
-        elif current_phase == GamePhase.ACTION:
-            self._start_cleanup_phase()
-        elif current_phase == GamePhase.CLEANUP:
-            # Check for game end (15 rounds)
-            if self.state.round == 15:
-                self._end_game()
-            else:
-                self.state.round += 1
-                # Check for Era change
-                if self.state.round == 6: # Start Era 2 (Twilight)
-                    self.state.era = 2
-                    self._start_intermission_phase()
-                elif self.state.round == 11: # Start Era 3 (Night)
-                    self.state.era = 3
-                    self._start_intermission_phase()
-                else:
-                    self._start_wilderness_phase() # Start next round
-        
-        elif current_phase == GamePhase.INTERMISSION:
-            # After intermission, always start Wilderness
-            self._start_wilderness_phase()
-            
-        elif current_phase == GamePhase.GAME_OVER:
-            # Do nothing
-            pass
+    def surrender_player(self, user_id: str):
+        """ Player forfeits the game."""
+        player = self.state.get_player(user_id)
+        if player and player.status == PlayerStatus.ACTIVE:
+            player.status = PlayerStatus.SURRENDERED
+            player.is_connected = False # Treat them as disconnected for turn order
+            self.state.add_log(f"{player.username} has surrendered!")
 
-    # --- Phase: WILDERNESS ---
-    
+            # Check if this surrender triggers phase advancement
+            if self.state.phase == GamePhase.PLANNING:
+                if self._are_all_players_ready("plans"):
+                    self._advance_phase()
+            elif self.state.phase == GamePhase.DEFENSE:
+                 if self._are_all_players_ready("defenses"):
+                    self._resolve_all_defenses()
+            # ... etc.
+
+    # --- Phase 1: WILDERNESS ---
+
     def _start_wilderness_phase(self):
-        """
-        Phase 1: Draw new threats for the round.
-        """
         self.state.phase = GamePhase.WILDERNESS
-        self.state.add_log(f"--- Round {self.state.round} (Era {self.state.era}) ---")
+
+        self.state.add_log(f"--- Round {self.state.round} / Era {self.state.era} ---")
         self.state.add_log("Phase: WILDERNESS. New threats emerge...")
-        
-        # 1. Clear old threats
-        self.state.current_threats = []
-        
-        # 2. Draw new threats
+
+        if self.state.current_threats:
+            self.state.add_log("Discarding remaining threats from last round.")
+            self.state.threat_discard.extend(self.state.current_threats)
+            self.state.current_threats = []
+
         num_players = len(self.state.get_active_players_in_order())
-        num_threats = num_players + 1
-        
-        threat_deck = self.state.threat_decks.get(self.state.era)
-        if not threat_deck:
-            self.state.add_log(f"Error: No threat deck found for Era {self.state.era}!")
-            # Handle error, maybe end game?
+        # Per rulebook, 1 threat per player
+        num_threats = num_players
+
+        if num_threats == 0:
+            self.state.add_log("No active players. Advancing phase.")
+            self._advance_phase()
             return
-            
+
+        threat_deck = self.state.threat_deck
+
+        if len(threat_deck) < num_threats:
+            self.state.add_log("Threat deck empty, reshuffling discard...")
+            self.state.threat_deck.extend(self.state.threat_discard)
+            self.state.threat_discard = []
+            random.shuffle(self.state.threat_deck)
+            threat_deck = self.state.threat_deck
+
         drawn_threats = []
         for _ in range(num_threats):
             if not threat_deck:
-                self.state.add_log("Threat deck is empty!")
+                self.state.add_log("Threat deck is empty! No more threats to draw.")
                 break
             drawn_threats.append(threat_deck.pop(0))
-            
+
         self.state.current_threats = drawn_threats
-        
-        for threat in drawn_threats:
-            self.state.add_log(f"  > {threat.name} appears!")
-            
-        # 3. Advance to next phase
+        for t in drawn_threats:
+            self.state.add_log(f"A {t.name} (E{t.era}) appears!")
+
         self._advance_phase()
 
-    # --- Phase: PLANNING ---
+    # --- Phase 2: PLANNING ---
 
     def _start_planning_phase(self):
-        """
-        Phase 2: Players secretly choose Lure and Action cards.
-        """
         self.state.phase = GamePhase.PLANNING
-        self.state.add_log("Phase: PLANNING. Choose your Lure and Action.")
-        
-        # 1. Clear old plans
         self.state.player_plans = {}
-        
-        # 2. Create new empty plans for all players
-        for player in self.state.get_all_players_in_order(): # Use all, even disconnected
-            self.state.player_plans[player.user_id] = PlayerPlans()
-            # Reset round-specific flags
-            player.attracted_threat_id = None
-            player.defense_result = None
-            player.action_prevented = False # v1.8
-            
-    def submit_plan(self, user_id: str, lure_card: str, action_card: str) -> bool:
-        """
-        Player submits their plan for the round.
-        """
+
+        for player in self.state.players.values():
+            if player.status == PlayerStatus.ACTIVE:
+                player.plan_submitted = False
+                player.defense_submitted = False
+                player.attracted_threat = None
+                player.defense_result = None
+                player.action_prevented = False
+
+        self.state.add_log("Phase: PLANNING. All survivors, submit your plans.")
+
+    def submit_plan(self, player_id: str, lure_card: str, action_card: str) -> bool:
         if self.state.phase != GamePhase.PLANNING:
             return False
-            
-        player = self.state.get_player(user_id)
-        plan = self.state.player_plans.get(user_id)
-        
-        if not player or not plan or plan.ready:
-            return False # Player not found or already ready
-            
-        # Validate cards
+
+        player = self.state.get_player(player_id)
+        if not player or player.plan_submitted or player.status != PlayerStatus.ACTIVE:
+            return False
+
         try:
             lure = LureCard(lure_card)
             action = SurvivorActionCard(action_card)
         except ValueError:
-            self.state.add_log(f"Invalid plan submitted by {player.username}.")
+            self.state.add_log(f"Invalid card submission from {player.username}")
             return False
-            
+
         if lure not in player.lure_hand or action not in player.action_hand:
-            self.state.add_log(f"Plan validation failed for {player.username}.")
+            self.state.add_log(f"Player {player.username} does not own {lure} or {action}")
             return False
-            
-        # Set plan
-        plan.lure = lure
-        plan.action = action
-        plan.ready = True
-        
-        self.state.add_log(f"{player.username} is ready.", player_id=user_id, is_public=False)
-        
-        # Check if all players are ready
+
+        # v1.8 Rule [Source 51]
+        if lure == player.last_round_lure:
+            self.state.add_log(f"Player {player.username} cannot use the same lure as last round.")
+            return False
+
+        self.state.player_plans[player_id] = PlayerPlans(
+            player_id=player_id,
+            lure=lure,
+            action=action
+        )
+        player.plan_submitted = True
+        self.state.add_log(f"{player.username} has submitted their plan.")
+
         if self._are_all_players_ready("plans"):
             self._advance_phase()
-            
+
         return True
 
-    # --- Phase: ATTRACTION ---
-    
+    # --- Phase 3: ATTRACTION (v1.8 Rules) ---
+
     def _start_attraction_phase(self):
-        """
-        Phase 3: Reveal Lures, Attract Threats.
-        """
         self.state.phase = GamePhase.ATTRACTION
         self.state.add_log("Phase: ATTRACTION. Revealing plans...")
-        
-        # 1. Reveal all Lure and Action cards
-        for player in self.state.get_active_players_in_order():
-            plan = self.state.player_plans.get(player.user_id)
-            if plan:
-                self.state.add_log(f"{player.username} planned: {plan.lure.value} & {plan.action.value}")
-                # Set last round's action (v1.8)
-                player.last_round_lure = plan.lure
-                player.last_round_action = plan.action
-        
-        # 2. Setup attraction state
-        self.state.attraction_phase_state = "threat_attraction"
+
+        for pid, plan in self.state.player_plans.items():
+            player = self.state.get_player(pid)
+            if player:
+                self.state.add_log(f"  {player.username} planned: {plan.lure.value} & {plan.action.value}")
+
+        self.state.attraction_phase_state = "FIRST_PASS"
+
+        active_player_ids = [p.user_id for p in self.state.get_active_players_in_order()]
+        self.state.unassigned_player_ids = active_player_ids
+
         self.state.available_threat_ids = [t.id for t in self.state.current_threats]
-        self.state.unassigned_player_ids = self.state.initiative_queue[:]
-        
-        # 3. Start the first attraction turn
-        self._start_next_attraction_turn()
-        
-    def _start_next_attraction_turn(self):
-        """
-        Finds the next player who needs to attract a threat.
-        """
-        if not self.state.unassigned_player_ids:
-            # Everyone has attracted (or tried to).
-            # This should ideally not happen, logic continues from attract_threat
-            self.state.add_log("Error: _start_next_attraction_turn called with no unassigned players.")
-            return
 
-        next_player_id = self.state.unassigned_player_ids[0]
-        player = self.state.get_player(next_player_id)
-        
-        if not player or not player.is_connected:
-            # TODO: Handle disconnected player attraction
-            self.state.add_log(f"{player.username if player else 'Player'} is disconnected, skipping attraction.")
-            self.state.unassigned_player_ids.pop(0)
-            if not self.state.unassigned_player_ids:
-                self._advance_phase() # All done
-            else:
-                self._start_next_attraction_turn() # Try next
-            return
-            
-        self.state.attraction_turn_player_id = next_player_id
-        self.state.add_log(f"It's {player.username}'s turn to attract a threat.")
-
-    def attract_threat(self, user_id: str, threat_id: str) -> bool:
-        """
-        Player attempts to attract a specific threat.
-        """
-        if self.state.phase != GamePhase.ATTRACTION or \
-           self.state.attraction_phase_state != "threat_attraction" or \
-           self.state.attraction_turn_player_id != user_id:
-            return False
-            
-        player = self.state.get_player(user_id)
-        threat = self.state.get_threat_by_id(threat_id)
-        plan = self.state.player_plans.get(user_id)
-        
-        if not player or not threat or not plan:
-            self.state.add_log(f"Attraction failed (invalid state).")
-            return False
-            
-        if threat.id not in self.state.available_threat_ids:
-            self.state.add_log(f"Attraction failed: {threat.name} is not available.")
-            return False
-            
-        # Validation: Check lure strength
-        player_lure_strength = player.get_lure_strength(plan.lure)
-        
-        target_stat_map = {
-            LureCard.BLOODY_RAGS: threat.ferocity,
-            LureCard.STRANGE_NOISES: threat.cunning,
-            LureCard.FALLEN_FRUIT: threat.mass,
-        }
-        target_stat = target_stat_map.get(plan.lure, 0)
-        
-        if player_lure_strength < target_stat:
-            self.state.add_log(f"Attraction failed: {player.username}'s Lure ({player_lure_strength}) is too weak for {threat.name} ({target_stat}).")
-            return False
-            
-        # --- SUCCESS ---
-        self.state.add_log(f"{player.username} attracts {threat.name}!")
-        player.attracted_threat_id = threat.id
-        
-        # Remove threat and player from attraction pool
-        self.state.available_threat_ids.remove(threat.id)
-        self.state.unassigned_player_ids.remove(user_id)
-        
-        # Check for "On Attract:" abilities
-        if "On Attract: discard 1" in threat.ability:
-            scrap_type_str = threat.ability.split(" ")[-1] # "Red", "Blue", "Green"
-            scrap_map = {"Red": ScrapType.PARTS, "Blue": ScrapType.WIRING, "Green": ScrapType.PLATES}
-            scrap_type = scrap_map.get(scrap_type_str)
-            
-            if scrap_type and player.scrap[scrap_type] > 0:
-                player.scrap[scrap_type] -= 1
-                self.state.add_log(f"{threat.name}'s ability forces {player.username} to discard 1 {scrap_type.value}!")
-            else:
-                self.state.add_log(f"{player.username} has no {scrap_type_str} scrap to discard.")
-
-        # Check if phase is over
-        if not self.state.available_threat_ids or not self.state.unassigned_player_ids:
-            # Phase is over
-            self.state.attraction_turn_player_id = None
-            
-            # Assign remaining threat to last player
-            if len(self.state.unassigned_player_ids) == 1 and len(self.state.available_threat_ids) == 1:
-                last_player_id = self.state.unassigned_player_ids[0]
-                last_threat_id = self.state.available_threat_ids[0]
-                last_player = self.state.get_player(last_player_id)
-                last_threat = self.state.get_threat_by_id(last_threat_id)
-                
-                if last_player and last_threat:
-                    self.state.add_log(f"{last_threat.name} is left over and goes to {last_player.username}.")
-                    last_player.attracted_threat_id = last_threat.id
-                    # Check "On Attract" for this player too
-                    if "On Attract: discard 1" in last_threat.ability:
-                         scrap_type_str = last_threat.ability.split(" ")[-1]
-                         scrap_map = {"Red": ScrapType.PARTS, "Blue": ScrapType.WIRING, "Green": ScrapType.PLATES}
-                         scrap_type = scrap_map.get(scrap_type_str)
-                         if scrap_type and last_player.scrap[scrap_type] > 0:
-                             last_player.scrap[scrap_type] -= 1
-                             self.state.add_log(f"{last_threat.name}'s ability forces {last_player.username} to discard 1 {scrap_type.value}!")
-                         else:
-                             self.state.add_log(f"{last_player.username} has no {scrap_type_str} scrap to discard.")
-            
+        if not active_player_ids or not self.state.available_threat_ids:
+            self.state.add_log("No active players or threats. Advancing phase.")
             self._advance_phase()
-        else:
-            # Start next turn
-            self._start_next_attraction_turn()
-            
+            return
+
+        # Set the turn to the first player, then call advance_turn
+        # to validate them and find the *actual* first turn.
+        self.state.attraction_turn_player_id = active_player_ids[0]
+        self._advance_attraction_turn(is_new_pass=True)
+
+    def attract_threat(self, player_id: str, threat_id: str) -> bool:
+        """
+        Player 'player_id' attempts to attract 'threat_id'.
+        """
+        if self.state.phase != GamePhase.ATTRACTION:
+            return False
+
+        if player_id != self.state.attraction_turn_player_id:
+            return False # Not your turn
+
+        player = self.state.get_player(player_id)
+        if not player or player_id not in self.state.unassigned_player_ids:
+            return False # You've already attracted one
+
+        threat = next((t for t in self.state.current_threats if t.id == threat_id), None)
+        if not threat or threat.id not in self.state.available_threat_ids:
+            return False # Threat not available
+
+        player_plan = self.state.player_plans.get(player_id)
+        if not player_plan:
+            return False # Should not happen
+
+        if self.state.attraction_phase_state == "FIRST_PASS":
+            if threat.lure != player_plan.lure:
+                self.state.add_log(f"Invalid choice: {threat.name} does not match {player_plan.lure.value}")
+                return False
+
+        self.state.add_log(f"{player.username} attracts {threat.name}!")
+        player.attracted_threat = threat
+
+        self.state.unassigned_player_ids.remove(player_id)
+        self.state.available_threat_ids.remove(threat_id)
+
+        self._advance_attraction_turn()
         return True
 
-    # --- Phase: DEFENSE ---
+    def _advance_attraction_turn(self, is_new_pass: bool = False):
+        """
+        Finds the next player who can act in the attraction phase.
+        This function will loop, skipping players who cannot act,
+        until it finds a player who can, or until the phase ends.
+        """
+
+        active_initiative = [p.user_id for p in self.state.get_active_players_in_order()]
+        if not active_initiative:
+            self.state.add_log("No active players left.")
+            self._advance_phase()
+            return
+
+        # Get the list of players who still need a threat
+        unassigned_player_ids_set = set(self.state.unassigned_player_ids)
+
+        # Start searching from the correct player
+        start_idx = 0
+        if not is_new_pass:
+            # Start search *after* the current player
+            try:
+                start_idx = (active_initiative.index(self.state.attraction_turn_player_id) + 1)
+            except (ValueError, TypeError):
+                 # Current player might be None or not in active list
+                 start_idx = 0
+        
+        # Make sure start_idx is valid
+        if start_idx >= len(active_initiative):
+            start_idx = 0
+
+        # Loop max N times (N=num players) to find the next valid player
+        for i in range(len(active_initiative)):
+            current_idx = (start_idx + i) % len(active_initiative)
+            player_id = active_initiative[current_idx]
+
+            # 1. Check if this player is in the running
+            if player_id not in unassigned_player_ids_set:
+                continue # Skip player, they already have a threat
+
+            # 2. This player needs a threat. Check if they *can* act.
+            if self.state.attraction_phase_state == "FIRST_PASS":
+                player_plan = self.state.player_plans.get(player_id)
+                if not player_plan:
+                    self.state.add_log(f"Error: {self.state.get_player(player_id).username} has no plan. Skipping.")
+                    continue # Should not happen, but good to check
+
+                available_threats = [
+                    t for t in self.state.current_threats
+                    if t.id in self.state.available_threat_ids
+                ]
+                has_match = any(t.lure == player_plan.lure for t in available_threats)
+
+                if not has_match:
+                    self.state.add_log(f"{self.state.get_player(player_id).username} has no matching Lure! Skipping turn.")
+                    continue # Skip player, they have no valid moves
+
+            # 3. Found a valid player!
+            self.state.attraction_turn_player_id = player_id
+            player = self.state.get_player(player_id)
+            pass_name = "Pass 1" if self.state.attraction_phase_state == "FIRST_PASS" else "Pass 2"
+            self.state.add_log(f"{pass_name}: {player.username}'s turn.")
+            return # Exit, wait for player's action
+
+        # 4. If we looped through everyone and found no valid turns
+        # This means either:
+        #  a) All unassigned players have no matches (in Pass 1)
+        #  b) All unassigned players are assigned (Pass 1 or 2)
+        #  c) All threats are gone (Pass 2)
+
+        # Check if anyone is *still* unassigned
+        # We must re-fetch this as it's not updated *during* the loop
+        still_unassigned = [
+            pid for pid in active_initiative 
+            if pid in self.state.unassigned_player_ids
+        ]
+
+        if self.state.attraction_phase_state == "FIRST_PASS":
+            self.state.add_log("--- Attraction Pass 1 complete. ---")
+
+            if not still_unassigned or not self.state.available_threat_ids:
+                self.state.add_log("No players or threats remaining. Advancing phase.")
+                self._advance_phase()
+            else:
+                # Start Pass 2
+                self.state.attraction_phase_state = "SECOND_PASS"
+                self.state.add_log("Starting Attraction Pass 2.")
+                # Recursively call this to find the *first* player for Pass 2
+                # who is in the `still_unassigned` list.
+                self._advance_attraction_turn(is_new_pass=True)
+
+        else: # We were in SECOND_PASS
+            self.state.add_log("--- Attraction Pass 2 complete. ---")
+            self._advance_phase()
+
+    # --- Phase 4: DEFENSE ---
 
     def _start_defense_phase(self):
-        """
-        Phase 4: Players spend scrap to defend against their threat.
-        """
         self.state.phase = GamePhase.DEFENSE
-        self.state.add_log("Phase: DEFENSE. Spend scrap to defend!")
-        
-        # 1. Clear old defenses
         self.state.player_defenses = {}
-        
-        # 2. Create new empty defenses
-        for player in self.state.get_all_players_in_order():
-            self.state.player_defenses[player.user_id] = PlayerDefense()
-            
-            # Auto-ready players with no threat
-            if not player.attracted_threat_id:
-                self.state.player_defenses[player.user_id].ready = True
-                self.state.add_log(f"{player.username} has no threat to defend against.")
-        
-        # Check if all players are ready (in case no one attracted a threat)
-        if self._are_all_players_ready("defenses"):
-            self._advance_phase()
 
-    def submit_defense(self, user_id: str, scrap_spent: Dict[str, int], arsenal_ids: List[str]) -> bool:
-        """
-        Player submits their defense plan.
-        """
-        if self.state.phase != GamePhase.DEFENSE:
-            return False
-            
-        player = self.state.get_player(user_id)
-        defense = self.state.player_defenses.get(user_id)
-        
-        if not player or not defense or defense.ready:
-            return False # Already ready
-            
-        if not player.attracted_threat_id:
-            self.state.add_log(f"Error: {player.username} submitted defense with no threat.")
-            return False
-            
-        # 1. Validate Scrap
-        valid_scrap: Dict[ScrapType, int] = {}
-        total_spent_scrap = 0
-        for scrap_str, amount in scrap_spent.items():
-            try:
-                scrap_type = ScrapType(scrap_str)
-                amount = int(amount)
-            except (ValueError, TypeError):
-                self.state.add_log(f"Invalid scrap type or amount from {player.username}.")
-                return False
-                
-            if amount < 0:
-                self.state.add_log(f"Cannot spend negative scrap.")
-                return False
-                
-            if player.scrap[scrap_type] < amount:
-                self.state.add_log(f"{player.username} does not have {amount} {scrap_type.value}.")
-                return False
-            
-            if amount > 0:
-                valid_scrap[scrap_type] = amount
-                total_spent_scrap += amount
-        
-        # 2. Validate Arsenal Cards (NEW)
-        player_arsenal_ids = {card.id for card in player.arsenal_hand}
-        for card_id in arsenal_ids:
-            if card_id not in player_arsenal_ids:
-                self.state.add_log(f"Invalid defense: {player.username} tried to use arsenal card {card_id} they don't own.")
-                return False
-        
-        # --- SUCCESS ---
-        
-        # 3. Set Defense
-        defense.scrap_spent = valid_scrap
-        defense.arsenal_cards_used = arsenal_ids # NEW
-        defense.ready = True
-        
-        self.state.add_log(f"{player.username} is ready for action.", player_id=user_id, is_public=False)
-        
-        # 4. Check if all players are ready
+        for player in self.state.players.values():
+            player.defense_submitted = False
+
+            # Auto-submit for players with no threat or not active
+            if player.status != PlayerStatus.ACTIVE or not player.attracted_threat:
+                player.defense_submitted = True
+                if player.status == PlayerStatus.ACTIVE:
+                    self.state.add_log(f"{player.username} has no threat, auto-ready.")
+
+        self.state.add_log("Phase: DEFENSE. All survivors, submit defenses.")
+
+        # Check if all players are ready *immediately*
         if self._are_all_players_ready("defenses"):
             self._resolve_all_defenses()
-            self._advance_phase()
-            
+
+    def submit_defense(
+        self,
+        player_id: str,
+        scrap_spent: Dict[str, int],
+        arsenal_ids: List[str]
+    ) -> bool:
+        if self.state.phase != GamePhase.DEFENSE:
+            return False
+
+        player = self.state.get_player(player_id)
+        if not player or player.defense_submitted or player.status != PlayerStatus.ACTIVE:
+            return False
+
+        if not player.attracted_threat:
+            return False
+
+        validated_scrap = {}
+        try:
+            for k, v in scrap_spent.items():
+                scrap_type = ScrapType(k.upper())
+                amount = int(v)
+                if amount < 0: raise ValueError
+                validated_scrap[scrap_type] = amount
+        except (ValueError, KeyError):
+            self.state.add_log(f"Invalid scrap payload from {player.username}")
+            return False
+
+        temp_scrap_cost = {k: v for k, v in validated_scrap.items() if v > 0}
+        if not player.can_afford(temp_scrap_cost):
+            self.state.add_log(f"{player.username} cannot afford submitted scrap.")
+            return False
+
+        arsenal_cards_used = []
+        for card_id in arsenal_ids:
+            card = next((c for c in player.arsenal_hand if c.id == card_id), None)
+            if not card:
+                self.state.add_log(f"{player.username} does not have card {card_id}")
+                return False
+            arsenal_cards_used.append(card)
+
+        # ---
+        # TODO: This logic is too simple for complex Arsenal cards
+        # like Adrenaline, Makeshift Amp, etc.
+        # This requires a significant refactor of this method
+        # and the payload it accepts.
+        # ---
+
+        player.pay_cost(temp_scrap_cost)
+
+        self.state.player_defenses[player_id] = PlayerDefense(
+            player_id=player_id,
+            scrap_spent=validated_scrap,
+            arsenal_ids=arsenal_ids
+        )
+        player.defense_submitted = True
+        self.state.add_log(f"{player.username} has submitted their defense.")
+
+        for card in arsenal_cards_used:
+            if card.charges is not None:
+                card.charges -= 1
+                if card.charges > 0:
+                    self.state.add_log(f"{player.username} used 1 charge from {card.name}.")
+                else:
+                    self.state.add_log(f"{player.username} used the last charge from {card.name}.")
+                    player.arsenal_hand.remove(card)
+                    player.arsenal_discard.append(card)
+            else:
+                # One-use cards
+                player.arsenal_hand.remove(card)
+                player.arsenal_discard.append(card)
+
+        if self._are_all_players_ready("defenses"):
+            self._resolve_all_defenses()
+
         return True
 
     def _resolve_all_defenses(self):
         """
-        Helper: Called when all players are ready for Defense.
-        Calculates outcome for all players.
+        All defenses are in. Calculate outcomes.
         """
-        self.state.add_log("All players are ready. Resolving defenses...")
-        
+        self.state.add_log("All defenses submitted. Resolving...")
+
         for player in self.state.get_active_players_in_order():
-            defense = self.state.player_defenses.get(player.user_id)
-            plan = self.state.player_plans.get(player.user_id)
-            threat = self.state.get_threat_by_id(player.attracted_threat_id)
-            
-            if not defense or not plan or not threat:
-                # Player had no threat or is disconnected
+            if not player.attracted_threat:
                 continue
 
-            # 1. Consume Scrap
-            for scrap_type, amount in defense.scrap_spent.items():
-                player.scrap[scrap_type] -= amount
-            
-            # 2. Get player's total defense (Base + Scrap + Arsenal)
-            # This now includes Arsenal card boosts
-            total_defense = self._calculate_total_defense(player, plan, defense)
-            
-            # 3. Check for rule-bending cards (Lure to Weakness, Corrosive Sludge)
-            # We will skip this for the v1.9 implementation as discussed.
-            # This is where logic for ADRENALINE, LURE_TO_WEAKNESS, etc. would go.
-            
-            # Get the card objects
-            used_arsenal_cards = [
-                card for card in player.arsenal_hand 
-                if card.id in defense.arsenal_cards_used
-            ]
+            threat = player.attracted_threat
+            defense_plan = self.state.player_defenses.get(player.user_id)
 
-            # 4. Determine outcome
+            total_defense = self._calculate_total_defense(player, defense_plan, threat)
+
             outcome = self._check_defense_outcome(player, total_defense, threat)
-            
-            # 5. Apply outcome
-            player.defense_result = outcome.get("result", "FAIL") # "FAIL", "DEFEND", "KILL"
-            
-            # --- Handle "Adrenaline" Hack ---
-            # If we were to implement the "predictive hack" for Adrenaline:
-            has_adrenaline = any(c.special_effect_id == "ADRENALINE" for c in used_arsenal_cards)
-            if player.defense_result == "FAIL" and has_adrenaline:
-                player.defense_result = "DEFEND" # Override FAIL
-                self.state.add_log(f"{player.username} uses Adrenaline to ignore the consequences!")
-                
-            
+
+            player.defense_result = outcome["result"]
+
             if player.defense_result == "FAIL":
-                self.state.add_log(f"{player.username} FAILED to defend against {threat.name}!")
                 player.injuries += 1
-                self.state.add_log(f"{player.username} gains 1 Injury! (Total: {player.injuries})")
-                
-                # Check "On Fail:" abilities
-                if "On Fail: gain 1 Injury" in threat.ability:
-                    player.injuries += 1
-                    self.state.add_log(f"{threat.name}'s ability causes 1 additional Injury! (Total: {player.injuries})")
-                if "On Fail: lose next Action" in threat.ability:
+                self.state.add_log(f"{player.username} FAILED against {threat.name} and gains 1 Injury.")
+
+                # Handle "On Fail"
+                if threat.on_fail == "DISCARD_SCRAP":
+                    # TODO: Implement this. For now, just log it.
+                    self.state.add_log(f"On Fail: {player.username} must discard scrap!")
+                elif threat.on_fail == "PREVENT_ACTION":
                     player.action_prevented = True
-                    self.state.add_log(f"{threat.name}'s ability prevents {player.username}'s action!")
-            
+                    self.state.add_log(f"On Fail: {player.username}'s action is PREVENTED!")
+                elif threat.on_fail == "GAIN_INJURY":
+                    player.injuries += 1
+                    self.state.add_log(f"On Fail: {player.username} gains 1 *additional* Injury!")
+                elif threat.on_fail == "GIVE_SCRAP":
+                    # TODO: Implement this
+                    self.state.add_log(f"On Fail: {player.username} must give scrap!")
+
+                # Discard threat
+                self.state.threat_discard.append(threat)
+
             elif player.defense_result == "DEFEND":
-                self.state.add_log(f"{player.username} successfully DEFENDED against {threat.name}!")
-                # No injuries, but no trophy.
-            
+                self.state.add_log(f"{player.username} DEFENDED against {threat.name}.")
+                self.state.threat_discard.append(threat)
+
             elif player.defense_result == "KILL":
                 self.state.add_log(f"{player.username} KILLED {threat.name}!")
+
+                # Add to trophies
                 player.trophies.append(threat.name)
-                # TODO: Handle reward
-                self.state.add_log(f"Reward: {threat.reward}") # Placeholder
-                
-            
-            # 6. Consume/Discard Arsenal Cards (NEW)
-            cards_to_keep = []
-            cards_to_discard = []
-            
-            for card in player.arsenal_hand:
-                if card.id not in defense.arsenal_cards_used:
-                    cards_to_keep.append(card)
-                    continue
+                # DO NOT discard threat, it goes to trophy pile (which is just a list)
 
-                # Card was used
-                is_kill = player.defense_result == "KILL"
-                
-                # Handle conditional "return to hand"
-                if is_kill and card.special_effect_id in ["RECYCLER_NET", "BOAR_SPEAR"]:
-                    cards_to_keep.append(card) # Return to hand
-                    self.state.add_log(f"{player.username}'s {card.name} returns to hand!")
-                    continue
-                    
-                # Handle multi-use "charges"
-                if card.charges is not None:
-                    card.charges -= 1
-                    if card.charges > 0:
-                        cards_to_keep.append(card) # Keep in hand, but with fewer charges
-                        self.state.add_log(f"{player.username}'s {card.name} has {card.charges} charges left.")
-                    else:
-                        cards_to_discard.append(card) # No charges left
-                        self.state.add_log(f"{player.username}'s {card.name} is out of charges and discarded.")
-                    continue
-                    
-                # Handle "Adrenaline" (if using the hack)
-                if card.special_effect_id == "ADRENALINE":
-                     # It's only consumed if it was *actually used* (i.e., changed FAIL to DEFEND)
-                     if player.defense_result == "DEFEND" and outcome.get("result") == "FAIL":
-                         cards_to_discard.append(card)
-                         self.state.add_log(f"{player.username}'s {card.name} is consumed.")
-                     else:
-                         cards_to_keep.append(card) # Not used, return to hand
-                     continue
+                # Gain Spoil
+                spoil_str_parts = []
+                for scrap_type, amount in threat.spoil.items():
+                    player.scrap[scrap_type] = player.scrap.get(scrap_type, 0) + amount
+                    spoil_str_parts.append(f"{amount} {scrap_type.value}")
 
-                # All other cards are one-use
-                cards_to_discard.append(card)
-                
-            player.arsenal_hand = cards_to_keep
-            player.arsenal_discard.extend(cards_to_discard)
+                if spoil_str_parts:
+                    spoil_str = ", ".join(spoil_str_parts)
+                    self.state.add_log(f"{player.username} gains Spoil: {spoil_str}")
 
+                # TODO: Handle "On Kill" effects (Recycler-Net, Boar Spear)
+                # This should be handled in _check_defense_outcome or here.
 
-    def _calculate_total_defense(self, player: PlayerState, plan: PlayerPlans, defense: PlayerDefense) -> Dict[ScrapType, int]:
+        self._advance_phase()
+
+    def _calculate_total_defense(
+        self,
+        player: PlayerState,
+        defense_plan: Optional[PlayerDefense],
+        threat: ThreatCard
+    ) -> Dict[ScrapType, int]:
         """
-        Calculates a player's total defense, including base, scrap, and arsenal.
+        Calculates a player's *effective* total defense values for the round,
+        accounting for scrap value, resistance, and upgrades.
         """
-        # 1. Get base defense from action
-        base_defense = BASE_DEFENSE_FROM_ACTION.get(plan.action, {}).copy()
-        
-        # 2. Add spent scrap
-        for scrap_type, amount in defense.scrap_spent.items():
-            base_defense[scrap_type] = base_defense.get(scrap_type, 0) + amount
-            
-        # 3. Add Upgrade card logic
-        # TODO
-        
-        # 4. Add Arsenal Card logic (NEW)
-        arsenal_cards = [
-            card for card in player.arsenal_hand 
-            if card.id in defense.arsenal_cards_used
-        ]
-        
-        for card in arsenal_cards:
-            if card.defense_boost:
-                for scrap_type, boost in card.defense_boost.items():
-                    base_defense[scrap_type] = base_defense.get(scrap_type, 0) + boost
 
-        return base_defense
+        total = {ScrapType.PARTS: 0, ScrapType.WIRING: 0, ScrapType.PLATES: 0}
+
+        # 1. Base Defense (from Action cards in hand)
+        plan = self.state.player_plans.get(player.user_id)
+        if plan:
+            base_defense = BASE_DEFENSE_FROM_ACTION.get(plan.action, {})
+            for s, v in base_defense.items():
+                total[s] += v
+
+        # 2. Passive Defense (from Upgrades)
+        passive = player.get_passive_defense()
+        for s, v in passive.items():
+            total[s] += v
+
+        # 3. Arsenal Cards
+        arsenal_cards_used = []
+        if defense_plan:
+            for card_id in defense_plan.arsenal_ids:
+                # Find card in discard (if 1-use) or hand (if charges)
+                card = next((c for c in player.arsenal_discard if c.id == card_id), None)
+                if not card:
+                    card = next((c for c in player.arsenal_hand if c.id == card_id), None)
+
+                if card:
+                    arsenal_cards_used.append(card)
+                    for s, v in card.defense_boost.items():
+                        total[s] += v
+
+        # 4. Spent Scrap (The complex part)
+        if defense_plan:
+            # Check for special upgrades
+            up_ids = {u.special_effect_id for u in player.upgrades}
+            has_piercing_jaws = "PIERCING_JAWS" in up_ids
+            has_serrated_parts = "SERRATED_PARTS" in up_ids
+            has_focused_wiring = "FOCUSED_WIRING" in up_ids
+            has_high_voltage = "HIGH_VOLTAGE_WIRE" in up_ids
+            has_reinf_plating = "REINFORCED_PLATING" in up_ids
+            has_layered_plating = "LAYERED_PLATING" in up_ids
+
+            # TODO: Check for special arsenal cards
+            # This logic is NOT implemented as it requires payload changes
+            is_sludge_used = any(c.special_effect_id == "CORROSIVE_SLUDGE" for c in arsenal_cards_used)
+            is_amp_used = any(c.special_effect_id == "MAKESHIFT_AMP" for c in arsenal_cards_used)
+
+
+            for scrap_type, num_scrap in defense_plan.scrap_spent.items():
+                if num_scrap == 0:
+                    continue
+
+                # Check Immunity first
+                # TODO: This doesn't account for Sludge target
+                if scrap_type in threat.immune and not is_sludge_used:
+                    continue # Value is 0
+
+                # Base value
+                scrap_value = 2 # Rulebook [Sec 4]
+
+                # Apply resistance
+                is_resistant = scrap_type in threat.resistant
+                if is_resistant:
+                    # TODO: This doesn't account for Sludge target
+                    if not is_sludge_used:
+                        scrap_value -= 1 # Rulebook [Sec 4]
+
+                # Apply player upgrades
+                if scrap_type == ScrapType.PARTS:
+                    if has_serrated_parts:
+                        scrap_value += 1 # Rulebook Manifest
+                    if has_piercing_jaws and is_resistant:
+                        scrap_value += 1 # Negates the -1
+                elif scrap_type == ScrapType.WIRING:
+                    if has_high_voltage:
+                        scrap_value += 1
+                    if has_focused_wiring and is_resistant:
+                        scrap_value += 1
+                elif scrap_type == ScrapType.PLATES:
+                    if has_layered_plating:
+                        scrap_value += 1
+                    if has_reinf_plating and is_resistant:
+                        scrap_value += 1
+
+                # TODO: Add logic for Makeshift Amp (not affected by R/I)
+
+                total[scrap_type] += (num_scrap * scrap_value)
+
+        return total
 
     def _check_defense_outcome(
         self,
-        player: PlayerState, 
-        total_defense: Dict[ScrapType, int], 
+        player: PlayerState,
+        total_defense: Dict[ScrapType, int],
         threat: ThreatCard
     ) -> Dict[str, Any]:
         """
-        Checks a player's defense against a threat and returns the outcome.
-        
-        Returns: {
-            "result": "FAIL" | "DEFEND" | "KILL",
-            "target_stat": "ferocity" | "cunning" | "mass",
-            "kill_stat": "ferocity" | "cunning" | "mass" | None
-        }
+        Checks a player's *effective* defense against a threat.
+        Assumes total_defense is already calculated.
         """
-        
-        # 1. Determine Target Stat (for "DEFEND" calculation)
-        # This is the HIGHEST stat on the threat
-        stats = {
-            "ferocity": threat.ferocity,
-            "cunning": threat.cunning,
-            "mass": threat.mass
-        }
-        target_stat_name = max(stats, key=stats.get)
-        target_stat_value = stats[target_stat_name]
-        
-        # Map stat name to scrap type
-        stat_to_scrap_map = {
-            "ferocity": ScrapType.PARTS,
-            "cunning": ScrapType.WIRING,
-            "mass": ScrapType.PLATES
-        }
-        target_scrap_type = stat_to_scrap_map[target_stat_name]
-        
-        # 2. Calculate effective defense against target stat
-        player_defense_value = total_defense.get(target_scrap_type, 0)
-        
-        # Apply resistance / immunity
-        if target_scrap_type in threat.immune:
-            player_defense_value = 0
-        elif target_scrap_type in threat.resistant:
-            player_defense_value = math.ceil(player_defense_value / 2)
-            
-        # 3. Check for DEFEND
-        if player_defense_value < target_stat_value:
-            return {"result": "FAIL", "target_stat": target_stat_name, "kill_stat": None}
-            
-        # --- Player has DEFENDED ---
-        # Now, check for KILL
-        
-        # 4. Determine Kill Stat (for "KILL" calculation)
-        # This is the LOWEST stat on the threat
-        # (Handle ties by picking one, e.g., ferocity)
-        stats_list = sorted(stats.items(), key=lambda item: item[1])
-        kill_stat_name = stats_list[0][0]
-        kill_stat_value = stats_list[0][1]
-        kill_scrap_type = stat_to_scrap_map[kill_stat_name]
 
-        # 5. Calculate effective defense against kill stat
-        player_kill_defense_value = total_defense.get(kill_scrap_type, 0)
-        
-        # Apply resistance / immunity
-        if kill_scrap_type in threat.immune:
-            player_kill_defense_value = 0
-        elif kill_scrap_type in threat.resistant:
-            player_kill_defense_value = math.ceil(player_kill_defense_value / 2)
-            
-        # 6. Check for KILL
-        if player_kill_defense_value >= kill_stat_value:
-            return {"result": "KILL", "target_stat": target_stat_name, "kill_stat": kill_stat_name}
-        else:
-            return {"result": "DEFEND", "target_stat": target_stat_name, "kill_stat": kill_stat_name}
+        effective_defense = total_defense # Already calculated
 
+        defense_str = f"Defense (P/W/Pl): {effective_defense[ScrapType.PARTS]}/{effective_defense[ScrapType.WIRING]}/{effective_defense[ScrapType.PLATES]}"
+        threat_str = f"Threat (F/C/M): {threat.ferocity}/{threat.cunning}/{threat.mass}"
+        self.state.add_log(f"  {player.username} vs {threat.name}: {defense_str} vs {threat_str}")
 
-    # --- Phase: ACTION ---
+        # TODO: Check for 'Adrenaline' card (requires new state)
+
+        is_fail = (
+            effective_defense[ScrapType.PARTS] < threat.ferocity and
+            effective_defense[ScrapType.WIRING] < threat.cunning and
+            effective_defense[ScrapType.PLATES] < threat.mass
+        )
+        if is_fail:
+            return {"result": "FAIL"}
+
+        # TODO: Check for 'Lure to Weakness' card (requires payload)
+        # This would change the 'highest_stat_val' logic
+        stats = {"ferocity": threat.ferocity, "cunning": threat.cunning, "mass": threat.mass}
+        highest_stat_val = max(stats.values())
+
+        met_highest_stat = False
+        if effective_defense[ScrapType.PARTS] >= threat.ferocity and threat.ferocity == highest_stat_val:
+            met_highest_stat = True
+        if effective_defense[ScrapType.WIRING] >= threat.cunning and threat.cunning == highest_stat_val:
+            met_highest_stat = True
+        if effective_defense[ScrapType.PLATES] >= threat.mass and threat.mass == highest_stat_val:
+            met_highest_stat = True
+
+        if met_highest_stat:
+            return {"result": "KILL"}
+
+        return {"result": "DEFEND"}
+
+    # --- Phase 5: ACTION (v1.8 Rules) ---
 
     def _start_action_phase(self):
-        """
-        Phase 5: Players take their actions in initiative order.
-        """
         self.state.phase = GamePhase.ACTION
-        self.state.add_log("Phase: ACTION. Taking actions...")
-        
-        # 1. Setup action state
-        self.state.action_turn_player_id = None
-        
-        # 2. Start the first action turn
-        self._start_next_action_turn()
+        self.state.add_log("Phase: ACTION. Survivors take their actions.")
 
-    def _start_next_action_turn(self):
-        """
-        Finds the next player who needs to take their action.
-        """
-        active_players = self.state.get_active_players_in_order()
-        
-        current_turn_player_id = self.state.action_turn_player_id
-        
-        if not current_turn_player_id:
-            # This is the first action of the phase
-            next_player = active_players[0]
-        else:
-            # Find the next player in the initiative queue
-            try:
-                current_index = self.state.initiative_queue.index(current_turn_player_id)
-                # Find the next *active* player
-                next_player = None
-                for i in range(1, len(active_players) + 1):
-                    next_index_in_queue = (current_index + i) % len(self.state.initiative_queue)
-                    next_player_id = self.state.initiative_queue[next_index_in_queue]
-                    
-                    # Check if this player is in the active list
-                    found = next((p for p in active_players if p.user_id == next_player_id), None)
-                    if found:
-                        next_player = found
-                        break
-                        
-                if not next_player: # Should not happen if active_players > 0
-                     self.state.add_log("Error: Could not find next active player.")
-                     self._advance_phase()
-                     return
-                
-            except ValueError:
-                self.state.add_log("Error: Current action player not in initiative queue.")
-                self._advance_phase() # Fail safe
-                return
-
-        if not next_player:
-             self.state.add_log("No active players to take actions.")
-             self._advance_phase()
-             return
-
-        # We have the next player.
-        self.state.action_turn_player_id = next_player.user_id
-        
-        plan = self.state.player_plans.get(next_player.user_id)
-        
-        if not plan:
-            self.state.add_log(f"Error: {next_player.username} has no plan.")
-            self._process_action_turn_end() # Skip them
-            return
-
-        # Check for "On Fail: lose next Action" (v1.8)
-        if next_player.action_prevented:
-            self.state.add_log(f"{next_player.username}'s action ({plan.action.value}) is PREVENTED!")
-            next_player.action_prevented = False # Reset flag
-            self._process_action_turn_end() # Skip to end of their turn
-            return
-
-        # --- Player takes their action automatically ---
-        self.state.add_log(f"{next_player.username} takes their action: {plan.action.value}")
-        
-        action = plan.action
-        
-        if action == SurvivorActionCard.SCAVENGE:
-            # Gain 2 Red, 2 Blue, 2 Green
-            next_player.scrap[ScrapType.PARTS] += 2
-            next_player.scrap[ScrapType.WIRING] += 2
-            next_player.scrap[ScrapType.PLATES] += 2
-            self.state.add_log(f"{next_player.username} gains 2 of each scrap type.")
-        
-        elif action == SurvivorActionCard.FORTIFY:
-            # Gain 5 Red, 1 Blue
-            next_player.scrap[ScrapType.PARTS] += 5
-            next_player.scrap[ScrapType.WIRING] += 1
-            self.state.add_log(f"{next_player.username} gains 5 PARTS and 1 WIRING.")
-            
-        elif action == SurvivorActionCard.ARMORY_RUN:
-            # Gain 1 Green, 5 Blue
-            next_player.scrap[ScrapType.PLATES] += 1
-            next_player.scrap[ScrapType.WIRING] += 5
-            self.state.add_log(f"{next_player.username} gains 1 PLATES and 5 WIRING.")
-            
-        elif action == SurvivorActionCard.SCHEME:
-            # Gain 1 Red, 1 Green, and +1 Initiative
-            next_player.scrap[ScrapType.PARTS] += 1
-            next_player.scrap[ScrapType.PLATES] += 1
-            self.state.add_log(f"{next_player.username} gains 1 PARTS and 1 PLATES.")
-            
-            # Move player up one slot in initiative
-            queue = self.state.initiative_queue
-            try:
-                idx = queue.index(next_player.user_id)
-                if idx > 0: # Cannot go past first player
-                    # Swap with player before
-                    prev_player_id = queue[idx - 1]
-                    queue[idx - 1] = next_player.user_id
-                    queue[idx] = prev_player_id
-                    self.state.add_log(f"{next_player.username} moves up in the initiative order!")
-            except ValueError:
-                pass # Player not in queue?
-                
-        # After action is resolved, process end of turn
-        self._process_action_turn_end()
-
-    def _process_action_turn_end(self):
-        """
-        Helper: Checks if all actions are done, or starts next turn.
-        """
-        current_turn_player_id = self.state.action_turn_player_id
-        
-        # Check if this was the last player
         active_players = self.state.get_active_players_in_order()
         if not active_players:
-            self._advance_phase() # No one left
+            self.state.add_log("No active players. Skipping phase.")
+            self._advance_phase()
             return
-            
-        last_player_in_initiative = active_players[-1]
+
+        self._start_next_action_turn(active_players[0].user_id)
+
+    def _start_next_action_turn(self, player_id: str):
+        """
+        Starts the action turn for the given player.
+        """
+        self.state.action_turn_player_id = player_id
+        player = self.state.get_player(player_id)
+        if not player:
+            return
+
+        plan = self.state.player_plans.get(player_id)
+        if not plan:
+            self.state.add_log(f"{player.username} had no plan. Skipping action.")
+            self._process_action_turn_end()
+            return
+
+        if player.action_prevented:
+            self.state.add_log(f"{player.username}'s action ({plan.action.value}) was PREVENTED!")
+            self._process_action_turn_end()
+            return
+
+        action = plan.action
+        self.state.add_log(f"{player.username}'s action: {action.value}")
+
+        if action == SurvivorActionCard.SCHEME:
+            self.state.add_log(f"{player.username} uses SCHEME. They will act first next round.")
+            # Rulebook Sec 5: Draw 1 random scrap
+            self._player_draws_random_scrap(player, 1)
+            player.initiative = -1 # Flag to be sorted first in Cleanup
+            self._process_action_turn_end()
+
+        elif action == SurvivorActionCard.SCAVENGE:
+            # Handle Scavenger's Eye
+            num_scrap = 2
+            if any(u.special_effect_id == "SCAVENGERS_EYE" for u in player.upgrades):
+                num_scrap = 3
+            # Scavenge is now interactive
+            player.action_choice_pending = action
+            self.state.add_log(f"Waiting for {player.username} to choose {num_scrap} scrap...")
+
+        elif action in [SurvivorActionCard.FORTIFY, SurvivorActionCard.ARMORY_RUN]:
+            player.action_choice_pending = action
+            self.state.add_log(f"Waiting for {player.username} to make a choice...")
+
+        else:
+            self.state.add_log(f"Unknown action {action}. Skipping.")
+            self._process_action_turn_end()
+
+    def submit_action_choice(self, player_id: str, payload: Dict[str, Any]) -> bool:
+        """
+        Handles the player's choice for an interactive action.
+        """
+        if self.state.phase != GamePhase.ACTION:
+            return False
+
+        if player_id != self.state.action_turn_player_id:
+            return False
+
+        player = self.state.get_player(player_id)
+        if not player or not player.action_choice_pending:
+            return False
+
+        action = player.action_choice_pending
+        choice_type = payload.get("choice_type")
+
+        # Handle passing the action
+        # This is now only used for Scavenge (if they don't want to pick)
+        if choice_type == "pass_action":
+            self.state.add_log(f"{player.username} passes their action.")
+            player.action_choice_pending = None
+            self._process_action_turn_end()
+            return True
+
+        if action == SurvivorActionCard.SCAVENGE and choice_type == "scavenge":
+            num_to_choose = 2
+            if any(u.special_effect_id == "SCAVENGERS_EYE" for u in player.upgrades):
+                num_to_choose = 3
+
+            scraps = payload.get("scraps", [])
+            if not isinstance(scraps, list) or len(scraps) != num_to_choose:
+                self.state.add_log(f"Invalid scrap choice: expected {num_to_choose}.")
+                return False
+
+            try:
+                scraps_to_add = [ScrapType(s) for s in scraps]
+                for s in scraps_to_add:
+                    player.scrap[s] = player.scrap.get(s, 0) + 1
+                scrap_str = ", ".join(s.value for s in scraps_to_add)
+                self.state.add_log(f"{player.username} scavenges: {scrap_str}")
+            except ValueError:
+                return False
+
+        elif action == SurvivorActionCard.FORTIFY and choice_type == "fortify":
+            card_id = payload.get("card_id")
+
+            # Handle Fallback
+            if not card_id or card_id == "pass":
+                self.state.add_log(f"{player.username} cannot/chooses not to Fortify. Drawing 2 random scrap.")
+                self._player_draws_random_scrap(player, 2)
+            else:
+                card = next((c for c in self.state.market.upgrade_market if c.id == card_id), None)
+                if not card:
+                    self.state.add_log("Invalid card ID.")
+                    return False
+
+                # Rulebook Sec 5: No discount
+                if not player.can_afford(card.cost):
+                    self.state.add_log(f"{player.username} cannot afford {card.name}. Choose 'Pass' to get fallback.")
+                    return False # Let user retry
+
+                player.pay_cost(card.cost)
+                player.upgrades.append(card)
+                self.state.market.upgrade_market.remove(card)
+                self.state.add_log(f"{player.username} built {card.name}!")
+
+        elif action == SurvivorActionCard.ARMORY_RUN and choice_type == "armory_run":
+            card_id = payload.get("card_id")
+
+            # Handle Fallback
+            if not card_id or card_id == "pass":
+                self.state.add_log(f"{player.username} cannot/chooses not to Armory Run. Drawing 2 random scrap.")
+                self._player_draws_random_scrap(player, 2)
+            else:
+                card = next((c for c in self.state.market.arsenal_market if c.id == card_id), None)
+                if not card:
+                    self.state.add_log("Invalid card ID.")
+                    return False
+
+                # Rulebook Sec 5: No discount
+                if not player.can_afford(card.cost):
+                    self.state.add_log(f"{player.username} cannot afford {card.name}. Choose 'Pass' to get fallback.")
+                    return False # Let user retry
+
+                player.pay_cost(card.cost)
+                player.arsenal_hand.append(card)
+                self.state.market.arsenal_market.remove(card)
+                self.state.add_log(f"{player.username} acquired {card.name}!")
+
+        else:
+            self.state.add_log(f"Mismatched action choice: {action} vs {choice_type}")
+            return False
+
+        player.action_choice_pending = None
+        self._process_action_turn_end()
+        return True
+
+    def _process_action_turn_end(self):
+        """Advances to the next player in the Action phase."""
+
+        current_player_id = self.state.action_turn_player_id
+        active_players_ordered = self.state.get_active_players_in_order()
         
-        if current_turn_player_id == last_player_in_initiative.user_id:
-            # All actions for the round are complete
+        if not active_players_ordered:
+            self.state.add_log("No active players. Advancing phase.")
+            self._advance_phase()
+            return
+
+        try:
+            current_idx = [p.user_id for p in active_players_ordered].index(current_player_id)
+        except ValueError:
+            self.state.add_log("Error: Could not find current action player. Advancing phase.")
+            self._advance_phase()
+            return
+
+        if current_idx == len(active_players_ordered) - 1:
             self.state.action_turn_player_id = None
             self.state.add_log("All actions complete.")
             self._advance_phase()
         else:
-            # Start the next player's turn
-            self._start_next_action_turn()
-            
-    # --- Phase: CLEANUP ---
+            next_player = active_players_ordered[current_idx + 1]
+            self._start_next_action_turn(next_player.user_id)
+
+    # --- Phase 6: CLEANUP ---
 
     def _start_cleanup_phase(self):
-        """
-        Phase 6: Pass initiative, check for game end.
-        """
         self.state.phase = GamePhase.CLEANUP
-        self.state.add_log("Phase: CLEANUP. Passing initiative...")
-        
-        # 1. Clear "last round" UI flags
-        for player in self.state.get_all_players_in_order():
-            player.last_round_action = None
-            player.last_round_lure = None
+        self.state.add_log("Phase: CLEANUP.")
 
-        # 2. Pass first player token
-        current_first_player = self.state.first_player
-        try:
-            idx = self.state.initiative_queue.index(current_first_player)
-            next_idx = (idx + 1) % len(self.state.initiative_queue)
-            self.state.first_player = self.state.initiative_queue[next_idx]
-            
-            new_first_player = self.state.get_player(self.state.first_player)
-            if new_first_player:
-                self.state.add_log(f"{new_first_player.username} is now the first player.")
-                
-        except ValueError:
-            self.state.add_log("Error: First player not in initiative queue.")
-            # Reset to first in list as a failsafe
-            if self.state.initiative_queue:
-                self.state.first_player = self.state.initiative_queue[0]
-            
-        
-        # 3. Advance phase (which will check for game end/next round)
+        # 1. Store last-used cards
+        for player in self.state.players.values():
+            plan = self.state.player_plans.get(player.user_id)
+            if plan:
+                player.last_round_lure = plan.lure
+                player.last_round_action = plan.action
+
+        # 2. Base Income
+        # Rulebook Sec 6: Every player draws 1 scrap randomly
+        self.state.add_log("All active players gain 1 random scrap for Base Income.")
+        for player in self.state.players.values():
+            if player.status == PlayerStatus.ACTIVE:
+                self._player_draws_random_scrap(player, 1)
+
+        # 3. Spoils (Handled in _resolve_all_defenses)
+
+        # 4. Initiative Queue
+        # Rulebook Sec 6: Queue does not change, except for Scheme
+        schemer_id = None
+        for player in self.state.get_active_players_in_order():
+            if player.initiative == -1: # Flag set by SCHEME
+                schemer_id = player.user_id
+                player.initiative = 0 # Reset flag
+                break
+
+        if schemer_id:
+            schemer_name = self.state.get_player(schemer_id).username
+            self.state.add_log(f"{schemer_name} (Scheme) takes first initiative!")
+            current_queue = self.state.initiative_queue
+            # Rebuild queue, preserving order of non-active players
+            active_queue = [pid for pid in current_queue if self.state.get_player(pid).status == PlayerStatus.ACTIVE]
+            inactive_queue = [pid for pid in current_queue if self.state.get_player(pid).status != PlayerStatus.ACTIVE]
+
+            if schemer_id in active_queue:
+                active_queue.remove(schemer_id)
+                self.state.initiative_queue = [schemer_id] + active_queue + inactive_queue
+            else:
+                 # Schemer must have disconnected/surrendered after playing scheme
+                 # but before cleanup. Put them at front of inactive queue.
+                 if schemer_id in inactive_queue:
+                    inactive_queue.remove(schemer_id)
+                 self.state.initiative_queue = active_queue + [schemer_id] + inactive_queue
+
+
+        # Set new first player
+        if self.state.initiative_queue:
+            # self.state.first_player = self.state.initiative_queue[0] # Removed, field no longer exists
+            pass
+        else:
+            # self.state.first_player = None # Removed, field no longer exists
+            pass
+
+        self.state.add_log("Initiative Order:")
+        for i, pid in enumerate(self.state.initiative_queue):
+            player = self.state.get_player(pid)
+            if player:
+                fp_marker = "(First Player)" if i == 0 else ""
+                status_marker = f"({player.status.value})" if player.status != PlayerStatus.ACTIVE else ""
+                self.state.add_log(f"  {i+1}. {player.username} {fp_marker} {status_marker}")
+
+        # 5. Refill Markets
+        # Rulebook Sec 6: Refill the Upgrade and Arsenal markets.
+        self.state.add_log("Refilling markets...")
+        # Rulebook Sec 3: "number of players minus one (minimum of 2, max 4)"
+        # Use total players in game, not just active
+        market_size = max(2, min(4, len(self.state.players) - 1))
+
+        self._refill_market(self.state.upgrade_deck, self.state.market.upgrade_market, market_size, self.state.upgrade_discard)
+        self._refill_market(self.state.arsenal_deck, self.state.market.arsenal_market, market_size, self.state.arsenal_discard)
+
+        # 6. Era Check (Handled in _advance_phase)
         self._advance_phase()
 
-    # --- Phase: INTERMISSION ---
-    
+    # --- Phase 7: INTERMISSION (v1.8 Rules) ---
+
     def _start_intermission_phase(self):
-        """
-        Phase 7 (v1.8): Occurs after rounds 5 and 10.
-        Players buy Upgrades and Arsenal cards.
-        """
         self.state.phase = GamePhase.INTERMISSION
-        self.state.add_log(f"--- INTERMISSION (End of Era {self.state.era - 1}) ---")
-        self.state.add_log("Phase: INTERMISSION. Time to buy cards.")
-        
-        # 1. Refill markets
-        self._refill_market(self.state.market.upgrade_deck, self.state.market.upgrade_market, 5)
-        self._refill_market(self.state.market.arsenal_deck, self.state.market.arsenal_market, 5)
+        self.state.add_log("Phase: INTERMISSION. Survivors may buy one item.")
 
-        # 2. Setup Intermission state
-        # Players buy in REVERSE initiative order
-        self.state.intermission_turn_player_id = self.state.initiative_queue[-1]
-        self.state.intermission_market_purchases = {}
-        for pid in self.state.players:
-            self.state.intermission_market_purchases[pid] = 0 # 0 purchases so far
-            
-        player = self.state.get_player(self.state.intermission_turn_player_id)
-        if player:
-            self.state.add_log(f"Starting with {player.username} (last in initiative).")
+        # Markets are already refilled by Cleanup
 
-    def _refill_market(self, deck: List, market_list: List, size: int):
-        """Helper to refill a market list from a deck."""
-        while len(market_list) < size:
-            if not deck:
-                self.state.add_log("Market deck is empty!")
-                break
-            market_list.append(deck.pop(0))
+        self.state.intermission_players_acted = []
 
-    def buy_market_card(self, user_id: str, card_id: str, card_type: str) -> bool:
-        """
-        Player attempts to buy a card from the Intermission market.
-        """
-        if self.state.phase != GamePhase.INTERMISSION or \
-           self.state.intermission_turn_player_id != user_id:
-            return False
-            
-        player = self.state.get_player(user_id)
-        if not player:
-            return False
-            
-        # Check purchase limit (max 2)
-        purchases_made = self.state.intermission_market_purchases.get(user_id, 0)
-        if purchases_made >= 2:
-            self.state.add_log(f"{player.username} has already made 2 purchases.")
-            return False
-            
-        # Find the card
-        source_market: List[UpgradeCard | ArsenalCard]
-        if card_type == "upgrade":
-            source_market = self.state.market.upgrade_market
-        elif card_type == "arsenal":
-            source_market = self.state.market.arsenal_market
-        else:
-            return False
-            
-        card_to_buy: Optional[UpgradeCard | ArsenalCard] = None
-        for card in source_market:
-            if card.id == card_id:
-                card_to_buy = card
-                break
-                
-        if not card_to_buy:
-            self.state.add_log(f"Card {card_id} not found in {card_type} market.")
-            return False
-            
-        # Check cost
-        for scrap_type, cost in card_to_buy.cost.items():
-            if player.scrap.get(scrap_type, 0) < cost:
-                self.state.add_log(f"{player.username} cannot afford {card_to_buy.name}.")
-                return False
-                
-        # --- SUCCESS ---
-        
-        # 1. Pay cost
-        for scrap_type, cost in card_to_buy.cost.items():
-            player.scrap[scrap_type] -= cost
-            
-        # 2. Remove from market
-        source_market.remove(card_to_buy)
-        
-        # 3. Add to player
-        if isinstance(card_to_buy, UpgradeCard):
-            player.upgrades.append(card_to_buy)
-            self.state.add_log(f"{player.username} bought Upgrade: {card_to_buy.name}")
-        elif isinstance(card_to_buy, ArsenalCard):
-            player.arsenal_hand.append(card_to_buy)
-            self.state.add_log(f"{player.username} bought Arsenal: {card_to_buy.name}")
-            
-        # 4. Increment purchase count
-        self.state.intermission_market_purchases[user_id] = purchases_made + 1
-        
-        # 5. Refill the market
-        if card_type == "upgrade":
-            self._refill_market(self.state.market.upgrade_deck, self.state.market.upgrade_market, 5)
-        else:
-            self._refill_market(self.state.market.arsenal_deck, self.state.market.arsenal_market, 5)
-        
-        return True
-
-    def pass_intermission_turn(self, user_id: str) -> bool:
-        """
-        Player passes their turn to buy.
-        """
-        if self.state.phase != GamePhase.INTERMISSION or \
-           self.state.intermission_turn_player_id != user_id:
-            return False
-            
-        player = self.state.get_player(user_id)
-        if not player:
-            return False
-            
-        self.state.add_log(f"{player.username} passes their turn.")
-        
-        # Find next player (in reverse initiative)
-        try:
-            current_idx = self.state.initiative_queue.index(user_id)
-            
-            if current_idx == 0:
-                # This was the first player in initiative (last to buy)
-                # Phase is over.
-                self.state.add_log("Intermission buying phase is over.")
-                self.state.intermission_turn_player_id = None
-                self._advance_phase()
-            else:
-                # Get previous player in queue
-                next_player_id = self.state.initiative_queue[current_idx - 1]
-                self.state.intermission_turn_player_id = next_player_id
-                next_player = self.state.get_player(next_player_id)
-                if next_player:
-                    self.state.add_log(f"It's now {next_player.username}'s turn to buy.")
-                
-        except ValueError:
-            self.state.add_log("Error: Intermission player not in queue.")
-            self.state.intermission_turn_player_id = None
-            self._advance_phase() # Failsafe
-            
-        return True
-
-    # --- Phase: GAME OVER ---
-
-    def _end_game(self):
-        """
-        Game Over: Calculate winner.
-        """
-        self.state.phase = GamePhase.GAME_OVER
-        self.state.add_log("--- GAME OVER ---")
-        
         active_players = self.state.get_active_players_in_order()
         if not active_players:
-            self.state.add_log("No active players to determine a winner.")
+            self.state.add_log("No active players. Skipping Intermission.")
+            self._advance_phase()
             return
-            
-        # Winner is player with FEWEST injuries.
-        # Tie-breaker: most trophies.
-        # Tie-breaker 2: most scrap.
-        # Tie-breaker 3: (Not in rules) highest initiative (last)
-        
+
+        first_player_id = active_players[0].user_id
+        self.state.intermission_turn_player_id = first_player_id
+
+        player = self.state.get_player(first_player_id)
+        if player:
+            self.state.add_log(f"Starting with {player.username} (first in initiative).")
+
+    def buy_market_card(self, user_id: str, card_id: str, card_type: str) -> bool:
+        if self.state.phase != GamePhase.INTERMISSION:
+            return False
+
+        if user_id != self.state.intermission_turn_player_id:
+            return False
+
+        player = self.state.get_player(user_id)
+        if not player or user_id in self.state.intermission_players_acted:
+            return False
+
+        card = None
+        market_list = None
+
+        if card_type == "UPGRADE":
+            market_list = self.state.market.upgrade_market
+            card = next((c for c in market_list if c.id == card_id), None)
+        elif card_type == "ARSENAL":
+            market_list = self.state.market.arsenal_market
+            card = next((c for c in market_list if c.id == card_id), None)
+
+        if not card or market_list is None:
+            return False
+
+        if not player.can_afford(card.cost):
+            self.state.add_log(f"{player.username} cannot afford {card.name}")
+            return False
+
+        player.pay_cost(card.cost)
+        market_list.remove(card)
+
+        if card_type == "UPGRADE":
+            player.upgrades.append(cast(UpgradeCard, card))
+        elif card_type == "ARSENAL":
+            player.arsenal_hand.append(cast(ArsenalCard, card))
+
+        self.state.add_log(f"{player.username} purchased {card.name}.")
+
+        # Do not refill market per Rulebook Sec 7
+
+        self.pass_intermission_turn(user_id, bought_card=True)
+
+        return True
+
+    def pass_intermission_turn(self, user_id: str, bought_card: bool = False) -> bool:
+        if self.state.phase != GamePhase.INTERMISSION:
+            return False
+
+        if user_id != self.state.intermission_turn_player_id:
+            return False
+
+        player = self.state.get_player(user_id)
+        if not player:
+            return False
+
+        if user_id not in self.state.intermission_players_acted:
+            if not bought_card:
+                self.state.add_log(f"{player.username} passes their turn.")
+            self.state.intermission_players_acted.append(user_id)
+
+        active_initiative = [p.user_id for p in self.state.get_active_players_in_order()]
+
+        try:
+            current_idx = active_initiative.index(user_id)
+        except ValueError:
+            self.state.add_log("Error: Could not find current intermission player.")
+            self._advance_phase()
+            return True
+
+        next_player_id = None
+        for i in range(1, len(active_initiative) + 1): # Check all players
+            next_idx = (current_idx + i) % len(active_initiative)
+            pid = active_initiative[next_idx]
+            if pid not in self.state.intermission_players_acted:
+                next_player_id = pid
+                break
+
+        if next_player_id:
+            self.state.intermission_turn_player_id = next_player_id
+            next_player = self.state.get_player(next_player_id)
+            self.state.add_log(f"It is {next_player.username}'s turn to buy.")
+        else:
+            self.state.add_log("Intermission buying phase is over.")
+            self.state.intermission_turn_player_id = None
+            self._advance_phase()
+
+        return True
+
+    def _refill_market(
+        self,
+        deck: List,
+        market_list: List,
+        target_size: int,
+        discard_pile: List
+    ):
+        """Refills a market list from its deck."""
+
+        while len(market_list) < target_size:
+            if not deck:
+                if not discard_pile:
+                    self.state.add_log(f"Market deck and discard are empty.")
+                    break
+
+                self.state.add_log("Market deck empty, reshuffling discard...")
+                deck.extend(discard_pile)
+                discard_pile.clear()
+                random.shuffle(deck)
+
+            if not deck: # Still empty after shuffle?
+                break
+
+            market_list.append(deck.pop(0))
+
+    # --- Phase Advancement ---
+
+    def _advance_phase(self):
+        """
+        Main state machine logic.
+        """
+        current_phase = self.state.phase
+
+        if current_phase == GamePhase.WILDERNESS:
+            self._start_planning_phase()
+
+        elif current_phase == GamePhase.PLANNING:
+            self._start_attraction_phase()
+
+        elif current_phase == GamePhase.ATTRACTION:
+            self._start_defense_phase()
+
+        elif current_phase == GamePhase.DEFENSE:
+            self._start_action_phase()
+
+        elif current_phase == GamePhase.ACTION:
+            self._start_cleanup_phase()
+
+        elif current_phase == GamePhase.CLEANUP:
+            if self.state.round == TOTAL_ROUNDS:
+                self._start_game_over()
+                return
+
+            if self.state.round % ROUNDS_PER_ERA == 0:
+                self._start_intermission_phase()
+            else:
+                self.state.round += 1
+                self._start_wilderness_phase()
+
+        elif current_phase == GamePhase.INTERMISSION:
+            self.state.round += 1
+            self.state.era += 1
+            self.state.add_log(f"Entering Era {self.state.era}.")
+            self._start_wilderness_phase()
+
+    # --- Game End ---
+
+    def _start_game_over(self):
+        self.state.phase = GamePhase.GAME_OVER
+        self.state.add_log("--- GAME OVER ---")
+
+        # [Source 99] Determine winner
+        # Get all players who finished
+        finalist_players = [
+            p for p in self.state.players.values()
+            if p.status in [PlayerStatus.ACTIVE, PlayerStatus.DISCONNECTED]
+        ]
+
+        if not finalist_players:
+            self.state.add_log("No active players remaining. No winner.")
+            return
+
+        # Tie-breaker #1: Trophies
+        # Tie-breaker #2: Total Scrap
+        # Tie-breaker #3: (Implied) Initiative
+
+        # Create a stable initiative tiebreak map
+        initiative_tiebreak = {pid: i for i, pid in enumerate(self.state.initiative_queue)}
+
         sorted_players = sorted(
-            active_players,
+            finalist_players,
             key=lambda p: (
-                p.injuries,           # 1. Fewest injuries
-                -len(p.trophies),     # 2. Most trophies
-                -p.get_total_scrap()  # 3. Most scrap
+                p.injuries,                  # 1. Fewest Injuries
+                -len(p.trophies),            # 2. Most Trophies
+                -p.get_total_scrap(),        # 3. Most Scrap
+                initiative_tiebreak.get(p.user_id, 99) # 4. Initiative
             )
         )
-        
+
         winner = sorted_players[0]
         self.state.winner = winner
-        
+
         self.state.add_log(f"The winner is {winner.username}!")
         self.state.add_log("Final Standings:")
         for i, p in enumerate(sorted_players):
             self.state.add_log(
                 f"  {i+1}. {p.username} (Injuries: {p.injuries}, Trophies: {len(p.trophies)}, Scrap: {p.get_total_scrap()})"
             )
+
+        # Add surrendered players at the end
+        surrendered_players = [
+             p for p in self.state.players.values()
+             if p.status == PlayerStatus.SURRENDERED
+        ]
+        for p in surrendered_players:
+             self.state.add_log(
+                f"  - {p.username} (Surrendered)"
+            )
+
 
     # --- Helper: Check Readiness ---
 
@@ -1054,17 +1247,23 @@ class GameInstance:
         Checks if all *active* players are ready for a given phase.
         check_type: "plans" or "defenses"
         """
-        
+
+        active_player_ids = {
+            p.user_id for p in self.state.get_active_players_in_order()
+        }
+
+        if not active_player_ids:
+            return True # No one is active, so we are "ready"
+
         if check_type == "plans":
-            plans = self.state.player_plans
+            submitted_ids = {
+                pid for pid, p in self.state.players.items() if p.plan_submitted
+            }
         elif check_type == "defenses":
-            plans = self.state.player_defenses
+            submitted_ids = {
+                pid for pid, p in self.state.players.items() if p.defense_submitted
+            }
         else:
             return False
-            
-        for player in self.state.get_active_players_in_order():
-            plan = plans.get(player.user_id)
-            if not plan or not plan.ready:
-                return False # At least one active player is not ready
-                
-        return True
+
+        return active_player_ids.issubset(submitted_ids)

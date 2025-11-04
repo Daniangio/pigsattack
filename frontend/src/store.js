@@ -11,27 +11,27 @@ export const useStore = create((set, get) => ({
   lobbyState: { users: [], rooms: [] },
   roomState: null,
   gameState: null,
+  sendMessage: null, // --- FIX: Add sendMessage to the store state
 
   // Actions
-  // FIX: Add a dedicated action to handle client-side view changes.
-  // The `set` function is only available inside the store's definition.
   setView: (view) => set({ view }),
+
+  // --- FIX: Add a setter for sendMessage ---
+  setSendMessage: (fn) => set({ sendMessage: fn }),
 
   setToken: (token) => {
     sessionStorage.setItem("authToken", token);
     const decoded = jwtDecode(token);
     const user = {
       id: decoded.sub,
-      username: decoded.username, // Assuming username is in the token
+      username: decoded.username,
       currentRoomId: null,
     };
-    // Don't set view here. The backend will send the authoritative state upon connection.
     set({ token, user });
   },
 
   clearAuth: () => {
     sessionStorage.removeItem("authToken");
-    // Reset all state and return to auth view
     set({
       token: null,
       user: null,
@@ -41,6 +41,7 @@ export const useStore = create((set, get) => ({
       lobbyState: { users: [], rooms: [] },
       gameResult: null,
       gameState: null,
+      sendMessage: null, // --- FIX: Clear sendMessage on logout
     });
   },
 
@@ -48,13 +49,10 @@ export const useStore = create((set, get) => ({
 
   handleGuestAuth: (payload) => {
     const user = { id: payload.id, username: payload.username };
-    // Don't set view here. The backend will send the authoritative state.
     set({ user });
   },
 
   handleAuthSuccess: (payload) => {
-    // This is called after the websocket confirms the token.
-    // It's crucial to re-set the user object here to avoid it being cleared.
     const user = {
       id: payload.id,
       username: payload.username,
@@ -66,25 +64,28 @@ export const useStore = create((set, get) => ({
     alert(`Server Error: ${payload.message}`);
   },
 
-  // A single, authoritative state handler
   handleStateUpdate: (payload) => {
-    // The backend sends the view and all relevant state.
-    // The frontend's only job is to apply it. All logic is now on the backend.
     set((state) => {
+      // --- FIX for Race Condition ---
+      // If we are currently in a game (gameState is not null),
+      // we must *ignore* any 'state_update' messages, as they
+      // are stale messages from the lobby/room we already left.
+      // The only message that can update us now is 'game_state_update'
+      // or an action that clears the game (like logout).
+      if (state.gameState) {
+        console.warn("Ignoring stale 'state_update' while in game.");
+        return state; // Ignore the update
+      }
+
+      // If we are not in a game, process the update.
       return { ...state, ...payload };
     });
-
-    const newState = { ...get(), ...payload };
-    if (payload.view && payload.view !== "game") {
-      newState.gameState = null;
-    }
-    set(newState);
+    // --- END FIX ---
   },
 
-  // --- Handle the specific game state update ---
   handleGameStateUpdate: (payload) => {
-    // This message ONLY comes when we are in a game.
-    // It forces the view to 'game' and updates the state.
+    // This handler is now the *only* one that sets the game state
+    // and forces the view to 'game'.
     set({ gameState: payload, view: "game" });
   },
 }));

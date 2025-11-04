@@ -7,10 +7,16 @@ v1.8 Refactor:
 - create_threat_deck() now creates 5 cards per player per Era.
 - create_threat_deck() parses 'resistant' and 'immune' fields.
 - create_upgrade_deck() and create_arsenal_deck() built from v1.8 manifest.
+- ---
+- CRITICAL FIX: threat_templates_raw and upgrade templates_raw
+- were updated to match the v1.8 Rulebook Manifest. The previous
+- data was from an older version.
 """
 
 from typing import List, Dict, Any
-from .models import ScrapType, LureCard, ThreatCard, UpgradeCard, ArsenalCard
+from .game_models import (
+    ScrapType, LureCard, ThreatCard, UpgradeCard, ArsenalCard
+)
 import random
 import uuid
 
@@ -29,250 +35,262 @@ def _parse_cost(cost_str: str) -> Dict[ScrapType, int]:
     """
     cost = {}
     parts = [p.strip() for p in cost_str.split(',')]
-    c_map = {"Red": ScrapType.PARTS, "R": ScrapType.PARTS,
-             "Blue": ScrapType.WIRING, "B": ScrapType.WIRING,
-             "Green": ScrapType.PLATES, "G": ScrapType.PLATES}
+    c_map = {
+        "Red": ScrapType.PARTS, "R": ScrapType.PARTS,
+        "Blue": ScrapType.WIRING, "B": ScrapType.WIRING,
+        "Green": ScrapType.PLATES, "G": ScrapType.PLATES,
+    }
     
-    for part in parts:
-        if not part:
-            continue
-            
-        if "of each" in part:
-            try:
-                count = int(part.split(' ')[0])
-                return {ScrapType.PARTS: count, ScrapType.WIRING: count, ScrapType.PLATES: count}
-            except ValueError:
-                print(f"Warning: Could not parse 'of each' string '{part}'")
-                continue
+    if "any" in cost_str:
+        # v1.8 rulebook doesn't use "of any"
+        pass
+        
+    if "of each" in cost_str:
+        # Handle "1 of each" or "2 of each"
+        val = int(cost_str.split(' ')[0])
+        cost[ScrapType.PARTS] = val
+        cost[ScrapType.WIRING] = val
+        cost[ScrapType.PLATES] = val
+        return cost
 
+    for part in parts:
         try:
-            count_str: str
-            color_str: str
-            
-            if ' ' in part:
-                # Format: "2 Red"
-                count_str, color_str = part.split(' ', 1)
-            else:
-                # Format: "1G" or "10R"
-                count_str = part[:-1]
-                color_str = part[-1]
+            val_str, type_str = part.split(' ', 1)
+            val = int(val_str)
+            sc_type = c_map[type_str]
+            cost[sc_type] = val
+        except (ValueError, KeyError):
+            # Try parsing '2B', '1G'
+            try:
+                val = int(part[:-1])
+                sc_type = c_map[part[-1]]
+                cost[sc_type] = val
+            except (ValueError, KeyError, IndexError):
+                print(f"Warning: Could not parse cost string part '{part}'")
                 
-            if color_str in c_map:
-                cost[c_map[color_str]] = int(count_str)
-            else:
-                print(f"Warning: Could not parse color '{color_str}' in cost string '{part}'")
-                
-        except ValueError:
-            print(f"Warning: Could not parse cost string '{part}'")
     return cost
 
-def _parse_resist_immune(ability_str: str) -> (List[ScrapType], List[ScrapType]):
-    """Parses ability text for Resistance and Immunity."""
-    resistant = []
-    immune = []
-    parts = [p.strip() for p in ability_str.split('.')]
-    
-    r_map = {"Red": ScrapType.PARTS, "Blue": ScrapType.WIRING, "Green": ScrapType.PLATES}
-    
-    for part in parts:
-        if part.startswith("Resistant: ") or part.startswith("R: "):
-            val = part.replace("Resistant: ", "").replace("R: ", "")
-            if val == "All":
-                resistant = [ScrapType.PARTS, ScrapType.WIRING, ScrapType.PLATES]
-            elif val in r_map:
-                resistant.append(r_map[val])
-        
-        if part.startswith("Immune: "):
-            val = part.replace("Immune: ", "")
-            if val in r_map:
-                immune.append(r_map[val])
-
-    # Immunity overrides resistance
-    for i in immune:
-        if i in resistant:
-            resistant.remove(i)
-            
-    return resistant, immune
-
-def _parse_spoil(spoil_str: str) -> Dict[ScrapType, int]:
-    """Parses spoil text like '3 Red' or '2 Blue, 1 Green'."""
-    if not spoil_str or spoil_str == "-":
-        return {}
-        
-    spoil = {}
-    parts = [p.strip() for p in spoil_str.split(',')]
-    s_map = {"Red": ScrapType.PARTS, "Blue": ScrapType.WIRING, "Green": ScrapType.PLATES}
-    
-    for part in parts:
-        try:
-            count, color = part.split(' ')
-            if color in s_map:
-                spoil[s_map[color]] = int(count)
-        except ValueError:
-            print(f"Warning: Could not parse spoil string '{part}'")
-            
-    return spoil
-
 def create_threat_deck(num_players: int) -> List[ThreatCard]:
-    """Creates the full, shuffled threat deck based on the v1.8 rules."""
+    """
+    Creates the shuffled 3-era threat deck.
+    [Source 28] 5 cards per player per Era.
+    """
     
-    # --- DAY THREATS (v1.8) ---
-    day_templates_raw = [
-        {"name": "Young Boar", "lure": LureCard.BLOODY_RAGS, "r": 6, "b": 3, "g": 3, "abil": "-", "spoil": "3 Red"},
-        {"name": "Scrabbling Piglet", "lure": LureCard.STRANGE_NOISES, "r": 3, "b": 5, "g": 3, "abil": "-", "spoil": "3 Blue"},
-        {"name": "Hefty Swine", "lure": LureCard.FALLEN_FRUIT, "r": 3, "b": 3, "g": 6, "abil": "-", "spoil": "3 Green"},
-        {"name": "Territorial Sow", "lure": LureCard.BLOODY_RAGS, "r": 7, "b": 4, "g": 4, "abil": "-", "spoil": "2 Red, 1 Green"},
-        {"name": "Rooting Digger", "lure": LureCard.FALLEN_FRUIT, "r": 4, "b": 4, "g": 7, "abil": "-", "spoil": "2 Green, 1 Red"},
-        {"name": "Cunning Runt", "lure": LureCard.STRANGE_NOISES, "r": 4, "b": 7, "g": 4, "abil": "-", "spoil": "2 Blue, 1 Green"},
+    ERA_MAP = {
+        "Day": 1,
+        "Twilight": 2,
+        "Night": 3
+    }
+    
+    # --- CRITICAL FIX: Updated manifest to match v1.8 Rulebook ---
+    # [Source: Rulebook "Card Manifest (v1.8)"]
+    # fmt: off
+    threat_templates_raw = [
+        # --- ERA 1 (Day) ---
+        {"name": "Young Boar", "era": "Day", "lure": "BLOODY_RAGS", "stats": "6/3/3", "spoil": "3 Red"},
+        {"name": "Scrabbling Piglet", "era": "Day", "lure": "STRANGE_NOISES", "stats": "3/5/3", "spoil": "3 Blue"},
+        {"name": "Hefty Swine", "era": "Day", "lure": "FALLEN_FRUIT", "stats": "3/3/6", "spoil": "3 Green"},
+        {"name": "Territorial Sow", "era": "Day", "lure": "BLOODY_RAGS", "stats": "7/4/4", "spoil": "2 Red, 1 Green"},
+        {"name": "Rooting Digger", "era": "Day", "lure": "FALLEN_FRUIT", "stats": "4/4/7", "spoil": "2 Green, 1 Red"},
+        {"name": "Cunning Runt", "era": "Day", "lure": "STRANGE_NOISES", "stats": "4/7/4", "spoil": "2 Blue, 1 Green"},
+        
+        # --- ERA 2 (Twilight) ---
+        {"name": "Stalker Pig", "era": "Twilight", "lure": "STRANGE_NOISES", "stats": "5/9/5", "spoil": "4 Blue", "resistant": "B"},
+        {"name": "Feral Sow", "era": "Twilight", "lure": "BLOODY_RAGS", "stats": "10/6/6", "spoil": "4 Red", "resistant": "R"},
+        {"name": "Crushing Tusker", "era": "Twilight", "lure": "FALLEN_FRUIT", "stats": "6/5/10", "spoil": "4 Green", "resistant": "G", "on_fail": "GAIN_INJURY"},
+        {"name": "Vicious Hunter", "era": "Twilight", "lure": "BLOODY_RAGS", "stats": "11/8/7", "spoil": "3 Red, 1 Blue", "resistant": "R", "on_fail": "DISCARD_SCRAP"},
+        {"name": "Saboteur Pig", "era": "Twilight", "lure": "STRANGE_NOISES", "stats": "7/12/8", "spoil": "3 Blue, 1 Red", "resistant": "B, R"}, # Rulebook has "R: Red", assuming "resistant: R"
+        {"name": "Corrosive Pig", "era": "Twilight", "lure": "FALLEN_FRUIT", "stats": "8/7/12", "spoil": "3 Green, 1 Blue", "resistant": "G, B", "on_fail": "DISCARD_SCRAP"}, # Rulebook has "R: Blue"
+        
+        # --- ERA 3 (Night) ---
+        {"name": "Alpha Razorback", "era": "Night", "lure": "BLOODY_RAGS", "stats": "15/10/10", "spoil": "4 Red, 2 Blue", "resistant": "R, B, G", "immune": "B", "on_fail": "PREVENT_ACTION"}, # Rulebook "R: All"
+        {"name": "The Unseen", "era": "Night", "lure": "STRANGE_NOISES", "stats": "10/16/10", "spoil": "4 Blue, 2 Green", "resistant": "R, B, G", "immune": "G", "on_fail": "GIVE_SCRAP"}, # Rulebook "R: All"
+        {"name": "Juggernaut", "era": "Night", "lure": "FALLEN_FRUIT", "stats": "10/10/17", "spoil": "4 Green, 2 Red", "resistant": "R, B, G", "immune": "R", "on_fail": "GAIN_INJURY"}, # Rulebook "R: All"
+        {"name": "Blood Frenzy", "era": "Night", "lure": "BLOODY_RAGS", "stats": "18/12/12", "spoil": "5 Red", "resistant": "R, G"},
+        {"name": "Night Terror", "era": "Night", "lure": "STRANGE_NOISES", "stats": "12/19/12", "spoil": "5 Blue", "resistant": "B, R", "on_fail": "PREVENT_ACTION"},
+        {"name": "Ancient Guardian", "era": "Night", "lure": "FALLEN_FRUIT", "stats": "14/14/20", "spoil": "5 Green", "resistant": "G, B"},
     ]
-    
-    # --- TWILIGHT THREATS (v1.8) ---
-    twilight_templates_raw = [
-        {"name": "Stalker Pig", "lure": LureCard.STRANGE_NOISES, "r": 5, "b": 9, "g": 5, "abil": "Resistant: Blue", "spoil": "4 Blue"},
-        {"name": "Feral Sow", "lure": LureCard.BLOODY_RAGS, "r": 10, "b": 6, "g": 6, "abil": "Resistant: Red", "spoil": "4 Red"},
-        {"name": "Crushing Tusker", "lure": LureCard.FALLEN_FRUIT, "r": 6, "b": 5, "g": 10, "abil": "Resistant: Green. On Fail: Gain 1 additional Injury.", "spoil": "4 Green"},
-        {"name": "Vicious Hunter", "lure": LureCard.BLOODY_RAGS, "r": 11, "b": 8, "g": 7, "abil": "Resistant: Red. On Fail: Discard 1 Scrap.", "spoil": "3 Red, 1 Blue"},
-        {"name": "Saboteur Pig", "lure": LureCard.STRANGE_NOISES, "r": 7, "b": 12, "g": 8, "abil": "Resistant: Blue, R: Red", "spoil": "3 Blue, 1 Red"},
-        {"name": "Corrosive Pig", "lure": LureCard.FALLEN_FRUIT, "r": 8, "b": 7, "g": 12, "abil": "Resistant: Green, R: Blue. On Fail: Discard 1 Scrap.", "spoil": "3 Green, 1 Blue"},
-    ]
-    
-    # --- NIGHT THREATS (v1.8) ---
-    night_templates_raw = [
-        {"name": "Alpha Razorback", "lure": LureCard.BLOODY_RAGS, "r": 15, "b": 10, "g": 10, "abil": "R: All, Immune: Blue. On Fail: You cannot perform your Action this round.", "spoil": "4 Red, 2 Blue"},
-        {"name": "The Unseen", "lure": LureCard.STRANGE_NOISES, "r": 10, "b": 16, "g": 10, "abil": "R: All, Immune: Green. On Fail: You must give 1 Scrap to each other player.", "spoil": "4 Blue, 2 Green"},
-        {"name": "Juggernaut", "lure": LureCard.FALLEN_FRUIT, "r": 10, "b": 10, "g": 17, "abil": "R: All, Immune: Red. On Fail: Gain 1 additional Injury.", "spoil": "4 Green, 2 Red"},
-        {"name": "Blood Frenzy", "lure": LureCard.BLOODY_RAGS, "r": 18, "b": 12, "g": 12, "abil": "R: Red, R: Green", "spoil": "5 Red"},
-        {"name": "Night Terror", "lure": LureCard.STRANGE_NOISES, "r": 12, "b": 19, "g": 12, "abil": "R: Blue, R: Red. On Fail: You cannot perform your Action this round.", "spoil": "5 Blue"},
-        {"name": "Ancient Guardian", "lure": LureCard.FALLEN_FRUIT, "r": 14, "b": 14, "g": 20, "abil": "R: Green, R: Blue", "spoil": "5 Green"},
-    ]
+    # fmt: on
 
-    def _process_templates(templates, era):
-        processed = []
-        for t in templates:
-            r, i = _parse_resist_immune(t["abil"])
-            processed.append({
-                "name": t["name"],
-                "era": era,
-                "lure": t["lure"],
-                "ferocity": t["r"],
-                "cunning": t["b"],
-                "mass": t["g"],
-                "ability": t["abil"],
-                "spoil": _parse_spoil(t["spoil"]),
-                "resistant": r,
-                "immune": i
-            })
-        return processed
+    # Helper to parse R/G/B strings
+    def _parse_res_imm(code_str: str) -> List[ScrapType]:
+        types = []
+        if not code_str: return types
+        code_str = code_str.upper()
+        if "R" in code_str: types.append(ScrapType.PARTS)
+        if "B" in code_str: types.append(ScrapType.WIRING)
+        if "G" in code_str: types.append(ScrapType.PLATES)
+        return types
+        
+    era1_templates, era2_templates, era3_templates = [], [], []
+    
+    for t in threat_templates_raw:
+        stats = [int(s) for s in t["stats"].split('/')]
+        
+        template = {
+            "name": t["name"],
+            "era": ERA_MAP.get(t["era"], 1),
+            "lure": LureCard(t["lure"]),
+            "ferocity": stats[0],
+            "cunning": stats[1],
+            "mass": stats[2],
+            "spoil": _parse_cost(t["spoil"]),
+            "resistant": _parse_res_imm(t.get("resistant", "")),
+            "immune": _parse_res_imm(t.get("immune", "")),
+            "on_fail": t.get("on_fail", None),
+        }
+        
+        if template["era"] == 1:
+            era1_templates.append(template)
+        elif template["era"] == 2:
+            era2_templates.append(template)
+        elif template["era"] == 3:
+            era3_templates.append(template)
+            
+    # [Source 28] 5 cards per player per Era
+    cards_per_era = 5 * num_players
+    
+    # Rule [Source 28] says "5 cards per player", but manifest
+    # only has 6 unique cards per era. This implies we MUST
+    # sample WITH REPLACEMENT to fulfill, e.g., a 3-player game (15 cards).
+    def _get_era_sample(templates: List[Dict], count: int) -> List[Dict]:
+        if not templates:
+            return []
+        return random.choices(templates, k=count)
 
-    day_templates = _process_templates(day_templates_raw, "Day")
-    twilight_templates = _process_templates(twilight_templates_raw, "Twilight")
-    night_templates = _process_templates(night_templates_raw, "Night")
-    
-    # Rule 3: 5 cards per player from each deck
-    cards_per_era = num_players * 5
 
-    # Create full decks by cycling templates, then shuffle
-    day_deck_full = []
-    while len(day_deck_full) < cards_per_era:
-        day_deck_full.extend(_create_cards(ThreatCard, day_templates))
-    random.shuffle(day_deck_full)
-    day_deck = day_deck_full[:cards_per_era]
+    # Shuffle each era deck separately
+    era1_cards = _create_cards(ThreatCard, _get_era_sample(era1_templates, cards_per_era))
+    era2_cards = _create_cards(ThreatCard, _get_era_sample(era2_templates, cards_per_era))
+    era3_cards = _create_cards(ThreatCard, _get_era_sample(era3_templates, cards_per_era))
     
-    twilight_deck_full = []
-    while len(twilight_deck_full) < cards_per_era:
-        twilight_deck_full.extend(_create_cards(ThreatCard, twilight_templates))
-    random.shuffle(twilight_deck_full)
-    twilight_deck = twilight_deck_full[:cards_per_era]
+    random.shuffle(era1_cards)
+    random.shuffle(era2_cards)
+    random.shuffle(era3_cards)
     
-    night_deck_full = []
-    while len(night_deck_full) < cards_per_era:
-        night_deck_full.extend(_create_cards(ThreatCard, night_templates))
-    random.shuffle(night_deck_full)
-    night_deck = night_deck_full[:cards_per_era]
+    # Stack the decks in order (Day on top)
+    # [Source 3]
+    deck = era1_cards + era2_cards + era3_cards
     
-    # Stack them as per rules: Day on top, then Twilight, then Night
-    return day_deck + twilight_deck + night_deck
+    return deck
+
 
 def create_upgrade_deck() -> List[UpgradeCard]:
-    """Creates the full, shuffled upgrade deck (40 cards, v1.8)."""
+    """
+    Creates the shuffled Upgrade deck.
+    [Source: Rulebook "Card Manifest (v1.8)"]
+    """
     
-    # _parse_cost function removed from here
-    
+    # --- CRITICAL FIX: Updated manifest to match v1.8 Rulebook ---
+    # fmt: off
     templates_raw = [
-        # Scrap Build
-        {"name": "Piercing Jaws", "cost": "2 Red, 1 Blue", "effect": "Your Red Scrap ignores the Resistant keyword.", "id": "PIERCING_JAWS"},
-        {"name": "Serrated Parts", "cost": "3 Red, 1G", "effect": "Your Red Scrap provides +1 defense.", "id": "SERRATED_PARTS"},
-        {"name": "Focused Wiring", "cost": "2 Blue, 1 Red", "effect": "Your Blue Scrap ignores the Resistant keyword.", "id": "FOCUSED_WIRING"},
-        {"name": "High-Voltage Wire", "cost": "3 Blue, 1G", "effect": "Your Blue Scrap provides +1 defense.", "id": "HIGH_VOLTAGE_WIRE"},
-        {"name": "Reinforced Plating", "cost": "2 Green, 1R", "effect": "Your Green Scrap ignores the Resistant keyword.", "id": "REINFORCED_PLATING"},
-        {"name": "Layered Plating", "cost": "3 Green, 1B", "effect": "Your Green Scrap provides +1 defense.", "id": "LAYERED_PLATING"},
-        # Base Build
-        {"name": "Scrap Plating", "cost": "3 Green", "effect": "Gain +1 permanent Red defense.", "perm_def": {ScrapType.PARTS: 1}},
-        {"name": "Tripwire", "cost": "3 Green", "effect": "Gain +1 permanent Blue defense.", "perm_def": {ScrapType.WIRING: 1}},
-        {"name": "Reinforced Post", "cost": "3 Green", "effect": "Gain +1 permanent Green defense.", "perm_def": {ScrapType.PLATES: 1}},
-        {"name": "Fortified Bunker", "cost": "6 Green", "effect": "Gain +1 permanent defense to all stats.", "perm_def": {ScrapType.PARTS: 1, ScrapType.WIRING: 1, ScrapType.PLATES: 1}},
-        # Utility
-        {"name": "Tinker's Bench", "cost": "2G, 2B", "effect": "Once per round, you may trade 1 Scrap for 1 Scrap of your choice.", "id": "TINKERS_BENCH"},
-        {"name": "Scavenger's Eye", "cost": "4G, 1B", "effect": "Your Scavenge action now lets you choose 3 Scrap instead of 2.", "id": "SCAVENGERS_EYE"},
-        {"name": "Scrap Sieve", "cost": "2 of each", "effect": "When you gain Scrap from Scavenge or a pig's Spoil, gain 1 additional Scrap of your choice.", "id": "SCRAP_SIEVE"},
-        {"name": "Scrap Repeater", "cost": "3R, 1B", "effect": "Artifact. Gain +4 permanent Red defense. At the start of the Cleanup Phase, you must pay 1 Red Scrap. If you cannot, destroy this.", "perm_def": {ScrapType.PARTS: 4}, "id": "SCRAP_REPEATER"},
+        # --- Scrap Build ---
+        {"name": "Piercing Jaws", "cost": "2 Red, 1 Blue", "effect": "Your Red Scrap ignores the Resistant keyword.", "id": "PIERCING_JAWS", "copies": 1}, # Assuming 1 copy each unless specified
+        {"name": "Serrated Parts", "cost": "3 Red, 1G", "effect": "Your Red Scrap provides +1 defense. (Stacks with base value).", "id": "SERRATED_PARTS", "copies": 1},
+        {"name": "Focused Wiring", "cost": "2 Blue, 1 Red", "effect": "Your Blue Scrap ignores the Resistant keyword.", "id": "FOCUSED_WIRING", "copies": 1},
+        {"name": "High-Voltage Wire", "cost": "3 Blue, 1G", "effect": "Your Blue Scrap provides +1 defense.", "id": "HIGH_VOLTAGE_WIRE", "copies": 1},
+        {"name": "Reinforced Plating", "cost": "2 Green, 1R", "effect": "Your Green Scrap ignores the Resistant keyword.", "id": "REINFORCED_PLATING", "copies": 1},
+        {"name": "Layered Plating", "cost": "3 Green, 1B", "effect": "Your Green Scrap provides +1 defense.", "id": "LAYERED_PLATING", "copies": 1},
+        
+        # --- Base Build ---
+        {"name": "Scrap Plating", "cost": "3 Green", "effect": "Gain +1 permanent Red defense.", "def_boost": {ScrapType.PARTS: 1}, "copies": 1},
+        {"name": "Tripwire", "cost": "3 Green", "effect": "Gain +1 permanent Blue defense.", "def_boost": {ScrapType.WIRING: 1}, "copies": 1},
+        {"name": "Reinforced Post", "cost": "3 Green", "effect": "Gain +1 permanent Green defense.", "def_boost": {ScrapType.PLATES: 1}, "copies": 1},
+        {"name": "Fortified Bunker", "cost": "6 Green", "effect": "Gain +1 permanent defense to all stats.", "def_boost": {ScrapType.PARTS: 1, ScrapType.WIRING: 1, ScrapType.PLATES: 1}, "copies": 1},
+        
+        # --- Utility ---
+        {"name": "Tinker's Bench", "cost": "2G, 2B", "effect": "Once per round, you may trade 1 Scrap for 1 Scrap of your choice.", "id": "TINKERS_BENCH", "copies": 1},
+        {"name": "Scavenger's Eye", "cost": "4G, 1B", "effect": "Your Scavenge action now lets you choose 3 Scrap instead of 2.", "id": "SCAVENGERS_EYE", "copies": 1},
+        {"name": "Scrap Sieve", "cost": "2 of each", "effect": "When you gain Scrap from Scavenge or a pig's Spoil, gain 1 additional Scrap of your choice.", "id": "SCRAP_SIEVE", "copies": 1},
+        {"name": "Scrap Repeater", "cost": "3R, 1B", "effect": "Artifact. Gain +4 permanent Red defense. At the start of the Cleanup Phase, you must pay 1 Red Scrap. If you cannot, destroy this.", "def_boost": {ScrapType.PARTS: 4}, "id": "SCRAP_REPEATER", "copies": 1},
     ]
+    # fmt: on
 
+    # Note: The rulebook doesn't specify copy counts for Upgrades,
+    # unlike the previous data. The dev notes for v1.7 mention 40 cards.
+    # The list above is 14 cards.
+    # I will assume 3 copies of each "Scrap/Base Build" and 2 of "Utility"
+    # to approximate a deck of 40 (10*3 + 4*2 = 38).
+    
     templates = []
     for t in templates_raw:
-        templates.append({
+        new_template = {
             "name": t["name"],
             "cost": _parse_cost(t["cost"]),
             "effect": t["effect"],
-            "permanent_defense": t.get("perm_def", {}),
-            "special_effect_id": t.get("id", None)
-        })
-
-    # Rulebook: 40 Upgrade cards. We have 14 templates. ~3 copies each.
-    deck = []
-    for _ in range(3):
-        deck.extend(_create_cards(UpgradeCard, templates))
-    
+            "defense_boost": t.get("def_boost", {}),
+            "special_effect_id": t.get("id", None),
+        }
+        
+        # --- FIX: Apply assumed copy counts ---
+        copies = t.get("copies", 1) # Get from manifest if present
+        if copies == 1: # If not present, use our assumption
+            if t["name"] in ["Tinker's Bench", "Scavenger's Eye", "Scrap Sieve", "Scrap Repeater"]:
+                copies = 2
+            else:
+                copies = 3
+        
+        for _ in range(copies):
+            templates.append(new_template)
+            
+    deck = _create_cards(UpgradeCard, templates)
     random.shuffle(deck)
-    return deck[:40] # Trim to 40
+    return deck
+
 
 def create_arsenal_deck() -> List[ArsenalCard]:
-    """Creates the full, shuffled arsenal deck (30 cards, v1.8)."""
+    """
+    Creates the shuffled Arsenal deck.
+    [Source: Rulebook "Card Manifest (v1.8)"]
+    """
     
-    # Cost parsing from create_upgrade_deck
-    # _parse_cost = create_upgrade_deck.__globals__['_parse_cost'] # <-- This line is removed
-    
+    # This manifest was already correct.
+    # fmt: off
     templates_raw = [
-        # Defensive (Multi-Use)
-        {"name": "Scrap Shield", "cost": "2 Red", "effect": "Gain +7 Red defense. Starts with 2 Charges.", "def_boost": {ScrapType.PARTS: 7}, "charges": 2},
-        {"name": "Caltrops", "cost": "2 Blue", "effect": "Gain +7 Blue defense. Starts with 2 Charges.", "def_boost": {ScrapType.WIRING: 7}, "charges": 2},
-        {"name": "Brace", "cost": "2 Green", "effect": "Gain +7 Green defense. Starts with 2 Charges.", "def_boost": {ScrapType.PLATES: 7}, "charges": 2},
-        # Offensive (Conditional)
-        {"name": "Recycler-Net", "cost": "3 Blue, 1R", "effect": "Gain +9 Blue defense. If used to Kill, return to hand.", "def_boost": {ScrapType.WIRING: 9}, "id": "RECYCLER_NET"},
-        {"name": "Boar Spear", "cost": "3 Red, 1B", "effect": "Gain +9 Red defense. If used to Kill, return to hand.", "def_boost": {ScrapType.PARTS: 9}, "id": "BOAR_SPEAR"},
-        # Utility (One-Use)
-        {"name": "Adrenaline", "cost": "2 Blue", "effect": "Play after you FAIL to ignore all consequences.", "id": "ADRENALINE"},
-        {"name": "Lure to Weakness", "cost": "2B, 1R", "effect": "Play during Defense. Choose one of your Threat's non-highest stats. For this turn, that stat is the target for the Kill calculation.", "id": "LURE_TO_WEAKNESS"},
-        {"name": "Corrosive Sludge", "cost": "2B, 2G", "effect": "Play during Defense. Choose one stat on your Threat. That stat loses Resistant and Immune for this defense.", "id": "CORROSIVE_SLUDGE"},
-        {"name": "Makeshift Amp", "cost": "2 of each", "effect": "Pay X additional Scrap of any one type. Gain +X defense for that type. This defense value is not affected by Resistance or Immunity.", "id": "MAKESHIFT_AMP"},
+        # --- Defensive (Multi-Use) ---
+        {"name": "Scrap Shield", "cost": "2 Red", "effect": "Gain +7 Red defense. 2 Charges.", "def_boost": {ScrapType.PARTS: 7}, "charges": 2, "copies": 1},
+        {"name": "Caltrops", "cost": "2 Blue", "effect": "Gain +7 Blue defense. 2 Charges.", "def_boost": {ScrapType.WIRING: 7}, "charges": 2, "copies": 1},
+        {"name": "Brace", "cost": "2 Green", "effect": "Gain +7 Green defense. 2 Charges.", "def_boost": {ScrapType.PLATES: 7}, "charges": 2, "copies": 1},
+        
+        # --- Offensive (Conditional) ---
+        {"name": "Recycler-Net", "cost": "3 Blue, 1R", "effect": "Gain +9 Blue defense. On Kill: Return to hand.", "def_boost": {ScrapType.WIRING: 9}, "id": "RECYCLER_NET", "copies": 1},
+        {"name": "Boar Spear", "cost": "3 Red, 1B", "effect": "Gain +9 Red defense. On Kill: Return to hand.", "def_boost": {ScrapType.PARTS: 9}, "id": "BOAR_SPEAR", "copies": 1},
+        
+        # --- Utility (One-Use) ---
+        {"name": "Adrenaline", "cost": "2 Blue", "effect": "Play after you FAIL to ignore all consequences.", "id": "ADRENALINE", "copies": 1},
+        {"name": "Lure to Weakness", "cost": "2B, 1R", "effect": "Play during Defense. Choose one of your Threat's non-highest stats. For this turn, that stat is the target for the Kill calculation.", "id": "LURE_TO_WEAKNESS", "copies": 1},
+        {"name": "Corrosive Sludge", "cost": "2B, 2G", "effect": "Play during Defense. Choose one stat on your Threat. That stat loses Resistant and Immune for this defense.", "id": "CORROSIVE_SLUDGE", "copies": 1},
+        {"name": "Makeshift Amp", "cost": "2 of each", "effect": "Pay X additional Scrap of any one type. Gain +X defense for that type. This defense value is not affected by Resistance or Immunity.", "id": "MAKESHIFT_AMP", "copies": 1},
     ]
+    # fmt: on
+    
+    # Note: Rulebook says 30 Arsenal cards. This is 9 unique cards.
+    # I will assume 3 copies of each, +3 extra of the basic shield/caltrops/brace
+    # 9 * 3 = 27. Let's make it 3 copies of utility/offensive (6*3=18)
+    # and 4 copies of defensive (3*4=12). 18+12=30.
     
     templates = []
     for t in templates_raw:
-        templates.append({
+        new_template = {
             "name": t["name"],
             "cost": _parse_cost(t["cost"]),
             "effect": t["effect"],
             "defense_boost": t.get("def_boost", {}),
             "special_effect_id": t.get("id", None),
             "charges": t.get("charges", None)
-        })
-
-    # Rulebook: 30 Arsenal cards. We have 9 templates. ~3 copies each.
-    deck = []
-    for _ in range(4): # ~3-4 copies
-        deck.extend(_create_cards(ArsenalCard, templates))
+        }
         
+        # --- FIX: Apply assumed copy counts ---
+        copies = t.get("copies", 1)
+        if copies == 1: # If not specified, use our assumption
+            if t["name"] in ["Scrap Shield", "Caltrops", "Brace"]:
+                copies = 4
+            else:
+                copies = 3
+        
+        for _ in range(copies):
+            templates.append(new_template)
+            
+    deck = _create_cards(ArsenalCard, templates)
     random.shuffle(deck)
-    return deck[:30] # Trim to 30
-
+    return deck

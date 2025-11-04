@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
-from .models import User, Room, LobbyState, GameRecord, GameParticipant, PlayerStatus
+from .server_models import User, Room, LobbyState, GameRecord, GameParticipant, PlayerStatus
 from .connection_manager import ConnectionManager
 from .routers import fake_games_db, fake_users_db
 

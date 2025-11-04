@@ -2,14 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from typing import Annotated
 from . import security
-from . import models
+from . import server_models
 from . import schemas
 router = APIRouter()
 
 # In-memory "database" for registered users.
 # In a real application, this would be a database session.
 fake_users_db = {
-    "admin": models.User(
+    "admin": server_models.User(
         id="admin",
         username="admin",
         hashed_password=security.get_password_hash("admin")
@@ -17,10 +17,10 @@ fake_users_db = {
 }
 
 # In-memory "database" for completed game records.
-fake_games_db: dict[str, models.GameRecord] = {}
+fake_games_db: dict[str, server_models.GameRecord] = {}
 
 @router.post("/register", response_model=schemas.UserPublic)
-def register_user(user: models.UserCreate):
+def register_user(user: server_models.UserCreate):
     """
     Register a new user.
     """
@@ -46,14 +46,14 @@ def register_user(user: models.UserCreate):
     hashed_password = security.get_password_hash(user.password)
     
     # Create the user object to store
-    stored_user = models.User(id=user.username, username=user.username, hashed_password=hashed_password)
+    stored_user = server_models.User(id=user.username, username=user.username, hashed_password=hashed_password)
     fake_users_db[user.username] = stored_user
     
     # Return the public version of the user object
     return stored_user
 
 
-@router.post("/token", response_model=models.Token)
+@router.post("/token", response_model=server_models.Token)
 def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()]
 ):
@@ -73,7 +73,7 @@ def login_for_access_token(
     return {"access_token": access_token, "token_type": "bearer"}
 
 
-@router.get("/results/{game_id}", response_model=models.GameRecord)
+@router.get("/results/{game_id}", response_model=server_models.GameRecord)
 def get_game_result(game_id: str):
     """
     Retrieve the results of a completed game.

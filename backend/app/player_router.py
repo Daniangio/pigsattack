@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 from typing import Dict
 
-from .models import User, GameRecord
+from .server_models import User, GameRecord
 from .schemas import PlayerProfile, GameHistoryEntry, GameRecordDetails
 
 

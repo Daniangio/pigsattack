@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
-from .models import User, GameParticipant
+from .server_models import User, GameParticipant
 
 class UserPublic(BaseModel):
     """A schema for user information that is safe to be exposed to clients."""

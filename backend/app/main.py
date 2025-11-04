@@ -5,7 +5,7 @@ import uuid
 
 from .connection_manager import ConnectionManager
 from .room_manager import RoomManager
-from .models import User
+from .server_models import User
 from .routers import router as auth_router
 from .player_router import router as player_router
 from .routers import fake_users_db 
@@ -13,7 +13,7 @@ from .security import get_current_user
 
 # --- GAME CORE IMPORTS ---
 from .game_manager import GameManager
-from .game_core.models import GamePhase
+from .game_core.game_models import GamePhase
 
 
 app = FastAPI()
@@ -127,8 +127,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     await game_manager.handle_game_action(
                         user=user,
                         game_id=current_room.game_record_id,
-                        action=payload.get("game_action"), # e.g., "submit_plan"
-                        payload=payload.get("data", {})     # e.g., {"lure": "...", "action": "..."}
+                        **payload                 # e.g., {"lure_card": "...", "action_card": "..."}
                     )
                 
                 elif action == "surrender":

@@ -4,18 +4,17 @@ This service acts as the bridge between the ConnectionManager/RoomManager
 and the individual GameInstance objects.
 """
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from .connection_manager import ConnectionManager
 # Use TYPE_CHECKING to avoid circular import at runtime
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .room_manager import RoomManager
 
-from .models import User, Room, GameParticipant, PlayerStatus
+from .server_models import User, Room, GameParticipant, PlayerStatus as ServerPlayerStatus
 from .game_instance import GameInstance
 # Note: We only import GamePhase for the GAME_OVER check.
-# The enums LureCard, SurvivorActionCard, ScrapType are no longer needed here.
-from .game_core.models import GameState, PlayerState, GamePhase
+from .game_core.game_models import GameState, PlayerState, GamePhase, PlayerStatus
 from .routers import fake_games_db # Import the fake_db
 
 class GameManager:
@@ -34,161 +33,200 @@ class GameManager:
     async def create_game(self, game_id: str, participants: List[GameParticipant]):
         """
         Creates a new GameInstance and stores it.
-        Called by RoomManager when a game starts.
+        Called by RoomManager when the host starts the game.
         """
-        if game_id in self.active_games:
-            print(f"Warning: Game {game_id} already exists.")
-            return
-            
         try:
-            game_instance = GameInstance(game_id, participants)
-            self.active_games[game_id] = game_instance
+            game = GameInstance(game_id, participants)
+            self.active_games[game_id] = game
+            print(f"GameInstance {game.state.game_id} created.")
+            # Send the initial state to all players
             await self.broadcast_game_state(game_id)
-            
         except Exception as e:
             print(f"Error creating game {game_id}: {e}")
+            import traceback
+            traceback.print_exc()
+            # TODO: Notify players of the error
             
-    async def handle_game_action(self, user: User, game_id: str, action: str, payload: dict):
+    async def handle_game_action(self, user: User, game_id: str, action: str, **payload: Any):
         """
-        The single entry point for all in-game actions from the websocket.
+        Routes a game action from a user to the correct GameInstance.
+        
+        FIX: Changed signature from (self, user, game_id, payload)
+             to (self, user, game_id, action, **payload)
+             to match how the router is calling it.
         """
         game = self.active_games.get(game_id)
         if not game:
-            print(f"Error: Game {game_id} not found for action {action}.")
+            print(f"Error: Game {game_id} not found for action.")
             return
-            
-        # Check if user is an active player *for most actions*
-        player = game.state.players.get(user.id)
-        if action not in ["spectate_action"]: # Add any spectator actions here
-            if not player or player.status != "ACTIVE":
-                print(f"User {user.id} is not an active player in game {game_id}.")
-                return
+
+        # 'action' is now a direct argument
+        if not action:
+            return
 
         action_success = False
         
         try:
             if action == "submit_plan":
-                # --- FIX ---
-                # Changed user_id to player_id
-                # Pass raw strings for lure and action, as expected by GameInstance
                 action_success = game.submit_plan(
                     player_id=user.id,
-                    lure=payload.get("lure"),
-                    action=payload.get("action")
+                    lure_card=payload.get("lure_card"),
+                    action_card=payload.get("action_card")
                 )
                 
             elif action == "submit_defense":
-                # --- FIX ---
-                # Changed user_id to player_id
-                # Pass the raw dict for scrap_spent, as expected by GameInstance
                 action_success = game.submit_defense(
                     player_id=user.id,
                     scrap_spent=payload.get("scrap_spent", {}),
                     arsenal_ids=payload.get("arsenal_ids", [])
                 )
             
-            elif action == "select_threat":
-                # --- FIX ---
-                # Changed user_id to player_id
-                action_success = game.select_threat(
+            elif action == "attract_threat":
+                action_success = game.attract_threat(
                     player_id=user.id,
                     threat_id=payload.get("threat_id")
                 )
             
             elif action == "submit_action_choice":
-                # --- FIX ---
-                # Changed user_id to player_id
-                # Unpack the payload as keyword arguments
+                # 'payload' is now the choice_payload, since 'action'
+                # was a separate argument.
+                choice_payload = payload
                 action_success = game.submit_action_choice(
                     player_id=user.id,
-                    **payload 
+                    payload=choice_payload
                 )
 
+            elif action == "buy_market_card":
+                action_success = game.buy_market_card(
+                    player_id=user.id,
+                    card_id=payload.get("card_id"),
+                    card_type=payload.get("card_type")
+                )
+            
+            elif action == "pass_intermission_turn":
+                action_success = game.pass_intermission_turn(
+                    player_id=user.id
+                )
+            
+            elif action == "surrender":
+                print(f"User {user.username} is surrendering in {game_id}.")
+                game.surrender_player(user.id)
+                action_success = True # The action was processed
+            
             else:
                 print(f"Unknown game action: {action}")
-                
-            if action_success:
-                await self.broadcast_game_state(game_id)
-                
-                if game.state.phase == GamePhase.GAME_OVER:
-                    winner_state = game.state.winner
-                    await self.terminate_game(game_id, winner_state)
-            else:
-                # Optionally send an error to the user
-                await self.conn_manager.send_to_user(user.id, {
-                    "type": "error",
-                    "payload": {"message": f"Invalid action: {action}"}
-                })
 
         except Exception as e:
-            print(f"Error handling action {action} for game {game_id}: {e}")
-            await self.conn_manager.send_to_user(user.id, {
-                "type": "error",
-                "payload": {"message": f"An error occurred: {str(e)}"}
-            })
+            print(f"Error processing action {action} for user {user.username}: {e}")
+            import traceback
+            traceback.print_exc()
+            action_success = False # Ensure we don't broadcast on error
 
-    async def handle_player_leave(self, user: User, game_id: str, status: PlayerStatus):
-        """Handles a player disconnecting or surrendering."""
-        game = self.active_games.get(game_id)
-        if not game:
-            return
-        
-        # --- FIX ---
-        # This method now exists in GameInstance
-        game.handle_player_leave(user.id, status.value)
-        
-        if game.state.phase == GamePhase.GAME_OVER:
-            # The game is over, so we terminate it. Terminate_game will send the
-            # final "post_game" state. We should NOT broadcast the intermediate
-            # game state here, as it can cause a race condition on the client.
-            winner_state = game.state.winner
-            await self.terminate_game(game_id, winner_state)
-        else:
-            # The game is not over, so we broadcast the new state.
+        if action_success:
+            # If the action was successful, broadcast the new state
             await self.broadcast_game_state(game_id)
+            
+            # Check for game over
+            if game.state.phase == GamePhase.GAME_OVER:
+                await self.end_game(game_id)
+        else:
+            # TODO: Send an error message back to the user?
+            print(f"Action '{action}' by {user.username} was not successful.")
 
-    async def broadcast_game_state(self, game_id: str, specific_user_id: Optional[str] = None):
-        """Sends the appropriate redacted state to every player in the game."""
+    async def handle_player_connect(self, user: User, game_id: str):
+        """Handle a player reconnecting to a game."""
         game = self.active_games.get(game_id)
         if not game:
+            print(f"Warning: Player {user.username} reconnected to game {game_id}, but instance not found.")
             return
+            
+        game.on_player_reconnect(user.id)
+        # Send full state just to the reconnecting user
+        await self.broadcast_game_state(game_id, specific_user_id=user.id)
+        # Send update to all other users
+        await self.broadcast_game_state(game_id, exclude_user_id=user.id)
+
+    async def handle_player_leave(self, user: User, game_id: str, status: ServerPlayerStatus):
+        """
+        Handle a player leaving a game.
+        Note: Takes a `ServerPlayerStatus` from RoomManager.
+        """
+        game = self.active_games.get(game_id)
+        if not game:
+            print(f"Warning: Player {user.username} left game {game_id}, but game instance not found.")
+            return
+
+        print(f"Player {user.username} is leaving game {game_id} with server status {status.value}.")
         
+        # Translate Server status to Game status
+        if status == ServerPlayerStatus.DISCONNECTED:
+            game.on_player_disconnect(user.id)
+        elif status == ServerPlayerStatus.SURRENDERED:
+            game.surrender_player(user.id)
+        
+        # Broadcast the updated state (e.g., player is_connected = False)
+        await self.broadcast_game_state(game_id)
+        
+        # Check if the game should end (e.g., all players disconnected/surrendered)
+        if game.state.phase != GamePhase.GAME_OVER:
+            active_players = game.state.get_active_players_in_order()
+            if not active_players:
+                print(f"Game {game_id} has no active players. Ending game.")
+                await self.end_game(game_id)
+
+    async def broadcast_game_state(self, game_id: str, 
+                                 specific_user_id: Optional[str] = None,
+                                 exclude_user_id: Optional[str] = None):
+        """
+        Sends the current game state to all (or one) players in a game.
+        """
+        game = self.active_games.get(game_id)
+        if not game:
+            print(f"Cannot broadcast state: Game {game_id} not found.")
+            return
+
         if specific_user_id:
-            # Send state to only one user (e.g., a new spectator)
-            # --- FIX ---
-            # Called get_player_state (which exists) instead of get_state_for_player
-            state_payload = game.get_player_state("spectator_view")
+            # Send to just one user (e.g., on reconnect)
+            state_payload = game.get_state(specific_user_id)
             msg = {"type": "game_state_update", "payload": state_payload}
             await self.conn_manager.send_to_user(specific_user_id, msg)
         else:
-            # Broadcast to all players in the game
-            # --- FIX ---
-            # Called get_all_player_states (which now exists)
+            # Send to all users in the game
             all_states = game.get_all_player_states()
             
             for user_id, state_payload in all_states.items():
-                if user_id in self.conn_manager.active_connections:
-                    msg = {
-                        "type": "game_state_update",
-                        "payload": state_payload
-                    }
-                    await self.conn_manager.send_to_user(user_id, msg)
-        
-        # TODO: Send spectator state
+                if user_id == "spectator":
+                    # TODO: Broadcast to spectators
+                    pass
+                elif user_id == exclude_user_id:
+                    continue # Skip this user
+                else:
+                    player_in_game = game.state.get_player(user_id)
+                    if player_in_game and player_in_game.is_connected:
+                        msg = {"type": "game_state_update", "payload": state_payload}
+                        await self.conn_manager.send_to_user(user_id, msg)
 
-    async def terminate_game(self, game_id: str, winner_state: Optional[PlayerState]):
+    async def end_game(self, game_id: str):
         """
-        Ends a game, notifies RoomManager to handle post-game UI,
-        and cleans up the in-memory game instance.
+        Cleans up a finished game.
+        Called by handle_game_action when phase becomes GAME_OVER
+        or by handle_player_leave when all players are gone.
         """
-        print(f"Terminating game {game_id}...")
-
         if not self.room_manager:
-            print(f"Error: RoomManager not injected. Cannot terminate game {game_id}.")
-            if game_id in self.active_games:
-                del self.active_games[game_id]
+            print("Error: RoomManager not set in GameManager.")
             return
-
+            
+        game = self.active_games.get(game_id)
+        if not game:
+            print(f"Error: Tried to end game {game_id}, but it was not active.")
+            return
+            
+        print(f"Game {game_id} has ended. Cleaning up...")
+        
+        # 1. Get final state and winner
+        winner_state = game.state.winner
+        
+        # 2. Get the GameRecord from the fake_db
         record = fake_games_db.get(game_id)
         if not record:
             print(f"Error: GameRecord {game_id} not found in fake_db.")
@@ -196,6 +234,7 @@ class GameManager:
                 del self.active_games[game_id]
             return
 
+        # 3. Find the Room associated with this game
         room: Optional[Room] = None
         for r in self.room_manager.rooms.values():
             if r.game_record_id == game_id:
@@ -204,10 +243,11 @@ class GameManager:
         
         if not room:
             print(f"Error: Room for game {game_id} not found in RoomManager.")
-            if game_id in self.active_games:
-                del self.active_games[game_id]
+            # Don't delete from active_games, RoomManager needs to
+            # end it first. This case shouldn't happen.
             return
 
+        # 4. Find the server-level User object for the winner
         winner_user: Optional[User] = None
         if winner_state:
             participant = next((p for p in record.participants if p.user.id == winner_state.user_id), None)
@@ -219,6 +259,8 @@ class GameManager:
         else:
             print("Game ended with no winner.")
 
+        # 5. Tell RoomManager to end the game
+        # RoomManager will update the room, record, and broadcast
         await self.room_manager.end_game(
             room=room,
             record=record,
@@ -226,8 +268,8 @@ class GameManager:
             winner=winner_user
         )
 
+        # 6. Remove game from active instances
         if game_id in self.active_games:
             del self.active_games[game_id]
-            print(f"GameInstance {game_id} removed from active_games.")
-        else:
-            print(f"Warning: GameInstance {game_id} not found in self.active_games.")
+            print(f"GameInstance {game_id} removed from active games.")
+

@@ -9,7 +9,7 @@ import ProfilePage from "./pages/ProfilePage.jsx";
 import PostGamePage from "./pages/PostGamePage.jsx";
 
 function App() {
-  const { view, token, clearAuth, gameResult, setView } = useStore();
+  const { view, token, clearAuth, gameResult } = useStore();
   const { connect, disconnect, sendMessage, isConnected } = useGameSocket();
 
   // This effect now runs whenever the token changes.
@@ -63,7 +63,9 @@ function App() {
           />
         );
       case "game":
-        return <GamePage onLogout={handleLogout} sendMessage={sendMessage} />;
+        // --- FIX: Removed the redundant sendMessage prop ---
+        // GamePage will get it from the store, as intended.
+        return <GamePage onLogout={handleLogout} />;
       case "post_game":
         // The gameResult is now an object directly in the store
         return (

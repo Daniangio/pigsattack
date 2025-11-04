@@ -8,7 +8,7 @@ from jose import JWTError, jwt
 import bcrypt
 
 from .config import settings
-from .models import User
+from .server_models import User
 
 # OAuth2 Scheme
 # This tells FastAPI which URL to check for the token
