@@ -1,8 +1,7 @@
 import React, { useState } from "react";
-import { useStore } from "../store";
+import { useStore } from "../store.js";
 import { useNavigate, Link } from "react-router-dom";
 
-// onLogout is passed down from AppContent
 const LobbyPage = ({ onLogout }) => {
   const { user, lobbyState } = useStore();
   const sendMessage = useStore((state) => state.sendMessage);
@@ -10,15 +9,12 @@ const LobbyPage = ({ onLogout }) => {
   const navigate = useNavigate();
 
   if (!lobbyState) {
-    return <div>Loading lobby...</div>; // Safety check
+    return <div>Loading lobby...</div>;
   }
 
   const handleCreateRoom = (e) => {
     e.preventDefault();
     if (newRoomName.trim() && sendMessage) {
-      // We send the message.
-      // The server will reply with a 'room_created' message.
-      // The useGameSocket hook will catch that message and navigate us.
       sendMessage({
         action: "create_room",
         payload: { room_name: newRoomName },
@@ -29,19 +25,16 @@ const LobbyPage = ({ onLogout }) => {
 
   const handleJoinRoom = (roomId) => {
     if (sendMessage) {
-      // We explicitly navigate. The server will send a 'room_state'
-      // broadcast, which our store will pick up, updating the page
-      // we just landed on.
+      // This is the correct logic:
+      // 1. Send the message to the server
       sendMessage({ action: "join_room", payload: { room_id: roomId } });
+      // 2. Proactively navigate the client
       navigate(`/room/${roomId}`);
     }
   };
 
   const handleSpectateGame = (gameRecordId) => {
     if (sendMessage) {
-      // Spectating is like joining a room, but the server
-      // will send a 'game_state_update' instead, and the
-      // StateGuard will force us to the game page.
       sendMessage({
         action: "spectate_game",
         payload: { game_record_id: gameRecordId },
@@ -55,7 +48,6 @@ const LobbyPage = ({ onLogout }) => {
     navigate(`/profile/${user.id}`);
   };
 
-  // Button Styles
   const btn = "py-2 px-4 font-semibold rounded-md shadow-md transition duration-200 ease-in-out disabled:opacity-50";
   const btnPrimary = `${btn} bg-orange-600 hover:bg-orange-700 text-white`;
   const btnSecondary = `${btn} bg-gray-600 hover:bg-gray-500 text-white`;

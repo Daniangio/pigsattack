@@ -55,8 +55,9 @@ const ProfilePage = () => {
     navigate(`/post-game/${gameId}`);
   };
 
-  const handleReturnToLobby = () => {
-    navigate("/lobby"); // Simple navigation
+  // --- REFACTOR: Changed to go back 1 step in history ---
+  const handleReturn = () => {
+    navigate(-1); // This goes back one step in browser history
   };
 
   if (loading) {
@@ -80,12 +81,13 @@ const ProfilePage = () => {
 
   return (
     <div className="bg-gray-800 p-6 rounded-lg border border-gray-700 max-w-3xl mx-auto animate-fade-in">
+      {/* --- REFACTOR: Changed button text and handler --- */}
       <div className="flex justify-between items-start mb-4">
         <h2 className="text-3xl font-bold text-orange-400">
           Profile: {profileData.user.username}
         </h2>
-        <button onClick={handleReturnToLobby} className={btnSecondary}>
-          Back to Lobby
+        <button onClick={handleReturn} className={btnSecondary}>
+          Back
         </button>
       </div>
       

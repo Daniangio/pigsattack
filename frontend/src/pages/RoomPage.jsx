@@ -1,43 +1,37 @@
-import React, { useEffect } from "react";
+import React from "react"; // --- REFACTOR: Removed useEffect and useRef
 import { useStore } from "../store.js";
 import { useParams, useNavigate } from "react-router-dom";
 
-// onLogout is passed down from AppContent
 const RoomPage = ({ onLogout }) => {
   const { user, roomState } = useStore();
   const sendMessage = useStore((state) => state.sendMessage);
-  const { roomId } = useParams(); // Get room ID from URL
+  const { roomId } = useParams();
   const navigate = useNavigate();
 
-  // Button Styles
-  const btn = "py-2 px-4 font-semibold rounded-md shadow-md transition duration-200 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed";
-  const btnPrimary = `${btn} bg-orange-600 hover:bg-orange-700 text-white`;
-  const btnSecondary = `${btn} bg-gray-600 hover:bg-gray-500 text-white`;
-  const btnDanger = `${btn} bg-red-700 hover:bg-red-800 text-white`;
-
-  // This effect handles being kicked or the room dissolving.
-  // If roomState becomes null while we are on this page, go to lobby.
-  useEffect(() => {
-    if (roomState === null) {
-      console.log("Room state is null, navigating to lobby.");
-      navigate("/lobby", { replace: true });
-    }
-    // Also check if the roomState.id matches our URL param
-    if (roomState && roomState.id !== roomId) {
-      console.log("Room state mismatch, navigating to lobby.");
-      navigate("/lobby", { replace: true });
-    }
-  }, [roomState, navigate, roomId]);
-
+  // --- REFACTOR: Removed the complex useEffect and hasLoadedRoom ref ---
+  // The StateGuard in App.jsx now handles all navigation logic:
+  // 1. If roomState is null, StateGuard redirects from /room/* to /lobby.
+  // 2. If roomState is for a different room, StateGuard redirects to the correct room.
+  
+  // This loading gate is now the *only* logic needed.
+  // It handles the initial load while waiting for the server
+  // to send the room_state message.
   if (!roomState || roomState.id !== roomId) {
-    // This also handles the case where the user joins via URL
-    // before the roomState has populated.
     return (
       <div className="flex justify-center items-center h-screen">
          <div className="text-lg text-gray-400">Loading room...</div>
       </div>
     );
   }
+  // --- END REFACTOR ---
+
+
+  // If we get here, roomState is valid and matches roomId.
+
+  const btn = "py-2 px-4 font-semibold rounded-md shadow-md transition duration-200 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed";
+  const btnPrimary = `${btn} bg-orange-600 hover:bg-orange-700 text-white`;
+  const btnSecondary = `${btn} bg-gray-600 hover:bg-gray-500 text-white`;
+  const btnDanger = `${btn} bg-red-700 hover:bg-red-800 text-white`;
 
   const isHost = user?.id === roomState.host_id;
   const canStartGame = roomState.players.length >= 2;
@@ -45,18 +39,17 @@ const RoomPage = ({ onLogout }) => {
   const handleLeaveRoom = () => {
     if (sendMessage) {
       sendMessage({ action: "leave_room" });
-      // We explicitly navigate away. The server will update
-      // everyone else and send a 'force_to_lobby' to us.
+      // We still optimistically navigate here. The StateGuard
+      // will also get the updated state and confirm this.
       navigate("/lobby");
     }
   };
   
   const handleStartGame = () => {
     if (isHost && canStartGame && sendMessage) {
-      // Send start message. The server will reply with
-      // 'game_state_update', and the StateGuard will
-      // navigate us to the game.
       sendMessage({ action: "start_game" });
+      // No navigation needed. StateGuard will handle the
+      // navigation to /game/:gameId when gameState is received.
     }
   };
 

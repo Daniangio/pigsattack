@@ -23,12 +23,13 @@ import PostGamePage from "./pages/PostGamePage.jsx";
  * It's the *only* place that should force-navigate the user based on game state.
  */
 const StateGuard = ({ children }) => {
-  const { gameState, gameResult, token } = useStore();
+  // --- REFACTOR: Added roomState ---
+  const { gameState, gameResult, token, roomState } = useStore();
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
-    // 1. Auth Rules
+    // 1. Auth Rules (Unchanged)
     if (!token && location.pathname !== "/auth") {
       // If logged out, force to auth page.
       navigate("/auth", { replace: true });
@@ -40,7 +41,7 @@ const StateGuard = ({ children }) => {
       return;
     }
 
-    // 2. The "One Hard Rule": Active Game
+    // 2. The "Active Game" Rule (Unchanged)
     // If we have an active game, we MUST be on the game page.
     const activeGameId = gameState?.id;
     if (activeGameId && location.pathname !== `/game/${activeGameId}`) {
@@ -51,7 +52,7 @@ const StateGuard = ({ children }) => {
       return;
     }
 
-    // 3. The "Game Over" Rule
+    // 3. The "Game Over" Rule (Unchanged)
     // If a game just ended, we MUST be on the post-game page.
     const gameResultId = gameResult?.id;
     if (gameResultId && location.pathname !== `/post-game/${gameResultId}`) {
@@ -61,21 +62,45 @@ const StateGuard = ({ children }) => {
       navigate(`/post-game/${gameResultId}`, { replace: true });
       return;
     }
-    
-    // 4. Cleanup Rules
+
+    // --- REFACTOR: ADDED NEW RULE FOR PRE-GAME ROOM ---
+    // 4. The "Pre-Game Room" Rule
+    // If we have a room state, we MUST be on that room's page.
+    const activeRoomId = roomState?.id;
+    if (
+      activeRoomId &&
+      location.pathname !== `/room/${activeRoomId}` && // Not on our room page
+      !activeGameId && // And not in a game
+      !gameResultId // And not on a post-game screen
+    ) {
+      // This will catch the user trying to go to /lobby, /profile, etc.
+      console.log(
+        "StateGuard: Active room detected, forcing navigation to room page."
+      );
+      navigate(`/room/${activeRoomId}`, { replace: true });
+      return;
+    }
+    // --- END NEW RULE ---
+
+    // 5. Cleanup Rules (Modified to include room cleanup)
     // If we are on a game page but have no game state, go to lobby.
     if (!activeGameId && location.pathname.startsWith("/game/")) {
       console.log("StateGuard: No game state, redirecting from game page.");
       navigate("/lobby", { replace: true });
     }
-    
+
     // If we are on a post-game page but have no result, go to lobby.
     if (!gameResultId && location.pathname.startsWith("/post-game/")) {
       console.log("StateGuard: No game result, redirecting from post-game page.");
       navigate("/lobby", { replace: true });
     }
 
-  }, [gameState, gameResult, token, location, navigate]);
+    // If we are on a room page but have no room state, go to lobby.
+    if (!activeRoomId && location.pathname.startsWith("/room/")) {
+      console.log("StateGuard: No room state, redirecting from room page.");
+      navigate("/lobby", { replace: true });
+    }
+  }, [gameState, gameResult, token, roomState, location, navigate]); // Added roomState
 
   return children; // Render the route
 };

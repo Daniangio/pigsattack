@@ -116,7 +116,6 @@ async def websocket_endpoint(websocket: WebSocket):
 
             if game_instance and player_status == "ACTIVE":
                 # --- User is IN-GAME ---
-                # (This logic was already correct and remains unchanged)
                 if action == "game_action":
                     sub_action = payload.get("sub_action")
                     sub_payload = payload.get("data", {})
@@ -161,11 +160,7 @@ async def websocket_endpoint(websocket: WebSocket):
             elif action == "return_to_lobby":
                 await room_manager.return_to_lobby(user, connection_manager)
             
-            # --- REFACTOR ---
-            # 'request_view' is GONE. This is the core of the refactor.
-            # elif action == "request_view":
-            #     await room_manager.handle_view_request(user, payload, connection_manager)
-            # --- END REFACTOR ---
+            # 'request_view' is gone.
                 
     except WebSocketDisconnect:
         if user_id_for_cleanup:
@@ -173,7 +168,6 @@ async def websocket_endpoint(websocket: WebSocket):
             connection_manager.disconnect(user_id_for_cleanup)
     except Exception as e:
         print(f"An error occurred with user {user_id_for_cleanup or 'unknown'}: {e}")
-        # Ensure cleanup on any unexpected error
         if user_id_for_cleanup:
             await room_manager.handle_disconnect(user_id_for_cleanup, connection_manager)
             connection_manager.disconnect(user_id_for_cleanup)

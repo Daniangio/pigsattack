@@ -1,17 +1,14 @@
 import { useRef, useCallback, useEffect } from "react";
 import { useStore } from "../store.js";
 
-// The hook now accepts the `Maps` function from react-router-dom
 const useGameSocket = (navigate) => {
   const socketRef = useRef(null);
   
-  // Create a ref for navigate to avoid stale closures in callbacks
   const navigateRef = useRef(navigate);
   useEffect(() => {
     navigateRef.current = navigate;
   }, [navigate]);
 
-  // Get all handlers from the store
   const {
     setConnectionStatus,
     handleAuthSuccess,
@@ -31,7 +28,6 @@ const useGameSocket = (navigate) => {
       handleGuestAuth: state.handleGuestAuth,
       handleError: state.handleError,
       clearAuth: state.clearAuth,
-      // New specific handlers
       handleLobbyState: state.handleLobbyState,
       handleRoomState: state.handleRoomState,
       handleGameStateUpdate: state.handleGameStateUpdate,
@@ -66,20 +62,15 @@ const useGameSocket = (navigate) => {
 
         const { type, payload } = message;
 
-        // Message handler mapping with new specific types
         const actions = {
           guest_auth_success: handleGuestAuth,
           auth_success: handleAuthSuccess,
           error: handleError,
-          
           lobby_state: handleLobbyState,
           room_state: handleRoomState,
           game_state_update: handleGameStateUpdate,
           game_result: handleGameResult,
           force_to_lobby: handleForceToLobby,
-          
-          // This is the one special case where the server
-          // responds to a user's action and we need to navigate.
           room_created: (payload) => {
             handleRoomState(payload);
             console.log("Room created, navigating to room...");
@@ -94,13 +85,14 @@ const useGameSocket = (navigate) => {
         }
       };
 
-      ws.onclose = () => {
-        console.log("WebSocket disconnected");
+      ws.onclose = (e) => {
+        console.log(`WebSocket disconnected: ${e.code} ${e.reason}`);
         socketRef.current = null;
         setConnectionStatus(false);
-        // On a sudden disconnect, clear auth, which will
-        // trigger the StateGuard to show the Auth page.
-        clearAuth();
+        if (e.code !== 1000) { 
+          console.log("Abnormal disconnect, clearing auth.");
+          clearAuth();
+        }
       };
 
       ws.onerror = (err) => {
@@ -121,14 +113,13 @@ const useGameSocket = (navigate) => {
       handleGameStateUpdate,
       handleGameResult,
       handleForceToLobby,
-      // navigateRef is stable, no need to include
     ]
-  ); // `connect` doesn't need setSendMessage
+  );
 
   const disconnect = useCallback(() => {
     if (socketRef.current) {
       console.log("Manually disconnecting WebSocket...");
-      socketRef.current.close(1000, "User logged out"); // 1000 is a normal closure
+      socketRef.current.close(1000, "User logged out");
       socketRef.current = null;
     }
   }, []);
@@ -142,7 +133,6 @@ const useGameSocket = (navigate) => {
     }
   }, [handleError]);
 
-  // Effect to set the sendMessage function in the store
   useEffect(() => {
     setSendMessage(sendMessage);
   }, [sendMessage, setSendMessage]);
