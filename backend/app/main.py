@@ -1,6 +1,6 @@
 from fastapi import (FastAPI, WebSocket, WebSocketDisconnect, Depends, Request)
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Dict
+from typing import Dict, Any
 import uuid
 
 from .connection_manager import ConnectionManager
@@ -13,7 +13,8 @@ from .security import get_current_user
 
 # --- GAME CORE IMPORTS ---
 from .game_manager import GameManager
-from .game_core.game_models import GamePhase
+# --- FIX: Import PlayerDefense model for the new endpoint ---
+from .game_core.game_models import GamePhase, PlayerDefense
 
 
 app = FastAPI()
@@ -52,6 +53,46 @@ game_manager.set_room_manager(room_manager)
 def health_check():
     return {"status": "ok"}
 
+
+# --- NEW: HTTP Endpoint for Defense Preview ---
+# This endpoint allows the frontend to get an authoritative preview
+# of a defense calculation without submitting the final action.
+@app.post("/api/game/{game_id}/preview_defense")
+async def http_preview_defense(
+    game_id: str,
+    # Use the PlayerDefense model. FastAPI will parse the JSON.
+    # The frontend must send keys "PARTS", "WIRING", "PLATES" for scrap.
+    payload: PlayerDefense, 
+    user: User = Depends(get_current_user)
+):
+    """
+    HTTP endpoint for a player to preview their defense calculation.
+    """
+    # The game_manager.preview_defense expects a dictionary,
+    # not a Pydantic object. .model_dump() converts it.
+    # It also correctly converts ScrapType enums to strings ("PARTS", etc.)
+    # which is what game_instance.py's preview function expects.
+    payload_dict = payload.model_dump(by_alias=True)
+    
+    # We must convert the enum keys in scrap_spent back to simple strings
+    # for the game_instance logic to parse them.
+    if 'scrap_spent' in payload_dict:
+         payload_dict['scrap_spent'] = {
+             str(k): v for k, v in payload_dict['scrap_spent'].items()
+         }
+    if 'special_amp_spend' in payload_dict:
+         payload_dict['special_amp_spend'] = {
+             str(k): v for k, v in payload_dict['special_amp_spend'].items()
+         }
+
+    result = await game_manager.preview_defense(
+        game_id=game_id,
+        player_id=user.id,
+        payload=payload_dict # Pass the raw dictionary
+    )
+    return result
+
+
 # The main WebSocket endpoint
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -60,6 +101,7 @@ async def websocket_endpoint(websocket: WebSocket):
     """
     user_id_for_cleanup: str = None
     user: User = None
+    token_for_http: str = None # Store token for HTTP requests
     try:
         # First, accept the connection
         await websocket.accept()
@@ -70,13 +112,17 @@ async def websocket_endpoint(websocket: WebSocket):
         
         if token:
             user = get_current_user(token=token)
+            token_for_http = token # Store the token
             await websocket.send_json({
-                "type": "auth_success", "payload": user.model_dump()
+                "type": "auth_success", 
+                "payload": user.model_dump(),
+                "token": token # Send token back to store on client
             })
         else:
             guest_id = f"guest_{str(uuid.uuid4())[:8]}"
             user = User(id=guest_id, username=guest_id)
             fake_users_db[guest_id] = user
+            # No token for guests, but we need to handle this
             await websocket.send_json({
                 "type": "guest_auth_success", "payload": user.model_dump()
             })

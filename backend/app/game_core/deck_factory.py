@@ -1,296 +1,382 @@
 """
-Parses the game rules to create the initial decks of cards.
+Parses card data from CSV files to create the initial decks.
 This is kept separate to be testable and to keep models.py clean.
 
-v1.8 Refactor:
-- All card templates completely rebuilt from v1.8 rulebook.
-- create_threat_deck() now creates 5 cards per player per Era.
-- create_threat_deck() parses 'resistant' and 'immune' fields.
-- create_upgrade_deck() and create_arsenal_deck() built from v1.8 manifest.
-- ---
-- CRITICAL FIX: threat_templates_raw and upgrade templates_raw
-- were updated to match the v1.8 Rulebook Manifest. The previous
-- data was from an older version.
+v1.9 Refactor:
+- All `..._templates_raw` lists have been removed.
+- Card data is now loaded from CSV files in `game_core/data/`.
+- Added new helper functions:
+  - `_load_card_templates` to read CSVs.
+  - `_parse_scrap_string` (renamed from _parse_cost) to handle costs/spoils.
+  - `_parse_effect_tags` a generic tag parser.
+  - `_parse_threat_template` to map CSV row to ThreatCard fields.
+  - `_parse_upgrade_template` to map CSV row to UpgradeCard fields.
+  - `_parse_arsenal_template` to map CSV row to ArsenalCard fields.
+- `create_..._deck` functions now use this new loading/parsing pipeline.
+- Logic now populates new structured fields like `on_fail_effect`.
 """
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Type, Optional
 from .game_models import (
-    ScrapType, LureCard, ThreatCard, UpgradeCard, ArsenalCard
+    ScrapType, LureCard, SurvivorActionCard, ThreatCard, UpgradeCard, ArsenalCard, Card,
+    OnFailEffect, UpgradeEffect, ArsenalEffect
 )
 import random
 import uuid
+import csv
+import os
 
-# A helper function to create multiple copies of cards with unique IDs
-def _create_cards(card_class, card_template_list):
+# --- Constants ---
+# Define the path to the data directory, relative to this file
+DATA_DIR = os.path.join(os.path.dirname(__file__), 'data')
+THREAT_CARDS_CSV = os.path.join(DATA_DIR, 'threat_cards.csv')
+UPGRADE_CARDS_CSV = os.path.join(DATA_DIR, 'upgrade_cards.csv')
+ARSENAL_CARDS_CSV = os.path.join(DATA_DIR, 'arsenal_cards.csv')
+
+CARDS_PER_ERA_PER_PLAYER = 5
+
+# --- Factory Helpers ---
+
+def _create_cards(card_class: Type[Card], card_template_list: List[Dict]) -> List[Card]:
+    """
+    Creates multiple card instances from a list of template dictionaries.
+    Ensures each card gets a new, unique UUID.
+    """
     deck = []
     for template in card_template_list:
         # Create a new card instance from the template dict, ensuring a new UUID
         deck.append(card_class(id=str(uuid.uuid4()), **template))
     return deck
 
-def _parse_cost(cost_str: str) -> Dict[ScrapType, int]:
-    """
-    Parses cost string like '2 Red, 1 Blue', '1G', or '2G, 2B'
-    This is now a module-level function.
-    """
-    cost = {}
-    parts = [p.strip() for p in cost_str.split(',')]
-    c_map = {
-        "Red": ScrapType.PARTS, "R": ScrapType.PARTS,
-        "Blue": ScrapType.WIRING, "B": ScrapType.WIRING,
-        "Green": ScrapType.PLATES, "G": ScrapType.PLATES,
-    }
-    
-    if "any" in cost_str:
-        # v1.8 rulebook doesn't use "of any"
-        pass
+def _load_card_templates(csv_filepath: str) -> List[Dict]:
+    """Loads all rows from a CSV file into a list of dictionaries."""
+    if not os.path.exists(csv_filepath):
+        raise FileNotFoundError(f"Card data file not found: {csv_filepath}. Make sure it is in the 'game_core/data' directory.")
         
-    if "of each" in cost_str:
-        # Handle "1 of each" or "2 of each"
-        val = int(cost_str.split(' ')[0])
-        cost[ScrapType.PARTS] = val
-        cost[ScrapType.WIRING] = val
-        cost[ScrapType.PLATES] = val
-        return cost
+    with open(csv_filepath, mode='r', encoding='utf-8') as f:
+        reader = csv.DictReader(f)
+        return [row for row in reader]
 
-    for part in parts:
+def _parse_scrap_string(cost_str: str) -> Dict[ScrapType, int]:
+    """
+    Parses cost/spoil string like '2 PARTS, 1 WIRING', '1G', or '2 of each'.
+    """
+    if not cost_str or cost_str == '-':
+        return {}
+        
+    cost_str = cost_str.strip().upper()
+    cost = {}
+
+    if "OF EACH" in cost_str:
         try:
-            val_str, type_str = part.split(' ', 1)
-            val = int(val_str)
-            sc_type = c_map[type_str]
-            cost[sc_type] = val
-        except (ValueError, KeyError):
-            # Try parsing '2B', '1G'
+            amount = int(cost_str.split()[0])
+            return {ScrapType.PARTS: amount, ScrapType.WIRING: amount, ScrapType.PLATES: amount}
+        except ValueError:
+            return {} # Invalid format
+
+    parts = cost_str.split(',')
+    for part in parts:
+        part = part.strip()
+        try:
+            amount_str, color_str = part.split(maxsplit=1)
+            amount = int(amount_str)
+            if "PARTS" in color_str:
+                cost[ScrapType.PARTS] = cost.get(ScrapType.PARTS, 0) + amount
+            elif "WIRING" in color_str:
+                cost[ScrapType.WIRING] = cost.get(ScrapType.WIRING, 0) + amount
+            elif "PLATES" in color_str:
+                cost[ScrapType.PLATES] = cost.get(ScrapType.PLATES, 0) + amount
+        except ValueError:
+            # Handle single-letter format like "2R"
             try:
-                val = int(part[:-1])
-                sc_type = c_map[part[-1]]
-                cost[sc_type] = val
-            except (ValueError, KeyError, IndexError):
-                print(f"Warning: Could not parse cost string part '{part}'")
-                
+                amount = int(part[:-1])
+                color = part[-1]
+                if color == 'R':
+                    cost[ScrapType.PARTS] = cost.get(ScrapType.PARTS, 0) + amount
+                elif color == 'B':
+                    cost[ScrapType.WIRING] = cost.get(ScrapType.WIRING, 0) + amount
+                elif color == 'G':
+                    cost[ScrapType.PLATES] = cost.get(ScrapType.PLATES, 0) + amount
+            except Exception:
+                print(f"Warning: Could not parse cost part '{part}'")
+                continue
     return cost
 
-def create_threat_deck(num_players: int) -> List[ThreatCard]:
+def _parse_effect_tags(tags_str: str) -> List[str]:
+    """Splits a tag string (e.g., "TAG1;TAG2") into a list."""
+    if not tags_str:
+        return []
+    return [tag.strip().upper() for tag in tags_str.split(';')]
+
+def _parse_threat_template(row: Dict[str, str]) -> Dict[str, Any]:
     """
-    Creates the shuffled 3-era threat deck.
-    [Source 28] 5 cards per player per Era.
+    Parses a CSV row dictionary into a ThreatCard template dictionary.
+    This is where "tags and numbers" are converted to structured data.
     """
-    
-    ERA_MAP = {
-        "Day": 1,
-        "Twilight": 2,
-        "Night": 3
+    template = {
+        "name": row['Name'],
+        "era": int(row['Era']),
+        "lure_type": row['Lure'],
+        "ferocity": int(row['Parts']),
+        "cunning": int(row['Wiring']),
+        "mass": int(row['Plates']),
+        "abilities_text": row['Abilities'],
+        "trophy_value": _parse_scrap_string(row['Spoil']),
+        "player_count_min": int(row['PlayerCount']), # For filtering
+        
+        # Initialize structured fields
+        "resistant": [],
+        "immune": [],
+        "on_fail_effect": None
+    }
+
+    tags = _parse_effect_tags(row['EffectTags'])
+
+    special_tag = None
+    for tag in tags:
+        if not tag.startswith("DEFENSE:"):
+            special_tag = tag
+            break # Found the special tag
+
+    if special_tag:
+        template["special_effect_id"] = special_tag
+        try:
+            ArsenalEffect(special_tag)
+        except ValueError:
+            print(f"Warning: Tag '{special_tag}' for Arsenal '{row['Name']}' is not a defined ArsenalEffect.")
+
+    for tag in tags:
+        try:
+            if tag.startswith("RESIST:"):
+                color = tag.split(':', 1)[1]
+                if color == "ALL":
+                    template["resistant"] = [ScrapType.PARTS, ScrapType.WIRING, ScrapType.PLATES]
+                else:
+                    template["resistant"].append(ScrapType(color))
+            
+            elif tag.startswith("IMMUNE:"):
+                color = tag.split(':', 1)[1]
+                if color == "ALL":
+                    template["immune"] = [ScrapType.PARTS, ScrapType.WIRING, ScrapType.PLATES]
+                else:
+                    template["immune"].append(ScrapType(color))
+            
+            elif tag.startswith("ON_FAIL:"):
+                effect_name = tag.split(':', 1)[1]
+                template["on_fail_effect"] = OnFailEffect(effect_name)
+        
+        except Exception as e:
+            print(f"Warning: Could not parse tag '{tag}' for Threat '{row['Name']}'. Error: {e}")
+
+    return template
+
+def _parse_upgrade_template(row: Dict[str, str]) -> Dict[str, Any]:
+    """Parses a CSV row dictionary into an UpgradeCard template dictionary."""
+    template = {
+        "name": row['Name'],
+        "cost": _parse_scrap_string(row['Cost']),
+        "effect_text": row['Effect'],
+        "copies": int(row['Copies']), # For deck building
+        
+        # Initialize structured fields
+        "defense_boost": {},
+        "defense_piercing": {},
+        "special_effect_id": None
     }
     
-    # --- CRITICAL FIX: Updated manifest to match v1.8 Rulebook ---
-    # [Source: Rulebook "Card Manifest (v1.8)"]
-    # fmt: off
-    threat_templates_raw = [
-        # --- ERA 1 (Day) ---
-        {"name": "Young Boar", "era": "Day", "lure": "BLOODY_RAGS", "stats": "6/3/3", "spoil": "3 Red"},
-        {"name": "Scrabbling Piglet", "era": "Day", "lure": "STRANGE_NOISES", "stats": "3/5/3", "spoil": "3 Blue"},
-        {"name": "Hefty Swine", "era": "Day", "lure": "FALLEN_FRUIT", "stats": "3/3/6", "spoil": "3 Green"},
-        {"name": "Territorial Sow", "era": "Day", "lure": "BLOODY_RAGS", "stats": "7/4/4", "spoil": "2 Red, 1 Green"},
-        {"name": "Rooting Digger", "era": "Day", "lure": "FALLEN_FRUIT", "stats": "4/4/7", "spoil": "2 Green, 1 Red"},
-        {"name": "Cunning Runt", "era": "Day", "lure": "STRANGE_NOISES", "stats": "4/7/4", "spoil": "2 Blue, 1 Green"},
-        
-        # --- ERA 2 (Twilight) ---
-        {"name": "Stalker Pig", "era": "Twilight", "lure": "STRANGE_NOISES", "stats": "5/9/5", "spoil": "4 Blue", "resistant": "B"},
-        {"name": "Feral Sow", "era": "Twilight", "lure": "BLOODY_RAGS", "stats": "10/6/6", "spoil": "4 Red", "resistant": "R"},
-        {"name": "Crushing Tusker", "era": "Twilight", "lure": "FALLEN_FRUIT", "stats": "6/5/10", "spoil": "4 Green", "resistant": "G", "on_fail": "GAIN_INJURY"},
-        {"name": "Vicious Hunter", "era": "Twilight", "lure": "BLOODY_RAGS", "stats": "11/8/7", "spoil": "3 Red, 1 Blue", "resistant": "R", "on_fail": "DISCARD_SCRAP"},
-        {"name": "Saboteur Pig", "era": "Twilight", "lure": "STRANGE_NOISES", "stats": "7/12/8", "spoil": "3 Blue, 1 Red", "resistant": "B, R"}, # Rulebook has "R: Red", assuming "resistant: R"
-        {"name": "Corrosive Pig", "era": "Twilight", "lure": "FALLEN_FRUIT", "stats": "8/7/12", "spoil": "3 Green, 1 Blue", "resistant": "G, B", "on_fail": "DISCARD_SCRAP"}, # Rulebook has "R: Blue"
-        
-        # --- ERA 3 (Night) ---
-        {"name": "Alpha Razorback", "era": "Night", "lure": "BLOODY_RAGS", "stats": "15/10/10", "spoil": "4 Red, 2 Blue", "resistant": "R, B, G", "immune": "B", "on_fail": "PREVENT_ACTION"}, # Rulebook "R: All"
-        {"name": "The Unseen", "era": "Night", "lure": "STRANGE_NOISES", "stats": "10/16/10", "spoil": "4 Blue, 2 Green", "resistant": "R, B, G", "immune": "G", "on_fail": "GIVE_SCRAP"}, # Rulebook "R: All"
-        {"name": "Juggernaut", "era": "Night", "lure": "FALLEN_FRUIT", "stats": "10/10/17", "spoil": "4 Green, 2 Red", "resistant": "R, B, G", "immune": "R", "on_fail": "GAIN_INJURY"}, # Rulebook "R: All"
-        {"name": "Blood Frenzy", "era": "Night", "lure": "BLOODY_RAGS", "stats": "18/12/12", "spoil": "5 Red", "resistant": "R, G"},
-        {"name": "Night Terror", "era": "Night", "lure": "STRANGE_NOISES", "stats": "12/19/12", "spoil": "5 Blue", "resistant": "B, R", "on_fail": "PREVENT_ACTION"},
-        {"name": "Ancient Guardian", "era": "Night", "lure": "FALLEN_FRUIT", "stats": "14/14/20", "spoil": "5 Green", "resistant": "G, B"},
-    ]
-    # fmt: on
-
-    # Helper to parse R/G/B strings
-    def _parse_res_imm(code_str: str) -> List[ScrapType]:
-        types = []
-        if not code_str: return types
-        code_str = code_str.upper()
-        if "R" in code_str: types.append(ScrapType.PARTS)
-        if "B" in code_str: types.append(ScrapType.WIRING)
-        if "G" in code_str: types.append(ScrapType.PLATES)
-        return types
-        
-    era1_templates, era2_templates, era3_templates = [], [], []
+    tags = _parse_effect_tags(row['EffectTags'])
     
-    for t in threat_templates_raw:
-        stats = [int(s) for s in t["stats"].split('/')]
-        
-        template = {
-            "name": t["name"],
-            "era": ERA_MAP.get(t["era"], 1),
-            "lure": LureCard(t["lure"]),
-            "ferocity": stats[0],
-            "cunning": stats[1],
-            "mass": stats[2],
-            "spoil": _parse_cost(t["spoil"]),
-            "resistant": _parse_res_imm(t.get("resistant", "")),
-            "immune": _parse_res_imm(t.get("immune", "")),
-            "on_fail": t.get("on_fail", None),
-        }
-        
-        if template["era"] == 1:
-            era1_templates.append(template)
-        elif template["era"] == 2:
-            era2_templates.append(template)
-        elif template["era"] == 3:
-            era3_templates.append(template)
+    # Use the full tag string as the special_effect_id for most logic
+    if tags:
+        template["special_effect_id"] = row['EffectTags']
+
+    for tag in tags:
+        try:
+            parts = tag.split(':')
+            if parts[0] == "DEFENSE":
+                color = parts[1]
+                amount = int(parts[2])
+                if color == "ALL":
+                    template["defense_boost"] = {ScrapType.PARTS: amount, ScrapType.WIRING: amount, ScrapType.PLATES: amount}
+                else:
+                    template["defense_boost"][ScrapType(color)] = amount
             
-    # [Source 28] 5 cards per player per Era
-    cards_per_era = 5 * num_players
+            elif parts[0] == "DEFENSE_PIERCING":
+                color = parts[1]
+                amount = int(parts[2])
+                template["defense_piercing"][ScrapType(color)] = amount
+                
+            # Other tags are handled by the special_effect_id in game logic
+        
+        except Exception as e:
+            print(f"Warning: Could not parse tag '{tag}' for Upgrade '{row['Name']}'. Error: {e}")
+            
+    return template
+
+def _parse_arsenal_template(row: Dict[str, str]) -> Dict[str, Any]:
+    """Parses a CSV row dictionary into an ArsenalCard template dictionary."""
+    template = {
+        "name": row['Name'],
+        "cost": _parse_scrap_string(row['Cost']),
+        "effect_text": row['Effect'],
+        "charges": int(row['Charges']) if row['Charges'] else None,
+        "copies": int(row['Copies']), # For deck building
+        
+        # Initialize structured fields
+        "defense_boost": {},
+        "special_effect_id": None
+    }
     
-    # Rule [Source 28] says "5 cards per player", but manifest
-    # only has 6 unique cards per era. This implies we MUST
-    # sample WITH REPLACEMENT to fulfill, e.g., a 3-player game (15 cards).
-    def _get_era_sample(templates: List[Dict], count: int) -> List[Dict]:
-        if not templates:
-            return []
-        return random.choices(templates, k=count)
+    tags = _parse_effect_tags(row['EffectTags'])
+
+    # Use the first tag as the special_effect_id
+    # (or the full string if it's complex)
+    if tags:
+        # For simple defense, we don't need a special_effect_id
+        # For special cards, we do.
+        is_simple_defense = all(t.startswith("DEFENSE:") for t in tags)
+        
+        if not is_simple_defense:
+            # Use the *first* tag as the ID for logic
+            template["special_effect_id"] = tags[0] 
+            # e.g., "ON_KILL:RETURN_TO_HAND", "ON_FAIL:IGNORE_CONSEQUENCES", "SPECIAL:LURE_TO_WEAKNESS"
+            
+            # Verify it's a known ArsenalEffect
+            try:
+                ArsenalEffect(tags[0])
+            except ValueError:
+                print(f"Warning: Tag '{tags[0]}' for Arsenal '{row['Name']}' is not a defined ArsenalEffect.")
+
+    for tag in tags:
+        try:
+            parts = tag.split(':')
+            if parts[0] == "DEFENSE":
+                color = parts[1]
+                amount = int(parts[2])
+                if color == "ALL":
+                    template["defense_boost"] = {ScrapType.PARTS: amount, ScrapType.WIRING: amount, ScrapType.PLATES: amount}
+                else:
+                    template["defense_boost"][ScrapType(color)] = amount
+            
+            # Other tags are handled by special_effect_id in game logic
+        
+        except Exception as e:
+            print(f"Warning: Could not parse tag '{tag}' for Arsenal '{row['Name']}'. Error: {e}")
+            
+    return template
 
 
-    # Shuffle each era deck separately
-    era1_cards = _create_cards(ThreatCard, _get_era_sample(era1_templates, cards_per_era))
-    era2_cards = _create_cards(ThreatCard, _get_era_sample(era2_templates, cards_per_era))
-    era3_cards = _create_cards(ThreatCard, _get_era_sample(era3_templates, cards_per_era))
+# --- Public Deck Creation Functions ---
+
+def create_threat_deck(player_count: int) -> List[ThreatCard]:
+    """
+    Creates the combined Threat Deck for all 3 Eras.
+    Loads from CSV, filters by player count, then samples
+    (player_count * 5) cards from each Era.
+    """
     
-    random.shuffle(era1_cards)
-    random.shuffle(era2_cards)
-    random.shuffle(era3_cards)
+    # 1. Load all card templates from CSV
+    all_rows = _load_card_templates(THREAT_CARDS_CSV)
     
-    # Stack the decks in order (Day on top)
-    # [Source 3]
-    deck = era1_cards + era2_cards + era3_cards
+    # 2. Parse and Filter templates
+    all_templates = []
+    for row in all_rows:
+        try:
+            template = _parse_threat_template(row)
+            # Filter out cards not for this player count
+            if template["player_count_min"] <= player_count:
+                all_templates.append(template)
+        except Exception as e:
+            print(f"Error parsing threat row: {row}. Error: {e}")
+            continue
+            
+    # 3. Group templates by Era
+    era_templates: Dict[int, List[Dict]] = {1: [], 2: [], 3: []}
+    for t in all_templates:
+        if t['era'] in era_templates:
+            era_templates[t['era']].append(t)
+            
+    # 4. Sample and build the deck
+    deck = []
+    num_cards_per_era = player_count * CARDS_PER_ERA_PER_PLAYER
     
+    for era in [1, 2, 3]:
+        templates = era_templates[era]
+        if len(templates) < num_cards_per_era:
+            # This is a fallback in case the CSV doesn't have enough cards
+            print(f"Warning: Era {era} has {len(templates)} unique cards, but {num_cards_per_era} are needed. Using all available cards.")
+            era_deck_templates = templates
+        else:
+            era_deck_templates = random.sample(templates, num_cards_per_era)
+        
+        # Create card instances
+        deck.extend(_create_cards(ThreatCard, era_deck_templates))
+        
+    random.shuffle(deck)
     return deck
-
 
 def create_upgrade_deck() -> List[UpgradeCard]:
-    """
-    Creates the shuffled Upgrade deck.
-    [Source: Rulebook "Card Manifest (v1.8)"]
-    """
+    """Creates the shuffled Upgrade Deck from the CSV."""
     
-    # --- CRITICAL FIX: Updated manifest to match v1.8 Rulebook ---
-    # fmt: off
-    templates_raw = [
-        # --- Scrap Build ---
-        {"name": "Piercing Jaws", "cost": "2 Red, 1 Blue", "effect": "Your Red Scrap ignores the Resistant keyword.", "id": "PIERCING_JAWS", "copies": 1}, # Assuming 1 copy each unless specified
-        {"name": "Serrated Parts", "cost": "3 Red, 1G", "effect": "Your Red Scrap provides +1 defense. (Stacks with base value).", "id": "SERRATED_PARTS", "copies": 1},
-        {"name": "Focused Wiring", "cost": "2 Blue, 1 Red", "effect": "Your Blue Scrap ignores the Resistant keyword.", "id": "FOCUSED_WIRING", "copies": 1},
-        {"name": "High-Voltage Wire", "cost": "3 Blue, 1G", "effect": "Your Blue Scrap provides +1 defense.", "id": "HIGH_VOLTAGE_WIRE", "copies": 1},
-        {"name": "Reinforced Plating", "cost": "2 Green, 1R", "effect": "Your Green Scrap ignores the Resistant keyword.", "id": "REINFORCED_PLATING", "copies": 1},
-        {"name": "Layered Plating", "cost": "3 Green, 1B", "effect": "Your Green Scrap provides +1 defense.", "id": "LAYERED_PLATING", "copies": 1},
-        
-        # --- Base Build ---
-        {"name": "Scrap Plating", "cost": "3 Green", "effect": "Gain +1 permanent Red defense.", "def_boost": {ScrapType.PARTS: 1}, "copies": 1},
-        {"name": "Tripwire", "cost": "3 Green", "effect": "Gain +1 permanent Blue defense.", "def_boost": {ScrapType.WIRING: 1}, "copies": 1},
-        {"name": "Reinforced Post", "cost": "3 Green", "effect": "Gain +1 permanent Green defense.", "def_boost": {ScrapType.PLATES: 1}, "copies": 1},
-        {"name": "Fortified Bunker", "cost": "6 Green", "effect": "Gain +1 permanent defense to all stats.", "def_boost": {ScrapType.PARTS: 1, ScrapType.WIRING: 1, ScrapType.PLATES: 1}, "copies": 1},
-        
-        # --- Utility ---
-        {"name": "Tinker's Bench", "cost": "2G, 2B", "effect": "Once per round, you may trade 1 Scrap for 1 Scrap of your choice.", "id": "TINKERS_BENCH", "copies": 1},
-        {"name": "Scavenger's Eye", "cost": "4G, 1B", "effect": "Your Scavenge action now lets you choose 3 Scrap instead of 2.", "id": "SCAVENGERS_EYE", "copies": 1},
-        {"name": "Scrap Sieve", "cost": "2 of each", "effect": "When you gain Scrap from Scavenge or a pig's Spoil, gain 1 additional Scrap of your choice.", "id": "SCRAP_SIEVE", "copies": 1},
-        {"name": "Scrap Repeater", "cost": "3R, 1B", "effect": "Artifact. Gain +4 permanent Red defense. At the start of the Cleanup Phase, you must pay 1 Red Scrap. If you cannot, destroy this.", "def_boost": {ScrapType.PARTS: 4}, "id": "SCRAP_REPEATER", "copies": 1},
-    ]
-    # fmt: on
-
-    # Note: The rulebook doesn't specify copy counts for Upgrades,
-    # unlike the previous data. The dev notes for v1.7 mention 40 cards.
-    # The list above is 14 cards.
-    # I will assume 3 copies of each "Scrap/Base Build" and 2 of "Utility"
-    # to approximate a deck of 40 (10*3 + 4*2 = 38).
+    all_rows = _load_card_templates(UPGRADE_CARDS_CSV)
+    card_template_list = []
     
-    templates = []
-    for t in templates_raw:
-        new_template = {
-            "name": t["name"],
-            "cost": _parse_cost(t["cost"]),
-            "effect": t["effect"],
-            "defense_boost": t.get("def_boost", {}),
-            "special_effect_id": t.get("id", None),
-        }
-        
-        # --- FIX: Apply assumed copy counts ---
-        copies = t.get("copies", 1) # Get from manifest if present
-        if copies == 1: # If not present, use our assumption
-            if t["name"] in ["Tinker's Bench", "Scavenger's Eye", "Scrap Sieve", "Scrap Repeater"]:
-                copies = 2
-            else:
-                copies = 3
-        
-        for _ in range(copies):
-            templates.append(new_template)
+    for row in all_rows:
+        try:
+            template = _parse_upgrade_template(row)
+            copies = template.pop("copies", 1)
             
-    deck = _create_cards(UpgradeCard, templates)
+            # Add N copies to the list to be instantiated
+            for _ in range(copies):
+                card_template_list.append(template)
+        except Exception as e:
+            print(f"Error parsing upgrade row: {row}. Error: {e}")
+            continue
+
+    deck = _create_cards(UpgradeCard, card_template_list)
     random.shuffle(deck)
     return deck
-
 
 def create_arsenal_deck() -> List[ArsenalCard]:
-    """
-    Creates the shuffled Arsenal deck.
-    [Source: Rulebook "Card Manifest (v1.8)"]
-    """
+    """Creates the shuffled Arsenal Deck from the CSV."""
     
-    # This manifest was already correct.
-    # fmt: off
-    templates_raw = [
-        # --- Defensive (Multi-Use) ---
-        {"name": "Scrap Shield", "cost": "2 Red", "effect": "Gain +7 Red defense. 2 Charges.", "def_boost": {ScrapType.PARTS: 7}, "charges": 2, "copies": 1},
-        {"name": "Caltrops", "cost": "2 Blue", "effect": "Gain +7 Blue defense. 2 Charges.", "def_boost": {ScrapType.WIRING: 7}, "charges": 2, "copies": 1},
-        {"name": "Brace", "cost": "2 Green", "effect": "Gain +7 Green defense. 2 Charges.", "def_boost": {ScrapType.PLATES: 7}, "charges": 2, "copies": 1},
-        
-        # --- Offensive (Conditional) ---
-        {"name": "Recycler-Net", "cost": "3 Blue, 1R", "effect": "Gain +9 Blue defense. On Kill: Return to hand.", "def_boost": {ScrapType.WIRING: 9}, "id": "RECYCLER_NET", "copies": 1},
-        {"name": "Boar Spear", "cost": "3 Red, 1B", "effect": "Gain +9 Red defense. On Kill: Return to hand.", "def_boost": {ScrapType.PARTS: 9}, "id": "BOAR_SPEAR", "copies": 1},
-        
-        # --- Utility (One-Use) ---
-        {"name": "Adrenaline", "cost": "2 Blue", "effect": "Play after you FAIL to ignore all consequences.", "id": "ADRENALINE", "copies": 1},
-        {"name": "Lure to Weakness", "cost": "2B, 1R", "effect": "Play during Defense. Choose one of your Threat's non-highest stats. For this turn, that stat is the target for the Kill calculation.", "id": "LURE_TO_WEAKNESS", "copies": 1},
-        {"name": "Corrosive Sludge", "cost": "2B, 2G", "effect": "Play during Defense. Choose one stat on your Threat. That stat loses Resistant and Immune for this defense.", "id": "CORROSIVE_SLUDGE", "copies": 1},
-        {"name": "Makeshift Amp", "cost": "2 of each", "effect": "Pay X additional Scrap of any one type. Gain +X defense for that type. This defense value is not affected by Resistance or Immunity.", "id": "MAKESHIFT_AMP", "copies": 1},
-    ]
-    # fmt: on
+    all_rows = _load_card_templates(ARSENAL_CARDS_CSV)
+    card_template_list = []
     
-    # Note: Rulebook says 30 Arsenal cards. This is 9 unique cards.
-    # I will assume 3 copies of each, +3 extra of the basic shield/caltrops/brace
-    # 9 * 3 = 27. Let's make it 3 copies of utility/offensive (6*3=18)
-    # and 4 copies of defensive (3*4=12). 18+12=30.
-    
-    templates = []
-    for t in templates_raw:
-        new_template = {
-            "name": t["name"],
-            "cost": _parse_cost(t["cost"]),
-            "effect": t["effect"],
-            "defense_boost": t.get("def_boost", {}),
-            "special_effect_id": t.get("id", None),
-            "charges": t.get("charges", None)
-        }
-        
-        # --- FIX: Apply assumed copy counts ---
-        copies = t.get("copies", 1)
-        if copies == 1: # If not specified, use our assumption
-            if t["name"] in ["Scrap Shield", "Caltrops", "Brace"]:
-                copies = 4
-            else:
-                copies = 3
-        
-        for _ in range(copies):
-            templates.append(new_template)
+    for row in all_rows:
+        try:
+            template = _parse_arsenal_template(row)
+            copies = template.pop("copies", 1)
             
-    deck = _create_cards(ArsenalCard, templates)
+            # Add N copies to the list to be instantiated
+            for _ in range(copies):
+                card_template_list.append(template)
+        except Exception as e:
+            print(f"Error parsing arsenal row: {row}. Error: {e}")
+            continue
+
+    deck = _create_cards(ArsenalCard, card_template_list)
     random.shuffle(deck)
     return deck
+
+
+# --- Initial Hand Creation ---
+
+def create_initial_lure_cards() -> List[LureCard]:
+    """Creates the 3 starting Lure cards for a player."""
+    templates = [
+        {"name": "Bloody Rags", "lure_type": ScrapType.PARTS, "strength": 1},
+        {"name": "Strange Noises", "lure_type": ScrapType.WIRING, "strength": 2},
+        {"name": "Fallen Fruit", "lure_type": ScrapType.PLATES, "strength": 3},
+    ]
+    return _create_cards(LureCard, templates)
+
+def create_initial_action_cards() -> List[SurvivorActionCard]:
+    """Creates the 4 starting Action cards for a player."""
+    templates = [
+        {"name": "Scavenge"},
+        {"name": "Fortify"},
+        {"name": "Armory Run"},
+        {"name": "Scheme"},
+    ]
+    return _create_cards(SurvivorActionCard, templates)

@@ -25,7 +25,7 @@ import playerIcon4 from "../images/player-icon-4.png";
 import playerIcon5 from "../images/player-icon-5.png";
 
 // --- DATA CONSTANTS (v1.8) ---
-// Base defense from 3 cards *left in hand*, based on the 1 card *chosen*
+// --- FIX: Keys changed from PARTS/WIRING/PLATES to PARTS/WIRING/PLATES to match backend ---
 const BASE_DEFENSE_FROM_ACTION = {
   SCAVENGE: { PARTS: 3, WIRING: 1, PLATES: 3 },
   FORTIFY: { PARTS: 3, WIRING: 3, PLATES: 1 },
@@ -46,6 +46,7 @@ const ACTION_CARDS = [
   { id: "SCHEME", name: "Scheme", image: schemeCard },
 ];
 
+// --- FIX: Keys changed to PARTS/WIRING/PLATES to match backend game_models.py ScrapType ---
 const SCRAP_TYPES = {
   PARTS: {
     name: "Parts",
@@ -406,6 +407,7 @@ const ThreatCard = ({
       </div>
       <div className="flex justify-around text-center p-1.5 bg-black bg-opacity-20 rounded mt-auto">
         <div>
+          {/* --- FIX: Use backend keys ferocity, cunning, mass --- */}
           <span className="text-red-400 font-semibold text-xs">Ferocity</span>
           <p className="text-lg font-bold">{threat.ferocity}</p>
         </div>
@@ -1396,164 +1398,128 @@ const AttractionPhaseActions = ({
   );
 };
 
-// --- *** NEW: DefensePhaseActions *** ---
-// This is the new, interactive Defense Board
-const DefensePhaseActions = ({
-  sendGameAction,
+// --- *** NEW: DefenseSubmission *** ---
+// This is the new, interactive Defense Board from gamepageUpdate.jsx
+// It replaces the old DefensePhaseActions
+const DefenseSubmission = ({
   player,
-  playerPlans, // This is the *full* plans map
   threat,
+  sendGameAction,
+  gameState,
+  token,
 }) => {
-  const [spentScrap, setSpentScrap] = useState({
-    PARTS: 0,
-    WIRING: 0,
-    PLATES: 0,
-  });
-  const [spentArsenalIds, setSpentArsenalIds] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const { game_id } = gameState;
 
-  // Memoize available resources
-  const availableScrap = useMemo(() => {
-    return {
-      PARTS: (player.scrap.PARTS || 0) - spentScrap.PARTS,
-      WIRING: (player.scrap.WIRING || 0) - spentScrap.WIRING,
-      PLATES: (player.scrap.PLATES || 0) - spentScrap.PLATES,
+  // Player's local selections
+  const [scrap, setScrap] = useState({ PARTS: 0, WIRING: 0, PLATES: 0 });
+  const [selectedArsenal, setSelectedArsenal] = useState(new Set());
+
+  // State for the defense preview
+  const [defensePreview, setDefensePreview] = useState(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const debounceTimeout = useRef(null);
+
+  const availableScrap = player.scrap;
+
+  // Debounced fetch for defense preview
+  useEffect(() => {
+    // Clear any pending timeout
+    if (debounceTimeout.current) {
+      clearTimeout(debounceTimeout.current);
+    }
+
+    // Don't run if there's no threat
+    if (!threat) return;
+
+    // Set up the payload
+    const payload = {
+      scrap_spent: scrap,
+      arsenal_card_ids: Array.from(selectedArsenal),
+      // TODO: Add inputs for Lure to Weakness, etc.
+      special_target_stat: null,
+      special_corrode_stat: null,
+      special_amp_spend: {},
     };
-  }, [player.scrap, spentScrap]);
 
-  const availableArsenal = useMemo(() => {
-    return player.arsenal_hand.filter((c) => !spentArsenalIds.includes(c.id));
-  }, [player.arsenal_hand, spentArsenalIds]);
+    // Start a new timeout
+    debounceTimeout.current = setTimeout(async () => {
+      setIsPreviewLoading(true);
+      try {
+        const response = await fetch(`/api/game/${game_id}/preview_defense`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            // Add authorization token for the HTTP request
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        });
 
-  const spentArsenal = useMemo(() => {
-    return spentArsenalIds
-      .map((id) => player.arsenal_hand.find((c) => c.id === id))
-      .filter(Boolean);
-  }, [player.arsenal_hand, spentArsenalIds]);
+        if (!response.ok) {
+          const err = await response.json();
+          throw new Error(err.detail || "Preview failed");
+        }
 
-  // --- Handlers for moving resources ---
-  const handleSpendScrap = (type) => {
-    if (availableScrap[type] > 0) {
-      setSpentScrap((prev) => ({ ...prev, [type]: prev[type] + 1 }));
-    }
+        const previewData = await response.json();
+        setDefensePreview(previewData);
+      } catch (error) {
+        console.error("Error fetching defense preview:", error);
+        setDefensePreview({ error: `Could not get preview: ${error.message}` });
+      }
+      setIsPreviewLoading(false);
+    }, 300); // 300ms debounce
+
+    // Cleanup
+    return () => {
+      if (debounceTimeout.current) {
+        clearTimeout(debounceTimeout.current);
+      }
+    };
+    // Ensure token is a dependency
+  }, [scrap, selectedArsenal, threat, game_id, token]);
+
+  // Handlers for UI
+  const handleScrapChange = (color, amount) => {
+    const newAmount = Math.max(
+      0,
+      Math.min(availableScrap[color] || 0, (scrap[color] || 0) + amount)
+    );
+    setScrap((prev) => ({ ...prev, [color]: newAmount }));
   };
 
-  const handleReturnScrap = (type) => {
-    if (spentScrap[type] > 0) {
-      setSpentScrap((prev) => ({ ...prev, [type]: prev[type] - 1 }));
-    }
+  const handleSetMaxScrap = (color) => {
+    setScrap((prev) => ({ ...prev, [color]: availableScrap[color] || 0 }));
   };
 
-  const handleSpendArsenal = (cardId) => {
-    setSpentArsenalIds((prev) => [...prev, cardId]);
-  };
-
-  const handleReturnArsenal = (cardId) => {
-    setSpentArsenalIds((prev) => prev.filter((id) => id !== cardId));
-  };
-
-  // --- Live Defense Calculation (Replicates backend logic) ---
-  const calculatedDefense = useMemo(() => {
-    const total = { PARTS: 0, WIRING: 0, PLATES: 0 };
-    const myPlan = playerPlans[player.user_id];
-    if (!myPlan || !threat) return total;
-
-    // 1. Base Defense (from Action)
-    const baseDefense = BASE_DEFENSE_FROM_ACTION[myPlan.action] || {};
-    total.PARTS += baseDefense.PARTS || 0;
-    total.WIRING += baseDefense.WIRING || 0;
-    total.PLATES += baseDefense.PLATES || 0;
-
-    // 2. Passive Defense (from Upgrades)
-    player.upgrades.forEach((up) => {
-      total.PARTS += up.defense_boost.PARTS || 0;
-      total.WIRING += up.defense_boost.WIRING || 0;
-      total.PLATES += up.defense_boost.PLATES || 0;
+  const handleArsenalToggle = (cardId) => {
+    setSelectedArsenal((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(cardId)) {
+        newSet.delete(cardId);
+      } else {
+        newSet.add(cardId);
+      }
+      return newSet;
     });
-
-    // 3. Arsenal Cards
-    spentArsenal.forEach((card) => {
-      total.PARTS += card.defense_boost.PARTS || 0;
-      total.WIRING += card.defense_boost.WIRING || 0;
-      total.PLATES += card.defense_boost.PLATES || 0;
-    });
-
-    // 4. Spent Scrap (The complex part)
-    const up_ids = new Set(player.upgrades.map((u) => u.special_effect_id));
-    const has_piercing_jaws = up_ids.has("PIERCING_JAWS");
-    const has_serrated_parts = up_ids.has("SERRATED_PARTS");
-    const has_focused_wiring = up_ids.has("FOCUSED_WIRING");
-    const has_high_voltage = up_ids.has("HIGH_VOLTAGE_WIRE");
-    const has_reinf_plating = up_ids.has("REINFORCED_PLATING");
-    const has_layered_plating = up_ids.has("LAYERED_PLATING");
-
-    for (const [type, count] of Object.entries(spentScrap)) {
-      if (count === 0) continue;
-
-      // Rulebook Sec 4: Base value
-      let scrap_value = 2;
-
-      // Check Immunity
-      if (threat.immune.includes(type)) {
-        scrap_value = 0;
-      }
-
-      // Check Resistance
-      const is_resistant = threat.resistant.includes(type);
-      if (is_resistant) {
-        scrap_value -= 1; // Rulebook Sec 4
-      }
-
-      // Check Upgrades
-      if (type === "PARTS") {
-        if (has_serrated_parts) scrap_value += 1;
-        if (has_piercing_jaws && is_resistant) scrap_value += 1; // Negates -1
-      } else if (type === "WIRING") {
-        if (has_high_voltage) scrap_value += 1;
-        if (has_focused_wiring && is_resistant) scrap_value += 1;
-      } else if (type === "PLATES") {
-        if (has_layered_plating) scrap_value += 1;
-        if (has_reinf_plating && is_resistant) scrap_value += 1;
-      }
-
-      // TODO: Handle 'Corrosive Sludge' and 'Makeshift Amp'
-      // This requires a more complex UI and payload.
-      // For now, we calculate based on scrap and basic upgrades.
-
-      total[type] += count * Math.max(0, scrap_value);
-    }
-
-    return total;
-  }, [
-    spentScrap,
-    spentArsenal,
-    player.upgrades,
-    playerPlans,
-    player.user_id,
-    threat,
-  ]);
-  // --- End Live Defense Calculation ---
+  };
 
   const handleSubmit = () => {
-    setIsLoading(true);
-    // --- FIX: Wrap sendGameAction in try...catch ---
-    try {
-      sendGameAction("submit_defense", {
-        scrap_spent: spentScrap,
-        arsenal_ids: spentArsenalIds,
-      });
-    } catch (error) {
-      console.error("Failed to submit defense:", error);
-      setIsLoading(false);
-    }
-    // --- END FIX ---
+    const payload = {
+      scrap_spent: scrap,
+      arsenal_card_ids: Array.from(selectedArsenal),
+      // TODO: Add inputs for special cards
+      special_target_stat: null,
+      special_corrode_stat: null,
+      special_amp_spend: {},
+    };
+    sendGameAction("submit_defense", payload);
   };
 
   if (player.defense_submitted) {
     return (
       <div className="text-center p-4">
         <h3 className="text-lg text-green-400">
-          Defense submitted. Waiting for other players...
+          Defense submitted. Waiting...
         </h3>
       </div>
     );
@@ -1563,162 +1529,179 @@ const DefensePhaseActions = ({
     return (
       <div className="text-center p-4">
         <h3 className="text-lg text-gray-400">
-          No threat attracted. Waiting for other players...
+          No threat attracted. Waiting...
         </h3>
       </div>
     );
   }
 
-  // --- NEW 3-COLUMN LAYOUT ---
+  // --- UI for Defense Submission ---
   return (
     <div className="p-2 bg-gray-700 bg-opacity-80 rounded-lg h-full flex flex-col">
-      <div className="text-center p-2 bg-black bg-opacity-25 rounded-lg mb-2">
-        <p className="text-lg text-blue-300 animate-pulse">Defend your camp!</p>
-        <p className="text-xs text-gray-400">
-          Click resources to add them to your defense. Click items on the board
-          to return them.
-        </p>
-      </div>
+      <h3 className="text-xl font-bold text-white mb-2 text-center">
+        Submit Your Defense!
+      </h3>
+      <h4 className="text-lg text-red-400 mb-2 text-center">
+        vs. {threat.name}
+      </h4>
 
-      <div className="flex-grow grid grid-cols-3 gap-2 overflow-hidden">
-        {/* --- COLUMN 1: YOUR RESOURCES --- */}
-        <div className="flex flex-col gap-2 p-2 bg-black bg-opacity-20 rounded-lg overflow-y-auto">
-          <h4 className="text-sm font-bold text-gray-400 mb-1 text-center">
-            Your Resources
-          </h4>
-          {/* Available Scrap */}
-          <div className="flex justify-around items-center p-2 bg-gray-900 bg-opacity-50 rounded">
-            <ScrapIcon
-              image={scrapsParts}
-              count={availableScrap.PARTS}
-              size="w-10 h-10"
-              onClick={() => handleSpendScrap("PARTS")}
-            />
-            <ScrapIcon
-              image={scrapsWiring}
-              count={availableScrap.WIRING}
-              size="w-10 h-10"
-              onClick={() => handleSpendScrap("WIRING")}
-            />
-            <ScrapIcon
-              image={scrapsPlates}
-              count={availableScrap.PLATES}
-              size="w-10 h-10"
-              onClick={() => handleSpendScrap("PLATES")}
-            />
-          </div>
-          {/* Available Arsenal */}
-          <div className="flex flex-col gap-2 items-center">
-            {availableArsenal.length > 0 ? (
-              availableArsenal.map((card) => (
-                <OwnedCard
-                  key={card.id}
-                  card={card}
-                  cardType="ARSENAL"
-                  isSelectable={true}
-                  onClick={() => handleSpendArsenal(card.id)}
-                />
-              ))
-            ) : (
-              <p className="text-gray-500 text-xs italic p-2">
-                No arsenal cards in hand
-              </p>
-            )}
-          </div>
-        </div>
+      {/* --- Defense Preview Display --- */}
+      <PreviewDisplay preview={defensePreview} isLoading={isPreviewLoading} />
 
-        {/* --- COLUMN 2: DEFENSE BOARD --- */}
-        <div className="flex flex-col gap-2 p-2 bg-blue-900 bg-opacity-20 rounded-lg overflow-y-auto border-2 border-blue-500">
-          <h4 className="text-sm font-bold text-blue-300 mb-1 text-center">
-            Defense Board
-          </h4>
-          {/* Spent Scrap */}
-          <div className="flex justify-around items-center p-2 bg-gray-900 bg-opacity-50 rounded">
-            <ScrapIcon
-              image={scrapsParts}
-              count={spentScrap.PARTS}
-              size="w-10 h-10"
-              onClick={() => handleReturnScrap("PARTS")}
-            />
-            <ScrapIcon
-              image={scrapsWiring}
-              count={spentScrap.WIRING}
-              size="w-10 h-10"
-              onClick={() => handleReturnScrap("WIRING")}
-            />
-            <ScrapIcon
-              image={scrapsPlates}
-              count={spentScrap.PLATES}
-              size="w-10 h-10"
-              onClick={() => handleReturnScrap("PLATES")}
-            />
-          </div>
-          {/* Spent Arsenal */}
-          <div className="flex flex-col gap-2 items-center">
-            {spentArsenal.length > 0 ? (
-              spentArsenal.map((card) => (
-                <OwnedCard
-                  key={card.id}
-                  card={card}
-                  cardType="ARSENAL"
-                  isSelectable={true}
-                  onClick={() => handleReturnArsenal(card.id)}
-                />
-              ))
-            ) : (
-              <p className="text-gray-500 text-xs italic p-2">
-                No arsenal committed
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* --- COLUMN 3: THREAT & TOTALS --- */}
-        <div className="flex flex-col gap-2 p-2 bg-black bg-opacity-20 rounded-lg overflow-y-auto">
-          <h4 className="text-sm font-bold text-red-400 mb-1 text-center">
-            Threat & Totals
-          </h4>
-          <ThreatCard threat={threat} isAvailable={false} />
-          <div className="p-3 bg-black bg-opacity-30 rounded-lg border border-gray-600 mt-2">
-            <h5 className="text-sm font-semibold text-gray-300 mb-2 text-center">
-              Projected Defense
-            </h5>
-            <div className="grid grid-cols-3 gap-2 text-center">
-              <div>
-                <p className="text-red-400 font-semibold text-xs">Ferocity</p>
-                <p className="text-2xl font-bold">{calculatedDefense.PARTS}</p>
-                <p className="text-sm text-gray-400">vs {threat.ferocity}</p>
-              </div>
-              <div>
-                <p className="text-blue-400 font-semibold text-xs">Cunning</p>
-                <p className="text-2xl font-bold">{calculatedDefense.WIRING}</p>
-                <p className="text-sm text-gray-400">vs {threat.cunning}</p>
-              </div>
-              <div>
-                <p className="text-green-400 font-semibold text-xs">Mass</p>
-                <p className="text-2xl font-bold">{calculatedDefense.PLATES}</p>
-                <p className="text-sm text-gray-400">vs {threat.mass}</p>
-              </div>
+      {/* Scrap Selection */}
+      <div className="grid grid-cols-3 gap-4 mb-4">
+        {["PARTS", "WIRING", "PLATES"].map((color) => (
+          <div key={color} className="text-white">
+            <div className="flex items-center mb-1">
+              <img
+                src={SCRAP_TYPES[color].img}
+                alt={color}
+                className="w-6 h-6 mr-2"
+              />
+              <span>(Avail: {availableScrap[color] || 0})</span>
+            </div>
+            <div className="flex items-center">
+              <button
+                onClick={() => handleScrapChange(color, -1)}
+                className="px-2 py-1 bg-red-700 rounded"
+              >
+                -
+              </button>
+              <span className="mx-2 w-10 text-center">{scrap[color]}</span>
+              <button
+                onClick={() => handleScrapChange(color, 1)}
+                className="px-2 py-1 bg-green-700 rounded"
+              >
+                +
+              </button>
+              <button
+                onClick={() => handleSetMaxScrap(color)}
+                className="ml-2 px-2 py-1 bg-blue-700 rounded text-xs"
+              >
+                Max
+              </button>
             </div>
           </div>
+        ))}
+      </div>
+
+      {/* Arsenal Selection */}
+      <div className="mb-4 flex-grow overflow-y-auto">
+        <h5 className="text-white mb-2">Select Arsenal:</h5>
+        <div className="flex flex-col gap-2">
+          {player.arsenal_hand.length === 0 && (
+            <p className="text-gray-400">No Arsenal cards in hand.</p>
+          )}
+          {player.arsenal_hand.map((card) => (
+            <div
+              key={card.id}
+              onClick={() => handleArsenalToggle(card.id)}
+              className={`p-2 border-2 rounded-lg cursor-pointer bg-gray-700 ${
+                selectedArsenal.has(card.id)
+                  ? "border-yellow-400"
+                  : "border-gray-600"
+              }`}
+            >
+              <p className="text-white text-sm font-bold">{card.name}</p>
+              <p className="text-gray-300 text-xs">{card.effect_text}</p>
+            </div>
+          ))}
         </div>
       </div>
 
       <button
         onClick={handleSubmit}
-        className="w-full btn btn-primary text-lg mt-2"
-        disabled={isLoading}
+        className="w-full py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-colors mt-2"
       >
-        {isLoading ? (
-          <span className="loading loading-spinner"></span>
-        ) : (
-          "Submit Defense"
-        )}
+        Submit Defense
       </button>
     </div>
   );
 };
-// --- *** END NEW DefensePhaseActions *** ---
+
+// --- *** NEW: Helper component to show the preview *** ---
+const PreviewDisplay = ({ preview, isLoading }) => {
+  if (isLoading) {
+    return (
+      <div className="p-3 bg-gray-700 rounded-lg mb-4 text-center">
+        <p className="text-yellow-400">Calculating...</p>
+      </div>
+    );
+  }
+
+  if (!preview) {
+    return (
+      <div className="p-3 bg-gray-700 rounded-lg mb-4 text-center">
+        <p className="text-gray-400">
+          Adjust scrap or add cards to see preview.
+        </p>
+      </div>
+    );
+  }
+
+  if (preview.error) {
+    return (
+      <div className="p-3 bg-red-900 rounded-lg mb-4 text-center">
+        <p className="text-red-400">Error: {preview.error}</p>
+      </div>
+    );
+  }
+
+  // Helper to format threat stats
+  const formatTarget = (color) => {
+    const original = preview.threat_original_stats[color];
+    if (preview.threat_immune_to.includes(color)) return "Immune";
+    if (preview.threat_resistant_to.includes(color)) return `${original} (x2)`;
+    return original;
+  };
+
+  return (
+    <div className="p-3 bg-gray-900 rounded-lg mb-4">
+      <div className="flex justify-around items-center">
+        {preview.is_kill ? (
+          <h4 className="text-2xl font-bold text-green-400">PROJECTED KILL!</h4>
+        ) : (
+          <h4 className="text-2xl font-bold text-red-400">PROJECTED FAIL!</h4>
+        )}
+        <div className="text-sm text-gray-300">
+          <p>Targets: {preview.threat_highest_stats_to_beat.join(", ")}</p>
+          {preview.is_lure_to_weakness_active && (
+            <p className="text-blue-400">Lure to Weakness Active!</p>
+          )}
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-2 mt-2 text-center">
+        {["PARTS", "WIRING", "PLATES"].map((color) => {
+          const target = preview.threat_original_stats[color];
+          const defense = preview.player_total_defense[color];
+          const isTarget = preview.threat_highest_stats_to_beat.includes(color);
+
+          return (
+            <div
+              key={color}
+              className={isTarget ? "bg-black/50 p-1 rounded" : ""}
+            >
+              <p
+                className={`font-bold text-2xl ${
+                  defense >= target ? "text-green-400" : "text-red-400"
+                }`}
+              >
+                {defense} / {formatTarget(color)}
+              </p>
+              <p
+                className={`text-xs font-semibold ${SCRAP_TYPES[color].color}`}
+              >
+                {SCRAP_TYPES[color].name}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+// --- *** END NEW DEFENSE COMPONENTS *** ---
 
 const ScavengeChoiceModal = ({ onConfirm, onCancel, player }) => {
   // v1.8: Check for Scavenger's Eye
@@ -1761,26 +1744,27 @@ const ScavengeChoiceModal = ({ onConfirm, onCancel, player }) => {
           )}
         </p>
         <div className="flex justify-center space-x-4 mb-4">
+          {/* --- FIX: Use PARTS, WIRING, PLATES keys --- */}
           <button
             onClick={() => handleSelect("PARTS")}
             disabled={selection.length >= numToChoose}
             className="btn btn-danger px-4 py-2"
           >
-            Parts (Red)
+            Parts (PARTS)
           </button>
           <button
             onClick={() => handleSelect("WIRING")}
             disabled={selection.length >= numToChoose}
             className="btn btn-info px-4 py-2"
           >
-            Wiring (Blue)
+            Wiring (WIRING)
           </button>
           <button
             onClick={() => handleSelect("PLATES")}
             disabled={selection.length >= numToChoose}
             className="btn btn-success px-4 py-2"
           >
-            Plates (Green)
+            Plates (PLATES)
           </button>
         </div>
         <div className="h-10 p-2 bg-gray-900 rounded mb-4 flex items-center space-x-2">
@@ -1833,12 +1817,12 @@ const ActionPhaseActions = ({ sendGameAction, player, gameState }) => {
     }
   }, [isMyTurn, myChoice]);
 
-  const handleScavengeConfirm = (scraps) => {
+  const handleScavengeConfirm = (PARTS) => {
     // --- FIX: Wrap sendGameAction in try...catch ---
     try {
       sendGameAction("submit_action_choice", {
         choice_type: "scavenge",
-        scraps: scraps,
+        PARTS: PARTS,
       });
       setShowScavengeModal(false);
     } catch (error) {
@@ -2023,7 +2007,13 @@ const GameHeader = ({
 
 // --- MAIN GAME PAGE COMPONENT ---
 const GamePage = ({ onLogout }) => {
-  const { user, gameState } = useStore();
+  // --- FIX: Add `token` to the store selector ---
+  const { user, gameState, token } = useStore((state) => ({
+    user: state.user,
+    gameState: state.gameState,
+    token: state.token, // Get token for HTTP requests
+  }));
+
   const [showSurrenderModal, setShowSurrenderModal] = useState(false);
   // --- FIX: Removed Logout Modal ---
   // const [showLogoutModal, setShowLogoutModal] = useState(false);
@@ -2147,6 +2137,9 @@ const GamePage = ({ onLogout }) => {
         <div className="text-center p-6 bg-black bg-opacity-70 rounded-lg">
           <span className="loading loading-spinner loading-lg text-blue-400"></span>
           <p className="text-xl mt-4">Loading game state...</p>
+          {JSON.stringify(gameState)}
+          {JSON.stringify(user)}
+          {JSON.stringify(sendMessageForLoadingCheck)}
           {!sendMessageForLoadingCheck && (
             <p className="text-red-400 mt-2">Connecting to server...</p>
           )}
@@ -2450,14 +2443,19 @@ const GamePage = ({ onLogout }) => {
                     canConfirm={canConfirmThreat}
                   />
                 )}
+                {/* --- 
+                --- REFACTOR: Replaced DefensePhaseActions with DefenseSubmission
+                --- */}
                 {phase === "DEFENSE" && (
-                  <DefensePhaseActions
-                    sendGameAction={sendGameAction}
+                  <DefenseSubmission
                     player={self}
-                    playerPlans={player_plans}
                     threat={self.attracted_threat}
+                    sendGameAction={sendGameAction}
+                    gameState={gameState}
+                    token={token}
                   />
                 )}
+                {/* --- END REFACTOR --- */}
                 {phase === "ACTION" && (
                   <ActionPhaseActions
                     sendGameAction={sendGameAction}

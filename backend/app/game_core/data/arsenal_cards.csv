@@ -1,0 +1,16 @@
+Name,Cost,Effect,EffectTags,Charges,Copies
+Makeshift Shield,1 PARTS,"Gain +6 PARTS defense.",DEFENSE:PARTS:6,,4
+Caltrops,1 WIRING,"Gain +6 WIRING defense.",DEFENSE:WIRING:6,,4
+Brace,1 PLATES,"Gain +6 PLATES defense.",DEFENSE:PLATES:6,,4
+Heavy Shield,2 PARTS,"Gain +9 PARTS defense.",DEFENSE:PARTS:9,,3
+Chain-Link Trap,2 WIRING,"Gain +9 WIRING defense.",DEFENSE:WIRING:9,,3
+Reinforced Brace,2 PLATES,"Gain +9 PLATES defense.",DEFENSE:PLATES:9,,3
+Spiked Shield,2 PARTS,"Gain +5 PARTS defense. Starts with 2 Charges. When you use this, remove 1 Charge. When it has 0, discard it.",DEFENSE:PARTS:5,2,2
+Barbed Trap,2 WIRING,"Gain +5 WIRING defense. Starts with 2 Charges. When you use this, remove 1 Charge. When it has 0, discard it.",DEFENSE:WIRING:5,2,2
+Layered Brace,2 PLATES,"Gain +5 PLATES defense. Starts with 2 Charges. When you use this, remove 1 Charge. When it has 0, discard it.",DEFENSE:PLATES:5,2,2
+Recycler-Net,"3 WIRING, 1 PARTS","Gain +9 WIRING defense. If this card is used to Kill a Threat, return it to your hand at the end of the round. (One-use if no kill).",DEFENSE:WIRING:9;ON_KILL:RETURN_TO_HAND,,1
+Boar Spear,"3 PARTS, 1 WIRING","Gain +9 PARTS defense. If this card is used to Kill a Threat, return it to your hand at the end of the round. (One-use if no kill).",DEFENSE:PARTS:9;ON_KILL:RETURN_TO_HAND,,1
+Adrenaline,3 WIRING,"If you FAIL, ignore all consequences (gaining Injury, ""On Fail:"" effects, etc.) this round.",ON_FAIL:IGNORE_CONSEQUENCES,,1
+Lure to Weakness,"2 WIRING, 1 PARTS","Gain +5 of each defense. Choose one of your Threat's non-highest stats. For this turn, that stat is the target for the Kill calculation.",DEFENSE:ALL:5;SPECIAL:LURE_TO_WEAKNESS,,1
+Corrosive Sludge,"1 WIRING, 2 PLATES","Gain +5 of each defense. Choose one stat on your Threat. That stat loses Resistant and Immune for this defense.",DEFENSE:ALL:5;SPECIAL:CORROSIVE_SLUDGE,,1
+Makeshift Amp,"2 of each","Pay X additional Scrap of any one type. Gain +X defense for that type. This defense value is not affected by Resistance or Immunity.",SPECIAL:MAKESHIFT_AMP,,1
