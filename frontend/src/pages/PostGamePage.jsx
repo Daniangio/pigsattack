@@ -1,8 +1,13 @@
 import React from "react";
 import { useStore } from "../store";
 
-const PostGamePage = ({ gameRecord, onReturnToLobby, sendMessage }) => {
-  const { user } = useStore();
+const PostGamePage = ({ onReturnToLobby }) => {
+  const { user, gameRecord } = useStore((state) => ({
+    user: state.user,
+    gameRecord: state.gameResult,
+  }));
+  const sendMessage = useStore((state) => state.sendMessage);
+
   if (!gameRecord) {
     return (
       <div className="text-center p-8">
@@ -15,17 +20,8 @@ const PostGamePage = ({ gameRecord, onReturnToLobby, sendMessage }) => {
     );
   }
 
-  const handleSpectate = () => {
-    sendMessage({
-      action: "spectate_game",
-      payload: { game_record_id: gameRecord.id },
-    });
-  };
-
   const { winner, participants, room_name, ended_at, status } = gameRecord;
   const isWinner = winner && user && winner.id === user.id;
-  const myParticipantInfo = participants.find((p) => p.user.id === user?.id);
-  const myStatus = myParticipantInfo?.status || "SPECTATOR";
 
   return (
     <div className="bg-slate-700 p-8 rounded-lg shadow-lg max-w-2xl mx-auto text-center animate-fade-in">

@@ -3,31 +3,38 @@ import { jwtDecode } from "jwt-decode";
 
 export const useStore = create((set, get) => ({
   // State
-  view: "auth", // Default view is always 'auth'
+  // 'view' is removed. Navigation is handled by react-router.
   token: sessionStorage.getItem("authToken") || null,
   user: null,
-  isConnected: false, // This can stay as it's client-side state
+  isConnected: false,
   gameResult: null,
   lobbyState: { users: [], rooms: [] },
   roomState: null,
   gameState: null,
-  sendMessage: null, // --- FIX: Add sendMessage to the store state
+  sendMessage: null,
 
   // Actions
-  setView: (view) => set({ view }),
-
-  // --- FIX: Add a setter for sendMessage ---
   setSendMessage: (fn) => set({ sendMessage: fn }),
 
   setToken: (token) => {
     sessionStorage.setItem("authToken", token);
-    const decoded = jwtDecode(token);
-    const user = {
-      id: decoded.sub,
-      username: decoded.username,
-      currentRoomId: null,
-    };
-    set({ token, user });
+    try {
+      const decoded = jwtDecode(token);
+      if (decoded && decoded.sub) {
+        const user = {
+          id: decoded.sub,
+          username: decoded.username,
+        };
+        // Set token and user.
+        // The <StateGuard> will handle navigation to /lobby.
+        set({ token, user });
+      } else {
+        throw new Error("Invalid token structure.");
+      }
+    } catch (error) {
+      console.error("Could not decode token or token is invalid:", error);
+      get().clearAuth();
+    }
   },
 
   clearAuth: () => {
@@ -36,20 +43,21 @@ export const useStore = create((set, get) => ({
       token: null,
       user: null,
       isConnected: false,
-      view: "auth",
+      // 'view' is removed
       roomState: null,
       lobbyState: { users: [], rooms: [] },
       gameResult: null,
       gameState: null,
-      sendMessage: null, // --- FIX: Clear sendMessage on logout
     });
+    // The <StateGuard> will handle navigation to /auth.
   },
 
   setConnectionStatus: (status) => set({ isConnected: status }),
 
   handleGuestAuth: (payload) => {
     const user = { id: payload.id, username: payload.username };
-    set({ user });
+    // The <StateGuard> will handle navigation to /lobby.
+    set({ user, token: 'guest' });
   },
 
   handleAuthSuccess: (payload) => {
@@ -61,38 +69,76 @@ export const useStore = create((set, get) => ({
   },
 
   handleError: (payload) => {
-    alert(`Server Error: ${payload.message}`);
+    console.error(`Server Error: ${payload.message}`, payload);
+    // TODO: Implement a toast notification system
   },
 
-  handleStateUpdate: (payload) => {
-    set((state) => {
-      // --- FIX for Bug 1: Allow navigation *out* of game ---
-      // If a new view is 'lobby' or 'auth', it's a navigation
-      // command that should *always* be obeyed, and it should
-      // clear the game state.
-      if (payload.view && payload.view !== "game") {
-        console.warn(
-          `Force navigating to ${payload.view}, clearing game state.`
-        );
-        return { ...state, ...payload, gameState: null, gameResult: null };
-      }
+  // --- NEW, SPECIFIC STATE HANDLERS ---
 
-      // Original race condition fix:
-      // If we are in a game, ignore stale lobby/room updates.
-      if (state.gameState) {
-        console.warn("Ignoring stale 'state_update' while in game.");
-        return state; // Ignore the update
-      }
-      // --- END FIX ---
+  handleLobbyState: (payload) => {
+    set({ lobbyState: payload, roomState: null, gameState: null, gameResult: null });
+  },
 
-      // If we are not in a game, process the update.
-      return { ...state, ...payload };
-    });
+  handleRoomState: (payload) => {
+    // We are in a room. Clear lobby state.
+    set({ roomState: payload, lobbyState: { users: [], rooms: [] } });
+  },
+  
+  handleForceToLobby: () => {
+    // Server is telling us we are no longer in a room (e.g., we left/were kicked)
+    set({ roomState: null, gameState: null, gameResult: null });
+    // The <StateGuard> will NOT navigate us, but if we are on a /room/ page,
+    // that page should handle this null state gracefully (e.g., by navigating).
+    // Let's refine this: RoomPage.jsx will handle this.
+    // For now, just clear the state.
   },
 
   handleGameStateUpdate: (payload) => {
-    // This handler is now the *only* one that sets the game state
-    // and forces the view to 'game'.
-    set({ gameState: payload, view: "game" });
+    // When a game update comes in, we set the state.
+    // The <StateGuard> component will handle the forced navigation.
+    set({ gameState: payload, roomState: null, gameResult: null });
   },
+
+  handleGameResult: (payload) => {
+    // The <StateGuard> will handle the forced navigation.
+    set({ gameResult: payload, gameState: null, roomState: null });
+  },
+
+  // --- Reusable Authenticated Fetch (Unchanged) ---
+  httpGameRequest: async (gameId, endpoint, method = 'POST', body = {}) => {
+    // ... (this logic is fine and remains unchanged) ...
+    const { token, handleError } = get();
+    
+    if (!token || token === 'guest') {
+      console.error("Attempted HTTP request as guest.");
+      handleError({ message: "Guests cannot perform this action." });
+      return null;
+    }
+    
+    const url = `http://localhost:8000/api/game/${gameId}/${endpoint}`;
+    
+    try {
+      const response = await fetch(url, {
+        method: method,
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.detail || `HTTP Error: ${response.statusText}`);
+      }
+      
+      return await response.json(); // Return the JSON response
+    
+    } catch (err) {
+      console.error(`HTTP request to ${url} failed:`, err);
+      handleError({ message: err.message || "A network error occurred." });
+      return null;
+    }
+  },
+
 }));

@@ -18,6 +18,8 @@ Scaffold the Frontend with Vite:Run the following command in the project's root 
 Add Tailwind CSS to Frontend:Navigate into the new frontend directory and follow the official Tailwind CSS installation steps for Vite.cd frontend
 npm install -D tailwindcss postcss autoprefixer
 npx tailwindcss init -p
+Install react-router-dom
+npm install react-router-dom
 cd ..
 This will create tailwind.config.js and postcss.config.js.Configure Frontend for Dev Container:You need to create/modify three files in the frontend directory to finalize the setup.Configure frontend/tailwind.config.js to scan your source files:/** @type {import('tailwindcss').Config} \*/
 export default {

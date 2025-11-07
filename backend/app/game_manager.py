@@ -6,6 +6,10 @@ v1.9.1 - Defense Preview Refactor
   pass-through to the new GameInstance.public_preview_defense.
   It is intended to be called by a new HTTP endpoint,
   *not* by the main WebSocket `player_action` dispatcher.
+
+v1.9.3 - PAYLOAD FIX
+- Standardized all game state broadcasts to use the "payload" key
+  instead of inconsistently using "data" and "payload".
 """
 
 from typing import Dict, List, Optional, Any
@@ -56,7 +60,7 @@ class GameManager:
                 redacted_state = initial_state.get_redacted_state(p.user.id)
                 await self.conn_manager.send_to_user(
                     p.user.id,
-                    {"type": "game_state_update", "data": redacted_state}
+                    {"type": "game_state_update", "payload": redacted_state}
                 )
                 
         except Exception as e:
@@ -136,8 +140,7 @@ class GameManager:
             # Send it
             await self.conn_manager.send_to_user(
                 pid,
-                
-                {"type": "game_state_update", "data": redacted_state}
+                {"type": "game_state_update", "payload": redacted_state}
             )
     
     async def broadcast_game_state(self, game_id: str, 
@@ -201,6 +204,7 @@ class GameManager:
                 payload_to_send = spectator_payload
             
             if payload_to_send:
+                # This will now be a dict, not a Pydantic model
                 msg = {"type": "game_state_update", "payload": payload_to_send}
                 await self.conn_manager.send_to_user(user_id, msg)
 
@@ -220,10 +224,11 @@ class GameManager:
         
         # 1. Broadcast the final, unredacted state to everyone
         #    (so everyone can see the scores)
+        # --- FIX: Standardize on "payload" ---
         await self.conn_manager.broadcast_to_game(
             game_id,
             # We send the *full* state dump, not redacted
-            {"type": "game_over", "data": final_state.model_dump()}
+            {"type": "game_over", "payload": final_state.model_dump()}
         )
         
         # 2. Find the GameRecord and Room

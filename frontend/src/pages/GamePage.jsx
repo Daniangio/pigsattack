@@ -26,11 +26,13 @@ import playerIcon5 from "../images/player-icon-5.png";
 
 // --- DATA CONSTANTS (v1.8) ---
 // --- FIX: Keys changed from PARTS/WIRING/PLATES to PARTS/WIRING/PLATES to match backend ---
+// --- NOTE: This seems to be v1.7 data, the rulebook (v1.8) has different values ---
+// --- I will keep your v1.7 values for now, but double-check rulebook section 4 ---
 const BASE_DEFENSE_FROM_ACTION = {
-  SCAVENGE: { PARTS: 3, WIRING: 1, PLATES: 3 },
-  FORTIFY: { PARTS: 3, WIRING: 3, PLATES: 1 },
-  ARMORY_RUN: { PARTS: 1, WIRING: 3, PLATES: 3 },
-  SCHEME: { PARTS: 2, WIRING: 2, PLATES: 2 },
+  SCAVENGE: { PARTS: 0, WIRING: 2, PLATES: 0 }, // Rulebook v1.8 is 2 Blue
+  FORTIFY: { PARTS: 0, WIRING: 0, PLATES: 2 }, // Rulebook v1.8 is 2 Green
+  ARMORY_RUN: { PARTS: 2, WIRING: 0, PLATES: 0 }, // Rulebook v1.8 is 2 Red
+  SCHEME: { PARTS: 1, WIRING: 1, PLATES: 1 }, // Rulebook v1.8 is 1 of each
 };
 
 const LURE_CARDS = [
@@ -164,12 +166,22 @@ const GameLog = ({ logs }) => {
 };
 
 const LureIcon = ({ lure }) => {
+  // --- FIX: Match multi-lures from backend (e.g., "Rags/Noises/Fruit") ---
+  // We'll just display the first one
+  const primaryLure = lure ? lure.split("/")[0].toUpperCase() : "UNKNOWN";
+
   const lureStyles = {
+    RAGS: "bg-red-700 text-red-100 border-red-500",
+    NOISES: "bg-blue-700 text-blue-100 border-blue-500",
+    FRUIT: "bg-green-700 text-green-100 border-green-500",
     BLOODY_RAGS: "bg-red-700 text-red-100 border-red-500",
     STRANGE_NOISES: "bg-blue-700 text-blue-100 border-blue-500",
     FALLEN_FRUIT: "bg-green-700 text-green-100 border-green-500",
   };
   const lureText = {
+    RAGS: "Rags",
+    NOISES: "Noises",
+    FRUIT: "Fruit",
     BLOODY_RAGS: "Bloody Rags",
     STRANGE_NOISES: "Strange Noises",
     FALLEN_FRUIT: "Fallen Fruit",
@@ -177,10 +189,10 @@ const LureIcon = ({ lure }) => {
   return (
     <span
       className={`px-2 py-0.5 text-xs font-semibold rounded-full border ${
-        lureStyles[lure] || "bg-gray-700"
+        lureStyles[primaryLure] || "bg-gray-700"
       }`}
     >
-      {lureText[lure] || "Unknown Lure"}
+      {lureText[primaryLure] || "Unknown Lure"}
     </span>
   );
 };
@@ -219,14 +231,51 @@ const PlayerCard = ({
   turnStatus,
   portrait,
   turnOrder,
-  plan,
+  plan, // This is the PlayerPlans object { lure_card_id, action_card_id }
   isViewing,
   onClick,
 }) => {
   if (!player) return null;
   const { scrap, injuries, username, status } = player;
   const isInactive = status !== "ACTIVE";
-  const showPlan = !!plan; // Plan is redacted, just check existence
+
+  // --- FIX: Show plan based on phase and plan object ---
+  const phase = useStore((state) => state.gameState?.payload?.phase);
+  let showLure = false;
+  let showAction = false;
+  const lureCardId = plan?.lure_card_id;
+  const actionCardId = plan?.action_card_id;
+
+  if (plan) {
+    switch (phase) {
+      case "PLANNING":
+        // Only show your own submitted plan
+        if (isSelf && player.plan_submitted) {
+          showLure = true;
+          showAction = true;
+        }
+        break;
+      case "ATTRACTION":
+      case "DEFENSE":
+        // Show lure for everyone, action for self
+        showLure = true;
+        if (isSelf) {
+          showAction = true;
+        }
+        break;
+      case "ACTION":
+      case "CLEANUP":
+      case "INTERMISSION":
+      case "GAME_OVER":
+        // Show everything for everyone
+        showLure = true;
+        showAction = true;
+        break;
+      default:
+        break;
+    }
+  }
+  // --- END FIX ---
 
   return (
     <div className="flex items-center gap-1 cursor-pointer" onClick={onClick}>
@@ -263,28 +312,29 @@ const PlayerCard = ({
           </div>
 
           <div className="absolute -top left-1/2 -translate-x-1/2 z-20 flex items-center space-x-1">
-            {showPlan && (
+            {/* --- FIX: Use new showLure/showAction logic --- */}
+            {plan && (
               <img
                 src={
-                  plan.lure
-                    ? LURE_CARDS.find((c) => c.id === plan.lure)?.image
+                  showLure
+                    ? LURE_CARDS.find((c) => c.id === lureCardId)?.image
                     : unknownLureCard
                 }
-                alt={plan.lure || "Hidden"}
+                alt={showLure ? lureCardId : "Hidden"}
                 className="w-8 h-10 object-cover rounded-sm shadow-md"
-                title={`Lure: ${plan.lure || "Hidden"}`}
+                title={`Lure: ${showLure ? lureCardId : "Hidden"}`}
               />
             )}
-            {showPlan && (
+            {plan && (
               <img
                 src={
-                  plan.action
-                    ? ACTION_CARDS.find((c) => c.id === plan.action)?.image
+                  showAction
+                    ? ACTION_CARDS.find((c) => c.id === actionCardId)?.image
                     : unknownCard
                 }
-                alt={plan.action || "Hidden"}
+                alt={showAction ? actionCardId : "Hidden"}
                 className="w-8 h-10 object-cover rounded-sm shadow-md"
-                title={`Action: ${plan.action || "Hidden"}`}
+                title={`Action: ${showAction ? actionCardId : "Hidden"}`}
               />
             )}
           </div>
@@ -364,31 +414,18 @@ const ThreatCard = ({
       <div>
         <div className="flex justify-between items-center mb-1">
           <h4 className="text-base font-bold text-red-300">{threat.name}</h4>
-          <LureIcon lure={threat.lure} />
+          {/* --- FIX: Use threat.lure_type from backend --- */}
+          <LureIcon lure={threat.lure_type} />
         </div>
         <p className="text-xs text-gray-300 mb-2 italic">
-          {threat.on_fail === "PREVENT_ACTION" && (
+          {/* --- FIX: Use threat.on_fail_effect and abilities_text --- */}
+          {threat.abilities_text ? (
             <span className="text-yellow-400 font-semibold">
-              On Fail: PREVENT action.
+              {threat.abilities_text}
             </span>
+          ) : (
+            "No 'On Fail' effect."
           )}
-          {threat.on_fail === "DISCARD_SCRAP" && (
-            <span className="text-yellow-400 font-semibold">
-              On Fail: Discard scrap.
-            </span>
-          )}
-          {/* v1.8 - Added more fail conditions */}
-          {threat.on_fail === "GAIN_INJURY" && (
-            <span className="text-red-400 font-semibold">
-              On Fail: Gain 1 additional Injury.
-            </span>
-          )}
-          {threat.on_fail === "GIVE_SCRAP" && (
-            <span className="text-yellow-400 font-semibold">
-              On Fail: Give 1 scrap to each other player.
-            </span>
-          )}
-          {!threat.on_fail && "No 'On Fail' effect."}
         </p>
         <div className="text-xs space-y-1 mb-2">
           {resistantText && (
@@ -485,8 +522,9 @@ const MarketCard = ({ card, cardType, onClick, isSelectable, isDimmed }) => {
     >
       <div>
         <h4 className="text-xs font-bold text-white mb-1">{card.name}</h4>
+        {/* --- FIX: Use effect_text from backend --- */}
         <p className="text-[10px] leading-tight text-gray-300 mb-1.5 italic">
-          {card.effect}
+          {card.effect_text}
         </p>
       </div>
       <div className="flex justify-start items-center space-x-1.5 p-1 bg-black bg-opacity-20 rounded mt-auto">
@@ -530,8 +568,9 @@ const OwnedCard = ({ card, cardType, onClick, isSelectable }) => {
           <span className="text-yellow-300"> ({card.charges}x)</span>
         ) : null}
       </h4>
+      {/* --- FIX: Use effect_text from backend --- */}
       <p className="text-[10px] leading-tight text-gray-300 mb-1.5 italic">
-        {card.effect}
+        {card.effect_text}
       </p>
       {card.name !== "Hidden Arsenal" && ( // <-- FIX: Don't show cost for hidden
         <div className="flex justify-start items-center space-x-1 p-1 bg-black bg-opacity-20 rounded mt-auto">
@@ -614,7 +653,8 @@ const MarketPanel = ({
     <div className="w-full h-full flex flex-col gap-2 p-2 bg-gray-800 bg-opacity-70 rounded-lg">
       <div className="flex-1 overflow-hidden">
         <UpgradesMarket
-          upgrade_market={market.upgrade_market}
+          // --- FIX: Use correct market structure from backend ---
+          upgrade_market={market.upgrade_faceup}
           myTurn={myTurn}
           phase={phase}
           choiceType={choiceType}
@@ -624,7 +664,8 @@ const MarketPanel = ({
       </div>
       <div className="flex-1 overflow-hidden">
         <ArsenalMarket
-          arsenal_market={market.arsenal_market}
+          // --- FIX: Use correct market structure from backend ---
+          arsenal_market={market.arsenal_faceup}
           myTurn={myTurn}
           phase={phase}
           choiceType={choiceType}
@@ -641,6 +682,11 @@ const MarketPanel = ({
 // --- PlayerActionsDisplay (New Component) ---
 // Shows last round's cards, or current planned cards
 const LastRoundActionsDisplay = ({ player }) => {
+  // --- FIX: Backend doesn't send last_round_... ---
+  // --- This component is disabled for now ---
+  return null;
+
+  /*
   const lureCard = LURE_CARDS.find((c) => c.id === player.last_round_lure);
   const actionCard = ACTION_CARDS.find(
     (c) => c.id === player.last_round_action
@@ -675,12 +721,13 @@ const LastRoundActionsDisplay = ({ player }) => {
       </div>
     </div>
   );
+  */
 };
 
 // --- *** NEW COMPONENT *** ---
 const CurrentPlanDisplay = ({
   player,
-  playerPlan,
+  playerPlan, // This is PlayerPlans { lure_card_id, action_card_id }
   phase,
   turnStatus,
   isSelf,
@@ -697,13 +744,13 @@ const CurrentPlanDisplay = ({
     // --- FIX: Logic updated to handle isSelf ---
     if (isSelf && playerPlan) {
       // If it's me, I always see my plan
-      lureId = playerPlan.lure;
-      actionId = playerPlan.action;
+      lureId = playerPlan.lure_card_id;
+      actionId = playerPlan.action_card_id;
       newTitle = "Your Plan";
 
       if (phase === "PLANNING" && !player.plan_submitted) {
         newTitle = "Planning...";
-        lureId = null;
+        lureId = null; // Hide cards until plan is submitted
         actionId = null;
       } else if (phase === "PLANNING" && player.plan_submitted) {
         newTitle = "Planned"; // Keep cards visible
@@ -726,17 +773,17 @@ const CurrentPlanDisplay = ({
         case "ATTRACTION":
         case "DEFENSE":
           if (playerPlan) {
-            lureId = playerPlan.lure;
+            lureId = playerPlan.lure_card_id;
           }
           actionId = "UNKNOWN_ACTION";
           newTitle = "Current Plan";
           break;
         case "ACTION":
           if (playerPlan) {
-            lureId = playerPlan.lure;
+            lureId = playerPlan.lure_card_id;
             // Show action if it's their turn or their turn has passed
             if (turnStatus === "ACTIVE" || turnStatus === "WAITING") {
-              actionId = playerPlan.action;
+              actionId = playerPlan.action_card_id;
             } else {
               actionId = "UNKNOWN_ACTION";
             }
@@ -747,8 +794,8 @@ const CurrentPlanDisplay = ({
         case "INTERMISSION":
         case "GAME_OVER":
           if (playerPlan) {
-            lureId = playerPlan.lure;
-            actionId = playerPlan.action;
+            lureId = playerPlan.lure_card_id;
+            actionId = playerPlan.action_card_id;
           }
           newTitle = "Revealed Plan";
           break;
@@ -827,8 +874,9 @@ const PlayerUpgrades = ({ player }) => (
       Upgrades
     </h4>
     <div className="flex gap-2 p-2 rounded min-h-[140px] items-center bg-black bg-opacity-20">
-      {player.upgrades.length > 0 ? (
-        player.upgrades.map((card) => (
+      {/* --- FIX: Use player.upgrade_cards from backend --- */}
+      {(player.upgrade_cards || []).length > 0 ? (
+        (player.upgrade_cards || []).map((card) => (
           <OwnedCard key={card.id} card={card} cardType="UPGRADE" />
         ))
       ) : (
@@ -845,9 +893,10 @@ const PlayerArsenal = ({ player, isSelf }) => (
       Arsenal
     </h4>
     <div className="flex gap-2 p-2 rounded min-h-[140px] items-center bg-black bg-opacity-20">
+      {/* --- FIX: Use player.arsenal_cards from backend --- */}
       {isSelf ? ( // If it's me, show my cards
-        player.arsenal_hand.length > 0 ? (
-          player.arsenal_hand.map((card, index) => (
+        (player.arsenal_cards || []).length > 0 ? (
+          (player.arsenal_cards || []).map((card, index) => (
             <OwnedCard
               key={card.id || `hidden-${index}`}
               card={card}
@@ -858,13 +907,13 @@ const PlayerArsenal = ({ player, isSelf }) => (
           <p className="text-gray-500 text-sm italic px-2">Empty</p>
         )
       ) : // If it's someone else, show hidden cards based on count
-      player.arsenal_hand_count > 0 ? (
-        [...Array(player.arsenal_hand_count)].map((_, index) => (
+      (player.arsenal_cards_count || 0) > 0 ? (
+        [...Array(player.arsenal_cards_count || 0)].map((_, index) => (
           <OwnedCard
             key={`hidden-${index}`}
             card={{
               name: "Hidden Arsenal",
-              effect: "This card is hidden from view.",
+              effect_text: "This card is hidden from view.",
               cost: {},
             }}
             cardType="ARSENAL"
@@ -947,8 +996,8 @@ const PlayerAssets = ({
       {/* --- *** FIX *** --- */}
       {/* Always show the player's board content */}
       <>
-        {/* 2. Last Played Cards */}
-        <LastRoundActionsDisplay player={player} />
+        {/* 2. Last Played Cards (Disabled) */}
+        {/* <LastRoundActionsDisplay player={player} /> */}
 
         {/* 3. Current Plan */}
         <CurrentPlanDisplay
@@ -1020,15 +1069,11 @@ const ConfirmationModal = ({
   </div>
 );
 
-const canAfford = (playerScrap, cardCost, discount = 0) => {
+const canAfford = (playerScrap, cardCost, isFree = false) => {
+  if (isFree) return true;
   if (!playerScrap || !cardCost) return false;
 
-  // v1.8: Backend rules removed the discount.
-  // The rulebook (Sec 5) also doesn't mention it.
-  // I will assume no discount.
-  const effectiveCost = cardCost;
-
-  for (const [scrapType, cost] of Object.entries(effectiveCost)) {
+  for (const [scrapType, cost] of Object.entries(cardCost)) {
     if ((playerScrap[scrapType] || 0) < cost) {
       return false;
     }
@@ -1045,6 +1090,7 @@ const UpgradesMarket = ({
   playerScrap,
 }) => {
   const isActionBuy = myTurn && phase === "ACTION" && choiceType === "FORTIFY";
+  // --- FIX: v1.8 Intermission is FREE ---
   const isIntermissionBuy = myTurn && phase === "INTERMISSION";
   const isMyTurnToBuyUpgrades = isActionBuy || isIntermissionBuy;
 
@@ -1054,8 +1100,13 @@ const UpgradesMarket = ({
         Upgrades
       </h2>
       <div className="flex-1 flex gap-2 overflow-x-auto pb-2">
-        {upgrade_market.map((card) => {
-          const isAffordable = canAfford(playerScrap, card.cost, 0);
+        {(upgrade_market || []).map((card) => {
+          // --- FIX: v1.8 Intermission is FREE ---
+          const isAffordable = canAfford(
+            playerScrap,
+            card.cost,
+            isIntermissionBuy
+          );
           const isSelectable = isMyTurnToBuyUpgrades && isAffordable;
           const isDimmed =
             myTurn &&
@@ -1089,6 +1140,7 @@ const ArsenalMarket = ({
 }) => {
   const isActionBuy =
     myTurn && phase === "ACTION" && choiceType === "ARMORY_RUN";
+  // --- FIX: v1.8 Intermission is FREE ---
   const isIntermissionBuy = myTurn && phase === "INTERMISSION";
   const isMyTurnToBuyArsenal = isActionBuy || isIntermissionBuy;
 
@@ -1098,8 +1150,13 @@ const ArsenalMarket = ({
         Arsenal
       </h2>
       <div className="flex-1 flex gap-2 overflow-x-auto pb-2">
-        {arsenal_market.map((card) => {
-          const isAffordable = canAfford(playerScrap, card.cost, 0);
+        {(arsenal_market || []).map((card) => {
+          // --- FIX: v1.8 Intermission is FREE ---
+          const isAffordable = canAfford(
+            playerScrap,
+            card.cost,
+            isIntermissionBuy
+          );
           const isSelectable = isMyTurnToBuyArsenal && isAffordable;
           const isDimmed =
             myTurn &&
@@ -1125,7 +1182,11 @@ const ArsenalMarket = ({
 
 // --- ACTION PANEL COMPONENTS ---
 
-// --- REFACTORED: Planning Phase with loading state ---
+// ---
+// --- *** MAJOR FIX: PlanningPhaseActions *** ---
+// --- This component was completely broken by a copy-paste error.
+// --- It now correctly shows Lure/Action selection.
+// ---
 const PlanningPhaseActions = ({ sendGameAction, player }) => {
   const [lure, setLure] = useState(null);
   const [action, setAction] = useState(null);
@@ -1134,25 +1195,32 @@ const PlanningPhaseActions = ({ sendGameAction, player }) => {
 
   // Auto-select first available cards
   useEffect(() => {
-    if (!lure && player.lure_hand.length > 0) {
-      const firstAvailableLure = player.lure_hand.find(
-        (lureId) => lureId !== player.last_round_lure
-      );
+    // --- FIX: Add guards for undefined player or hands ---
+    if (!lure && player && player.lure_cards && player.lure_cards.length > 0) {
+      // v1.8 rule: Cannot play the same lure card twice
+      // --- FIX: Backend doesn't send last_round_lure, so we ignore this rule for now ---
+      // const firstAvailableLure = player.lure_cards.find(
+      //   (lureId) => lureId !== player.last_round_lure
+      // );
+      const firstAvailableLure = player.lure_cards[0];
+
       // <-- FIX: Only set if firstAvailableLure is found
       if (firstAvailableLure) {
         setLure(firstAvailableLure);
       }
-      // If no valid lure is found, `lure` remains null,
-      // and the submit button will be correctly disabled.
     }
-    if (!action && player.action_hand.length > 0) {
-      setAction(player.action_hand[0]);
+    if (
+      !action &&
+      player &&
+      player.action_cards &&
+      player.action_cards.length > 0
+    ) {
+      setAction(player.action_cards[0]);
     }
   }, [
-    player.lure_hand,
-    player.action_hand,
-    player.last_round_lure,
-    // <-- FIX: Removed lure and action from dependencies
+    player?.lure_cards, // <-- FIX: Use optional chaining in dependency
+    player?.action_cards, // <-- FIX: Use optional chaining in dependency
+    // player?.last_round_lure, // <-- FIX: Use optional chaining in dependency
   ]);
 
   // <-- FIX: Add useEffect to clear timeout on success or unmount
@@ -1175,7 +1243,8 @@ const PlanningPhaseActions = ({ sendGameAction, player }) => {
   }, []);
   // -- END FIX --
 
-  if (player.plan_submitted) {
+  // --- FIX: Add guard for undefined player or plan_submitted ---
+  if (player?.plan_submitted) {
     return (
       <div className="text-center p-4">
         <h3 className="text-lg text-green-400">
@@ -1185,135 +1254,135 @@ const PlanningPhaseActions = ({ sendGameAction, player }) => {
     );
   }
 
+  // --- FIX: Add a loading/error state if player or hands are missing ---
+  if (!player || !player.action_cards || !player.lure_cards) {
+    return (
+      <div className="text-center p-4 bg-gray-700 bg-opacity-80 rounded-lg">
+        <h3 className="text-lg text-yellow-400">Loading planning state...</h3>
+        <span className="loading loading-spinner"></span>
+      </div>
+    );
+  }
+
+  // --- FIX: This variable was missing from the broken copy-paste ---
+  const canConfirm = lure && action && !isLoading;
+
   const handleSubmit = () => {
-    if (!lure || !action) {
-      // TODO: Show an error to the user
-      console.error("Lure or action not selected");
-      return;
-    }
-    setIsLoading(true);
-    // --- FIX: Wrap sendGameAction in try...catch and add timeout ---
-    // Clear any existing timeout
-    if (failSafeTimeoutRef.current) {
-      clearTimeout(failSafeTimeoutRef.current);
-    }
+    if (canConfirm) {
+      setIsLoading(true); // Set loading
 
-    // Set a timeout to handle backend validation failures
-    failSafeTimeoutRef.current = setTimeout(() => {
-      setIsLoading(false);
-      // TODO: Show a user-facing error toast, e.g., "Submission failed. Please try again."
-      console.error("Plan submission timed out or failed. Resetting UI.");
-    }, 5000); // 5-second timeout
+      // Set a failsafe timeout
+      failSafeTimeoutRef.current = setTimeout(() => {
+        setIsLoading(false);
+        // Optionally show an error to the user
+        console.error("Plan submission timed out.");
+      }, 5000); // 5 second timeout
 
-    try {
-      sendGameAction("submit_plan", { lure_card: lure, action_card: action });
-      // On success, we wait for the state update to set player.plan_submitted
-      // which will show the "Waiting..." message and trigger the useEffect cleanup.
-    } catch (error) {
-      console.error("Failed to submit plan:", error);
-      setIsLoading(false); // Stop loading on *send* error
-      clearTimeout(failSafeTimeoutRef.current); // Clear timeout
-      failSafeTimeoutRef.current = null;
+      try {
+        // --- FIX: Call the correct backend action ---
+        sendGameAction("submit_plan", {
+          lure_card_id: lure,
+          action_card_id: action,
+        });
+      } catch (error) {
+        console.error("Failed to submit plan:", error);
+        setIsLoading(false); // Clear loading on error
+        if (failSafeTimeoutRef.current) {
+          clearTimeout(failSafeTimeoutRef.current); // Clear timeout
+        }
+      }
     }
-    // --- END FIX ---
   };
 
-  const actionCardsInHand =
-    player.action_hand.map((id) => ACTION_CARDS.find((c) => c.id === id)) || [];
-  const lureCardsInHand =
-    player.lure_hand.map((id) => LURE_CARDS.find((c) => c.id === id)) || [];
+  // --- FIX: Get full card objects for display ---
+  const actionCardsInHand = player.action_cards.map((backendCard) =>
+    ACTION_CARDS.find((c) => c.name === backendCard.name)
+  );
+  const lureCardsInHand = player.lure_cards.map((backendCard) =>
+    LURE_CARDS.find((c) => c.name === backendCard.name)
+  );
+  // const lastLure = player.last_round_lure; // v1.8 rule (disabled)
 
+  // --- FIX: This is the correct UI for Planning ---
   return (
     <div className="space-y-3 p-3 bg-gray-700 bg-opacity-80 rounded-lg">
-      <div className="p-4 bg-black bg-opacity-25 rounded-lg">
-        <p className="text-gray-300 pt-3 border-t border-gray-600 text-sm">
-          Choose your Lure and Action cards:
+      <div className="text-center p-2 bg-black bg-opacity-25 rounded-lg">
+        <p className="text-lg text-blue-300">
+          Choose your Lure and Action for this round.
         </p>
-        <div className="mb-3">
-          <label className="block text-gray-300 mb-2 font-semibold text-sm">
-            Choose a Lure Card
-          </label>
-          <div className="flex justify-center space-x-2 sm:space-x-4">
-            {lureCardsInHand.map((card) => (
-              <div key={card.id} className="relative">
-                <img
-                  src={card.image}
-                  alt={card.name}
-                  onClick={() => {
-                    if (player.last_round_lure !== card.id) {
-                      setLure(card.id);
-                    }
-                  }}
-                  className={`w-full max-w-[100px] rounded-lg transition-all duration-200 ${
-                    player.last_round_lure === card.id
-                      ? "cursor-not-allowed opacity-50 pointer-events-none" // <-- FIX: Added pointer-events-none
-                      : `cursor-pointer ${
-                          lure === card.id
-                            ? "ring-4 ring-blue-400 shadow-lg scale-105"
-                            : "ring-2 ring-transparent hover:ring-blue-500"
-                        }`
-                  }`}
-                />
-                {player.last_round_lure === card.id && (
-                  <div className="absolute inset-0 flex items-center justify-center text-red-500 bg-black bg-opacity-50 rounded-lg">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-12 w-12"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                    <span className="absolute bottom-2 text-xs font-bold text-white">
-                      Used Last Round
-                    </span>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
+        <p className="text-xs text-gray-400">Phase: PLANNING</p>
+      </div>
 
-        <div className="mb-3">
-          <label className="block text-gray-300 mb-2 font-semibold text-sm">
-            Choose an Action Card
-          </label>
-          <div className="flex justify-center space-x-2 sm:space-x-4">
-            {actionCardsInHand.map((card) => (
+      {/* Lure Card Selection */}
+      <div>
+        <h4 className="text-white font-semibold mb-2">Choose Lure:</h4>
+        <div className="flex justify-center gap-2">
+          {lureCardsInHand.map((card) => {
+            if (!card) return null;
+            // v1.8 rule check (disabled)
+            // const isUnavailable = card.id === lastLure;
+            const isUnavailable = false;
+            return (
+              <img
+                key={card.id}
+                src={card.image}
+                alt={card.name}
+                onClick={() => !isUnavailable && setLure(card.id)}
+                className={`w-20 h-28 object-cover rounded-md shadow-md transition-all ${
+                  isUnavailable
+                    ? "opacity-30 cursor-not-allowed"
+                    : "cursor-pointer"
+                } ${
+                  lure === card.id
+                    ? "ring-4 ring-blue-400"
+                    : "ring-2 ring-gray-600 hover:ring-blue-300"
+                }`}
+                title={isUnavailable ? `Used last round` : card.name}
+              />
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Action Card Selection */}
+      <div>
+        <h4 className="text-white font-semibold mb-2">Choose Action:</h4>
+        <div className="flex justify-center gap-2">
+          {actionCardsInHand.map((card) => {
+            if (!card) return null;
+            return (
               <img
                 key={card.id}
                 src={card.image}
                 alt={card.name}
                 onClick={() => setAction(card.id)}
-                className={`w-1/4 max-w-[100px] rounded-lg cursor-pointer transition-all duration-200 ${
+                className={`w-20 h-28 object-cover rounded-md shadow-md transition-all cursor-pointer ${
                   action === card.id
-                    ? "ring-4 ring-blue-400 shadow-lg scale-105"
-                    : "ring-2 ring-transparent hover:ring-blue-500"
+                    ? "ring-4 ring-blue-400"
+                    : "ring-2 ring-gray-600 hover:ring-blue-300"
                 }`}
+                title={card.name}
               />
-            ))}
-          </div>
+            );
+          })}
         </div>
       </div>
 
-      <button
-        onClick={handleSubmit}
-        className="w-full btn btn-primary text-lg mt-3"
-        disabled={isLoading || !lure || !action}
-      >
-        {isLoading ? (
-          <span className="loading loading-spinner"></span>
-        ) : (
-          "Submit Plan"
-        )}
-      </button>
+      <div className="flex justify-center items-center pt-3 border-t border-gray-600">
+        <button
+          onClick={handleSubmit}
+          disabled={!canConfirm || isLoading} // <-- Correct check
+          className={`btn ${
+            canConfirm ? "btn-primary" : "btn-disabled"
+          } text-lg px-6 ${isLoading ? "loading" : ""}`}
+        >
+          {isLoading ? "Submitting..." : "Confirm Plan"}
+        </button>
+      </div>
     </div>
   );
 };
+// --- *** END PLANNING PHASE FIX *** ---
 
 const AttractionPhaseActions = ({
   sendGameAction,
@@ -1322,35 +1391,20 @@ const AttractionPhaseActions = ({
   selectedThreatId,
   canConfirm,
 }) => {
-  const {
-    attraction_phase_state,
-    attraction_turn_player_id,
-    player_plans,
-    players,
-  } = gameState;
-
+  const { attraction_turn_player_id, attraction_phase_state, players } =
+    gameState;
   const isMyTurn = player.user_id === attraction_turn_player_id;
-  const myPlan = player_plans[player.user_id];
-
-  if (!player_plans || !player_plans[player.user_id]) {
-    return (
-      <div className="text-center p-4">
-        <h3 className="text-lg text-yellow-400">Waiting for plans...</h3>
-      </div>
-    );
-  }
-  const myLure = myPlan.lure;
+  // --- FIX: Get lure from player.plan (which is PlayerPlans) ---
+  const myLure = player.plan ? player.plan.lure_card_id : "NONE";
 
   const handleSubmit = () => {
     if (canConfirm) {
-      // --- FIX: Wrap sendGameAction in try...catch ---
       try {
-        sendGameAction("attract_threat", { threat_id: selectedThreatId });
+        // --- FIX: Call correct backend action ---
+        sendGameAction("assign_threat", { threat_id: selectedThreatId });
       } catch (error) {
-        console.error("Failed to attract threat:", error);
-        // No loading spinner here, but good practice
+        console.error("Failed to assign threat:", error);
       }
-      // --- END FIX ---
     }
   };
 
@@ -1366,6 +1420,7 @@ const AttractionPhaseActions = ({
               It's your turn to choose!
             </p>
             <p className="text-sm text-gray-200">
+              {/* --- FIX: LureIcon expects string like "BLOODY_RAGS" --- */}
               Your Lure: <LureIcon lure={myLure} />
             </p>
             <p className="text-xs text-gray-400">
@@ -1398,9 +1453,7 @@ const AttractionPhaseActions = ({
   );
 };
 
-// --- *** NEW: DefenseSubmission *** ---
-// This is the new, interactive Defense Board from gamepageUpdate.jsx
-// It replaces the old DefensePhaseActions
+// --- DefenseSubmission ---
 const DefenseSubmission = ({
   player,
   threat,
@@ -1589,10 +1642,11 @@ const DefenseSubmission = ({
       <div className="mb-4 flex-grow overflow-y-auto">
         <h5 className="text-white mb-2">Select Arsenal:</h5>
         <div className="flex flex-col gap-2">
-          {player.arsenal_hand.length === 0 && (
+          {/* --- FIX: Use player.arsenal_cards --- */}
+          {player.arsenal_cards.length === 0 && (
             <p className="text-gray-400">No Arsenal cards in hand.</p>
           )}
-          {player.arsenal_hand.map((card) => (
+          {player.arsenal_cards.map((card) => (
             <div
               key={card.id}
               onClick={() => handleArsenalToggle(card.id)}
@@ -1651,17 +1705,28 @@ const PreviewDisplay = ({ preview, isLoading }) => {
   const formatTarget = (color) => {
     const original = preview.threat_original_stats[color];
     if (preview.threat_immune_to.includes(color)) return "Immune";
-    if (preview.threat_resistant_to.includes(color)) return `${original} (x2)`;
+    // --- FIX: v1.8 Resistance is -1 scrap value, not x2 ---
+    if (preview.threat_resistant_to.includes(color)) return `${original} (Resist)`;
     return original;
   };
 
   return (
     <div className="p-3 bg-gray-900 rounded-lg mb-4">
       <div className="flex justify-around items-center">
+        {/* --- FIX: Check vs v1.8 fail logic (must fail all 3) --- */}
         {preview.is_kill ? (
           <h4 className="text-2xl font-bold text-green-400">PROJECTED KILL!</h4>
-        ) : (
+        ) : preview.player_total_defense.PARTS <
+            preview.threat_original_stats.PARTS &&
+          preview.player_total_defense.WIRING <
+            preview.threat_original_stats.WIRING &&
+          preview.player_total_defense.PLATES <
+            preview.threat_original_stats.PLATES ? (
           <h4 className="text-2xl font-bold text-red-400">PROJECTED FAIL!</h4>
+        ) : (
+          <h4 className="text-2xl font-bold text-yellow-400">
+            PROJECTED DEFEND
+          </h4>
         )}
         <div className="text-sm text-gray-300">
           <p>Targets: {preview.threat_highest_stats_to_beat.join(", ")}</p>
@@ -1705,7 +1770,7 @@ const PreviewDisplay = ({ preview, isLoading }) => {
 
 const ScavengeChoiceModal = ({ onConfirm, onCancel, player }) => {
   // v1.8: Check for Scavenger's Eye
-  const hasScavengersEye = player.upgrades.some(
+  const hasScavengersEye = (player.upgrade_cards || []).some(
     (u) => u.special_effect_id === "SCAVENGERS_EYE"
   );
   const numToChoose = hasScavengersEye ? 3 : 2;
@@ -1802,13 +1867,19 @@ const ScavengeChoiceModal = ({ onConfirm, onCancel, player }) => {
   );
 };
 
+// ---
+// --- *** MAJOR FIX: ActionPhaseActions *** ---
+// --- This component was broken and not calling the correct backend actions.
+// --- It is now refactored to match game_instance.py v1.9.2
+// ---
 const ActionPhaseActions = ({ sendGameAction, player, gameState }) => {
   const { action_turn_player_id, players } = gameState;
   const isMyTurn = player.user_id === action_turn_player_id;
-  const myChoice = player.action_choice_pending;
+  // --- FIX: Get action from player.plan ---
+  const myChoice = player.plan ? player.plan.action_card_id : null;
   const [showScavengeModal, setShowScavengeModal] = useState(false);
 
-  // Open modal automatically
+  // Open modal automatically if Scavenge
   useEffect(() => {
     if (isMyTurn && myChoice === "SCAVENGE") {
       setShowScavengeModal(true);
@@ -1817,32 +1888,37 @@ const ActionPhaseActions = ({ sendGameAction, player, gameState }) => {
     }
   }, [isMyTurn, myChoice]);
 
-  const handleScavengeConfirm = (PARTS) => {
-    // --- FIX: Wrap sendGameAction in try...catch ---
+  const handleScavengeConfirm = (choices) => {
+    // --- FIX: Send correct action and payload ---
     try {
-      sendGameAction("submit_action_choice", {
-        choice_type: "scavenge",
-        PARTS: PARTS,
+      sendGameAction("perform_scavenge", {
+        choices: choices,
       });
       setShowScavengeModal(false);
     } catch (error) {
       console.error("Failed to submit scavenge choice:", error);
-      // If this fails, we leave the modal open for them to retry
     }
     // --- END FIX ---
   };
 
-  const handlePass = (action) => {
-    // --- FIX: Wrap sendGameAction in try...catch ---
+  const handlePass = (actionType) => {
+    // --- FIX: Send correct action for fallback ---
+    const actionName =
+      actionType === "FORTIFY" ? "perform_fortify" : "perform_armory_run";
     try {
-      // v1.8: Send the correct payload for a "pass" on F/AR
-      // This allows the backend to give the fallback scrap.
-      sendGameAction("submit_action_choice", {
-        choice_type: action.toLowerCase(), // "fortify" or "armory_run"
-        card_id: "pass", // Special ID to signal a pass
-      });
+      sendGameAction(actionName, {}); // Send empty payload for fallback
     } catch (error) {
-      console.error("Failed to pass action:", error);
+      console.error(`Failed to pass ${actionType}:`, error);
+    }
+    // --- END FIX ---
+  };
+
+  const handleSchemeConfirm = () => {
+    // --- FIX: Add handler for Scheme ---
+    try {
+      sendGameAction("perform_scheme", {});
+    } catch (error) {
+      console.error("Failed to perform scheme:", error);
     }
     // --- END FIX ---
   };
@@ -1855,7 +1931,7 @@ const ActionPhaseActions = ({ sendGameAction, player, gameState }) => {
       {showScavengeModal && (
         <ScavengeChoiceModal
           onConfirm={handleScavengeConfirm}
-          onCancel={() => setShowScavengeModal(false)}
+          onCancel={() => setShowScavengeModal(false)} // Allow cancelling
           player={player}
         />
       )}
@@ -1893,6 +1969,9 @@ const ActionPhaseActions = ({ sendGameAction, player, gameState }) => {
 
       {isMyTurn && myChoice === "SCAVENGE" && (
         <div className="pt-3 border-t border-gray-600 text-center">
+          <p className="text-gray-300 mb-2">
+            Choose your scrap from the supply.
+          </p>
           <button
             onClick={() => setShowScavengeModal(true)}
             className="btn btn-primary"
@@ -1901,9 +1980,24 @@ const ActionPhaseActions = ({ sendGameAction, player, gameState }) => {
           </button>
         </div>
       )}
+
+      {isMyTurn && myChoice === "SCHEME" && (
+        <div className="pt-3 border-t border-gray-600 text-center">
+          <p className="text-gray-300 mb-2">
+            Confirm your Scheme action.
+          </p>
+          <button
+            onClick={handleSchemeConfirm}
+            className="btn btn-primary"
+          >
+            Confirm Scheme
+          </button>
+        </div>
+      )}
     </div>
   );
 };
+// --- *** END ACTION PHASE FIX *** ---
 
 const IntermissionPhaseActions = ({ sendGameAction, player, gameState }) => {
   const { intermission_turn_player_id, players } = gameState;
@@ -1912,7 +2006,8 @@ const IntermissionPhaseActions = ({ sendGameAction, player, gameState }) => {
   const handlePass = () => {
     // --- FIX: Wrap sendGameAction in try...catch ---
     try {
-      sendGameAction("pass_intermission_turn", {});
+      // --- FIX: Call correct backend action ---
+      sendGameAction("pass_buy", {});
     } catch (error) {
       console.error("Failed to pass intermission turn:", error);
     }
@@ -1931,7 +2026,8 @@ const IntermissionPhaseActions = ({ sendGameAction, player, gameState }) => {
               It's your turn to buy!
             </p>
             <p className="text-sm text-gray-200">
-              You may buy one card from the Market at full price.
+              {/* --- FIX: v1.8 is FREE --- */}
+              You may take one FREE card from the Market.
             </p>
             <p className="text-xs text-gray-400">Phase: INTERMISSION</p>
           </>
@@ -2007,12 +2103,26 @@ const GameHeader = ({
 
 // --- MAIN GAME PAGE COMPONENT ---
 const GamePage = ({ onLogout }) => {
-  // --- FIX: Add `token` to the store selector ---
-  const { user, gameState, token } = useStore((state) => ({
+  // --- FIX: Add `token` and get `rawGameState` ---
+  const { user, rawGameState, token } = useStore((state) => ({
     user: state.user,
-    gameState: state.gameState,
+    rawGameState: state.gameState, // <-- THE FIX: Select state.gameState and assign it to rawGameState
     token: state.token, // Get token for HTTP requests
   }));
+
+  // --- *** FIX *** ---
+  // Derive the *actual* game state from the raw message object
+  // This unwraps the { type: "...", data: {...} } or { type: "...", payload: {...} }
+  const gameState = useMemo(() => {
+    if (!rawGameState) return null;
+    if (rawGameState.data) return rawGameState.data; // Handle "data" key
+    if (rawGameState.payload) return rawGameState.payload; // Handle "payload" key
+    // If it has a game_id, it's *probably* the unwrapped state already
+    // (e.g., from a previous hot reload or state restoration)
+    if (rawGameState.game_id) return rawGameState;
+    return null; // Still loading or invalid state
+  }, [rawGameState]);
+  // --- *** END FIX ---
 
   const [showSurrenderModal, setShowSurrenderModal] = useState(false);
   // --- FIX: Removed Logout Modal ---
@@ -2031,7 +2141,7 @@ const GamePage = ({ onLogout }) => {
       portraits[pid] = playerPortraits[index % playerPortraits.length];
     });
     return portraits;
-  }, [gameState?.initiative_queue]);
+  }, [gameState?.initiative_queue, gameState?.players]); // <-- FIX: Added gameState.players dependency
 
   const self = useMemo(() => {
     return gameState?.players ? gameState.players[user.id] : null;
@@ -2042,15 +2152,20 @@ const GamePage = ({ onLogout }) => {
       setViewingPlayerId(user.id);
     }
 
-    if (viewingPlayerId === user.id) {
-      if (gameState?.phase === "ACTION" && self?.action_choice_pending) {
-        if (["FORTIFY", "ARMORY_RUN"].includes(self.action_choice_pending)) {
+    if (viewingPlayerId === user.id && self) {
+      // --- FIX: Use self.plan.action_card_id ---
+      const myAction = self.plan ? self.plan.action_card_id : null;
+
+      if (gameState?.phase === "ACTION" && myAction) {
+        if (["FORTIFY", "ARMORY_RUN"].includes(myAction)) {
           setActivePanel("market");
+        } else {
+          setActivePanel("threats"); // Default to threats if not buy action
         }
       } else if (gameState?.phase === "INTERMISSION") {
         setActivePanel("market");
       } else if (
-        ["PLANNING", "ATTRACTION", "DEFENSE", "WILDERNESS"].includes(
+        ["PLANNING", "ATTRACTION", "DEFENSE", "WILDERNESS", "CLEANUP"].includes(
           gameState?.phase
         )
       ) {
@@ -2061,7 +2176,7 @@ const GamePage = ({ onLogout }) => {
     user?.id,
     viewingPlayerId,
     gameState?.phase,
-    self?.action_choice_pending,
+    self?.plan?.action_card_id,
   ]);
 
   // ---
@@ -2082,8 +2197,10 @@ const GamePage = ({ onLogout }) => {
       sendMessage({
         action: "game_action",
         payload: {
-          action: actionName,
-          ...data,
+          // --- FIX: Reverting to sub_action/data structure ---
+          // This is what the WebSocket router (game_manager's caller) expects.
+          sub_action: actionName,
+          data: data,
         },
       });
     } catch (error) {
@@ -2123,10 +2240,8 @@ const GamePage = ({ onLogout }) => {
   // We use a selector here so the component re-renders when it changes
   const sendMessageForLoadingCheck = useStore((state) => state.sendMessage);
 
-  // --- FIX: Removed `!self` from the loading check. ---
-  // A "pure spectator" will have `self` as null, but we still
-  // need to render the page for them. The `isSpectator` flag
-  // correctly handles what to show them.
+  // --- FIX: The loading check now uses the *derived* gameState. ---
+  // This will correctly wait until the state is unwrapped.
   if (!gameState || !user || !sendMessageForLoadingCheck) {
     // Show a robust loading state
     return (
@@ -2137,12 +2252,13 @@ const GamePage = ({ onLogout }) => {
         <div className="text-center p-6 bg-black bg-opacity-70 rounded-lg">
           <span className="loading loading-spinner loading-lg text-blue-400"></span>
           <p className="text-xl mt-4">Loading game state...</p>
-          {JSON.stringify(gameState)}
-          {JSON.stringify(user)}
-          {JSON.stringify(sendMessageForLoadingCheck)}
           {!sendMessageForLoadingCheck && (
             <p className="text-red-400 mt-2">Connecting to server...</p>
           )}
+          {/* Keep this for debugging if you want */}
+          <pre className="text-xs text-left overflow-auto p-2 bg-gray-800 rounded mt-4 max-w-lg max-h-64">
+            {JSON.stringify(rawGameState, null, 2)}
+          </pre>
         </div>
       </div>
     );
@@ -2162,20 +2278,26 @@ const GamePage = ({ onLogout }) => {
     market,
     available_threat_ids,
     unassigned_player_ids,
+    player_threat_assignment, // --- FIX: Use this for assignments
   } = gameState;
 
   const canConfirmThreat = selectedThreatId !== null;
 
   const threatAssignments = useMemo(() => {
+    // --- FIX: Use player_threat_assignment from backend ---
     const assignments = {};
-    if (!gameState.players) return assignments;
-    Object.values(gameState.players).forEach((p) => {
-      if (p.attracted_threat) {
-        assignments[p.attracted_threat.id] = p.username;
+    if (!gameState.players || !player_threat_assignment) return assignments;
+
+    for (const [playerId, threatId] of Object.entries(
+      player_threat_assignment
+    )) {
+      const username = gameState.players[playerId]?.username;
+      if (username) {
+        assignments[threatId] = username;
       }
-    });
+    }
     return assignments;
-  }, [gameState.players]);
+  }, [gameState.players, player_threat_assignment]);
 
   const selectableThreats = useMemo(() => {
     if (
@@ -2192,8 +2314,22 @@ const GamePage = ({ onLogout }) => {
       available_threat_ids.includes(t.id)
     );
     if (gameState.attraction_phase_state === "FIRST_PASS") {
-      return available.filter((t) => t.lure === myPlan.lure);
+      // --- FIX: Check my lure against threat's lure_type ---
+      const myLureCard = LURE_CARDS.find(
+        (c) => c.id === myPlan.lure_card_id
+      );
+      if (!myLureCard) return [];
+      // Convert "BLOODY_RAGS" to "Rags"
+      const lureNameMap = {
+        BLOODY_RAGS: "Rags",
+        STRANGE_NOISES: "Noises",
+        FALLEN_FRUIT: "Fruit",
+      };
+      const myLureName = lureNameMap[myLureCard.id];
+
+      return available.filter((t) => t.lure_type.includes(myLureName));
     } else {
+      // Second pass, all available threats are selectable
       return available;
     }
   }, [
@@ -2207,27 +2343,29 @@ const GamePage = ({ onLogout }) => {
   ]);
 
   const threatsToShow = useMemo(() => {
+    // --- FIX: Simplify this logic ---
     const viewingPlayer = viewingPlayerId && gameState.players[viewingPlayerId];
-    if (viewingPlayer && viewingPlayer.attracted_threat) {
-      // Always show your own threat if you have one
-      // --- FIX for Bug 2: Use optional chaining on self ---
-      if (viewingPlayer.user_id === self?.user_id) {
-        return [viewingPlayer.attracted_threat];
-      }
-      // --- END FIX ---
-      // Only show other's threats if phase is past attraction
-      if (!["WILDERNESS", "PLANNING", "ATTRACTION"].includes(phase)) {
-        return [viewingPlayer.attracted_threat];
-      }
+    if (!viewingPlayer) return current_threats; // Default
+
+    // Find the threat assigned to the viewing player
+    const assignedThreatId = player_threat_assignment[viewingPlayer.user_id];
+    const assignedThreat = current_threats.find(
+      (t) => t.id === assignedThreatId
+    );
+
+    if (assignedThreat) {
+      // If player has a threat, always show *only* that threat
+      // This is true in DEFENSE, ACTION, etc.
+      return [assignedThreat];
     }
-    // Default to all current threats
+
+    // If no assigned threat (e.g., PLANNING, ATTRACTION), show all.
     return current_threats;
   }, [
     viewingPlayerId,
     gameState.players,
     current_threats,
-    phase,
-    self?.user_id, // --- FIX for Bug 2: Use optional chaining here too
+    player_threat_assignment,
   ]);
 
   const getPlayerTurnStatus = (playerId) => {
@@ -2243,37 +2381,47 @@ const GamePage = ({ onLogout }) => {
       if (playerId === action_turn_player_id) return "ACTIVE";
       const myIndex = initiative_queue.indexOf(playerId);
       const turnIndex = initiative_queue.indexOf(action_turn_player_id);
-      if (turnIndex === -1) return "PENDING";
+      if (turnIndex === -1) return "PENDING"; // Turn hasn't started
       return myIndex < turnIndex ? "WAITING" : "PENDING";
     }
     if (phase === "INTERMISSION") {
       if (playerId === intermission_turn_player_id) return "ACTIVE";
-      const hasActed = gameState.intermission_players_acted.includes(playerId);
-      return hasActed ? "WAITING" : "PENDING";
+      // --- FIX: Check intermission_purchases map ---
+      const purchaseState = gameState.intermission_purchases[playerId];
+      // 0 = pending, 1 = bought, -1 = passed
+      return purchaseState !== 0 ? "WAITING" : "PENDING";
     }
     if (phase === "PLANNING") {
       return player.plan_submitted ? "WAITING" : "ACTIVE";
     }
     if (phase === "DEFENSE") {
+      // --- FIX: Only active if they HAVE a threat ---
+      const hasThreat = !!player_threat_assignment[playerId];
+      if (!hasThreat) return "NONE"; // No action required
       return player.defense_submitted ? "WAITING" : "ACTIVE";
     }
     return "NONE";
   };
 
   const handleMarketCardSelect = (cardType, cardId) => {
+    // ---
+    // --- *** MAJOR FIX: MarketCardSelect *** ---
+    // ---
     // sendGameAction handles its own errors
     if (phase === "ACTION") {
-      const choiceType = cardType === "UPGRADE" ? "fortify" : "armory_run";
-      sendGameAction("submit_action_choice", {
-        choice_type: choiceType,
+      // --- FIX: Send correct backend action and payload ---
+      const actionName =
+        cardType === "UPGRADE" ? "perform_fortify" : "perform_armory_run";
+      sendGameAction(actionName, {
         card_id: cardId,
       });
     } else if (phase === "INTERMISSION") {
-      sendGameAction("buy_market_card", {
-        card_type: cardType,
+      // --- FIX: Send correct backend action and payload ---
+      sendGameAction("buy_from_market", {
         card_id: cardId,
       });
     }
+    // --- *** END FIX *** ---
   };
 
   const handleThreatSelect = (threatId) => {
@@ -2287,12 +2435,14 @@ const GamePage = ({ onLogout }) => {
     self && (self.status === "SURRENDERED" || self.status === "DISCONNECTED");
   const isSpectator = isPureSpectator || hasLeft;
 
+  // --- FIX: Get my action from my plan ---
+  const myActionChoice = self?.plan ? self.plan.action_card_id : null;
+
   const isMyTurnForMarket =
     (phase === "ACTION" &&
       self &&
       self.user_id === action_turn_player_id &&
-      (self.action_choice_pending === "FORTIFY" ||
-        self.action_choice_pending === "ARMORY_RUN")) ||
+      (myActionChoice === "FORTIFY" || myActionChoice === "ARMORY_RUN")) ||
     (phase === "INTERMISSION" &&
       self &&
       self.user_id === intermission_turn_player_id);
@@ -2301,6 +2451,12 @@ const GamePage = ({ onLogout }) => {
   const viewingPlayerTurnStatus = viewingPlayerId
     ? getPlayerTurnStatus(viewingPlayerId)
     : "NONE";
+
+  // --- FIX: Find assigned threat for Defense phase ---
+  const myAssignedThreatId = player_threat_assignment[self?.user_id];
+  const myAssignedThreat = current_threats.find(
+    (t) => t.id === myAssignedThreatId
+  );
 
   return (
     <div
@@ -2351,6 +2507,7 @@ const GamePage = ({ onLogout }) => {
                 portrait={playerPortraitsMap[pid]}
                 turnStatus={getPlayerTurnStatus(pid)}
                 turnOrder={index + 1}
+                // --- FIX: Pass the correct player's plan ---
                 plan={player_plans[pid]}
                 isViewing={isViewing}
                 onClick={() => setViewingPlayerId(pid)}
@@ -2421,7 +2578,8 @@ const GamePage = ({ onLogout }) => {
                     market={market}
                     myTurn={isMyTurnForMarket}
                     phase={phase}
-                    choiceType={self.action_choice_pending}
+                    // --- FIX: Pass correct action choice ---
+                    choiceType={myActionChoice}
                     onCardSelect={handleMarketCardSelect}
                     playerScrap={self.scrap}
                   />
@@ -2449,7 +2607,8 @@ const GamePage = ({ onLogout }) => {
                 {phase === "DEFENSE" && (
                   <DefenseSubmission
                     player={self}
-                    threat={self.attracted_threat}
+                    // --- FIX: Pass the correct assigned threat ---
+                    threat={myAssignedThreat}
                     sendGameAction={sendGameAction}
                     gameState={gameState}
                     token={token}

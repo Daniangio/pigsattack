@@ -1,6 +1,5 @@
 """
-Defines the Enums and constants for card effect tags.
-This provides a single, structured source of truth for game logic.
+Defines the Enums and constants for card effect tags..
 """
 
 from enum import Enum
@@ -10,10 +9,18 @@ class OnFailEffect(str, Enum):
     DISCARD_SCRAP_1 = "DISCARD_SCRAP_1"
     FALL_TO_BACK = "FALL_TO_BACK"
     PREVENT_ACTION = "PREVENT_ACTION"
+    GAIN_INJURY_1 = "GAIN_INJURY_1"
 
 class UpgradeEffect(str, Enum):
     """Tags for Upgrade 'special_effect_id' field."""
-    # On Reveal Effects
+    
+    SCRAP_IGNORE_RESIST_PARTS = "SCRAP_IGNORE_RESIST:PARTS"
+    SCRAP_IGNORE_RESIST_WIRING = "SCRAP_IGNORE_RESIST:WIRING"
+    SCRAP_IGNORE_RESIST_PLATES = "SCRAP_IGNORE_RESIST:PLATES"
+    SCRAP_BONUS_PARTS_1 = "SCRAP_BONUS:PARTS:1"
+    SCRAP_BONUS_WIRING_1 = "SCRAP_BONUS:WIRING:1"
+    SCRAP_BONUS_PLATES_1 = "SCRAP_BONUS:PLATES:1"
+    
     ON_REVEAL_GAIN_SCRAP_PARTS_1 = "ON_REVEAL:GAIN_SCRAP:PARTS:1"
     ON_REVEAL_GAIN_SCRAP_WIRING_1 = "ON_REVEAL:GAIN_SCRAP:WIRING:1"
     ON_REVEAL_GAIN_SCRAP_PLATES_1 = "ON_REVEAL:GAIN_SCRAP:PLATES:1"

@@ -1,35 +1,63 @@
-import { useRef, useCallback, useEffect } from "react"; // --- FIX: Import useEffect
-import { useStore } from "../store";
+import { useRef, useCallback, useEffect } from "react";
+import { useStore } from "../store.js";
 
-const useGameSocket = () => {
+// The hook now accepts the `Maps` function from react-router-dom
+const useGameSocket = (navigate) => {
   const socketRef = useRef(null);
+  
+  // Create a ref for navigate to avoid stale closures in callbacks
+  const navigateRef = useRef(navigate);
+  useEffect(() => {
+    navigateRef.current = navigate;
+  }, [navigate]);
 
-  // --- FIX: Use individual selectors to get store actions ---
-  // This is the idiomatic way and ensures functions are stable
-  // and properly subscribed to by the hook.
-  const setConnectionStatus = useStore((state) => state.setConnectionStatus);
-  const handleStateUpdate = useStore((state) => state.handleStateUpdate);
-  const handleAuthSuccess = useStore((state) => state.handleAuthSuccess);
-  const handleGuestAuth = useStore((state) => state.handleGuestAuth);
-  const handleError = useStore((state) => state.handleError);
-  const clearAuth = useStore((state) => state.clearAuth);
-  const handleGameStateUpdate = useStore(
-    (state) => state.handleGameStateUpdate
+  // Get all handlers from the store
+  const {
+    setConnectionStatus,
+    handleAuthSuccess,
+    handleGuestAuth,
+    handleError,
+    clearAuth,
+    handleLobbyState,
+    handleRoomState,
+    handleGameStateUpdate,
+    handleGameResult,
+    handleForceToLobby,
+    setSendMessage,
+  } = useStore(
+    (state) => ({
+      setConnectionStatus: state.setConnectionStatus,
+      handleAuthSuccess: state.handleAuthSuccess,
+      handleGuestAuth: state.handleGuestAuth,
+      handleError: state.handleError,
+      clearAuth: state.clearAuth,
+      // New specific handlers
+      handleLobbyState: state.handleLobbyState,
+      handleRoomState: state.handleRoomState,
+      handleGameStateUpdate: state.handleGameStateUpdate,
+      handleGameResult: state.handleGameResult,
+      handleForceToLobby: state.handleForceToLobby,
+      setSendMessage: state.setSendMessage,
+    })
   );
-  const setSendMessage = useStore((state) => state.setSendMessage);
-  // --- END FIX ---
 
   const connect = useCallback(
     (token) => {
-      if (socketRef.current) return;
+      if (socketRef.current) {
+        console.warn("Socket already connecting/connected.");
+        return;
+      }
 
-      const ws = new WebSocket("ws://localhost:8000/ws");
+      const WS_URL = "ws://localhost:8000/ws";
+      console.log(`Connecting to WebSocket at ${WS_URL}`);
+      const ws = new WebSocket(WS_URL);
       socketRef.current = ws;
 
       ws.onopen = () => {
         console.log("WebSocket connected");
         setConnectionStatus(true);
-        ws.send(JSON.stringify({ token }));
+        const authMessage = token ? { token } : { action: "guest_auth" };
+        ws.send(JSON.stringify(authMessage));
       };
 
       ws.onmessage = (event) => {
@@ -38,12 +66,25 @@ const useGameSocket = () => {
 
         const { type, payload } = message;
 
+        // Message handler mapping with new specific types
         const actions = {
           guest_auth_success: handleGuestAuth,
           auth_success: handleAuthSuccess,
           error: handleError,
-          state_update: handleStateUpdate,
+          
+          lobby_state: handleLobbyState,
+          room_state: handleRoomState,
           game_state_update: handleGameStateUpdate,
+          game_result: handleGameResult,
+          force_to_lobby: handleForceToLobby,
+          
+          // This is the one special case where the server
+          // responds to a user's action and we need to navigate.
+          room_created: (payload) => {
+            handleRoomState(payload);
+            console.log("Room created, navigating to room...");
+            navigateRef.current(`/room/${payload.id}`);
+          },
         };
 
         if (actions[type]) {
@@ -57,69 +98,60 @@ const useGameSocket = () => {
         console.log("WebSocket disconnected");
         socketRef.current = null;
         setConnectionStatus(false);
-
-        // --- CRITICAL FIX ---
-        // We DO NOT clearAuth() here. A simple disconnect (like a wifi
-        // flicker) should not log the user out. It should just set
-        // isConnected to false and allow the app to attempt reconnection.
-        // clearAuth() should ONLY be called from a user's explicit logout
-        // or an auth_failed message from the server.
-        //
-        // if (useStore.getState().token) {
-        //   clearAuth();
-        // }
-        // --- END FIX ---
+        // On a sudden disconnect, clear auth, which will
+        // trigger the StateGuard to show the Auth page.
+        clearAuth();
       };
 
       ws.onerror = (err) => {
         console.error("WebSocket error:", err);
-        handleError({ message: "WebSocket connection error." });
+        handleError({ message: "WebSocket connection error. Check console." });
+        socketRef.current = null;
+        setConnectionStatus(false);
       };
     },
     [
-      // The dependency array is now correct
       setConnectionStatus,
-      handleStateUpdate,
       handleAuthSuccess,
       handleGuestAuth,
       handleError,
       clearAuth,
+      handleLobbyState,
+      handleRoomState,
       handleGameStateUpdate,
+      handleGameResult,
+      handleForceToLobby,
+      // navigateRef is stable, no need to include
     ]
-  );
+  ); // `connect` doesn't need setSendMessage
 
   const disconnect = useCallback(() => {
     if (socketRef.current) {
-      socketRef.current.close();
+      console.log("Manually disconnecting WebSocket...");
+      socketRef.current.close(1000, "User logged out"); // 1000 is a normal closure
+      socketRef.current = null;
     }
   }, []);
 
   const sendMessage = useCallback((message) => {
-    // --- CRITICAL FIX ---
-    // Throw an error if the socket is not open. This prevents
-    // silent failures and allows UI components to handle the error
-    // (e.g., stop a loading spinner).
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
       socketRef.current.send(JSON.stringify(message));
     } else {
       console.warn("WebSocket not connected. Message not sent:", message);
-      throw new Error("WebSocket not connected.");
+      handleError({ message: "Not connected to server." });
     }
-    // --- END FIX ---
-  }, []);
+  }, [handleError]);
 
-  // --- FIX: This effect runs when the hook is used (in App.jsx) ---
-  // It puts the `sendMessage` function into the global store
-  // so all other components (like GamePage) can access it.
+  // Effect to set the sendMessage function in the store
   useEffect(() => {
     setSendMessage(sendMessage);
   }, [sendMessage, setSendMessage]);
-  // --- END FIX ---
 
   return {
     connect,
     disconnect,
-    sendMessage, // Still return it, in case App.jsx needs it directly
+    sendMessage,
+    isConnected: useStore((state) => state.isConnected),
   };
 };
 
