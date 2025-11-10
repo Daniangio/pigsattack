@@ -85,8 +85,9 @@ export const useStore = create((set, get) => ({
   },
 
   handleRoomState: (payload) => {
-    // We are in a room. Clear lobby state.
-    set({ roomState: payload, lobbyState: { users: [], rooms: [] } });
+    // When we receive a room state, we set it. We no longer clear the lobby state,
+    // allowing the user to navigate back to the lobby and see its contents.
+    set({ roomState: payload });
   },
   
   handleForceToLobby: () => {

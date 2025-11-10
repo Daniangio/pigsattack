@@ -38,12 +38,25 @@ class RoomManager:
 
     async def add_user_to_lobby(self, user: User, manager: ConnectionManager):
         """Adds a user to the lobby and notifies everyone."""
-        # Ensure user is not in a room context
-        self.remove_user_from_any_room(user.id)
-        
+        # Do not add to lobby if they are in an active game
+        game_id = self.find_game_by_user(user.id)
+        if game_id:
+            print(f"User {user.username} is in active game {game_id}, not adding to lobby.")
+            return
+         
+        # User is not in an active game, safe to add to lobby.
+        # They might be in a PRE-GAME room, which is fine.        
         self.lobby_users[user.id] = user
         print(f"User {user.username} ({user.id}) entered lobby.")
         await self.broadcast_lobby_state(manager)
+    
+    def _remove_player_from_room(self, user_id: str):
+        """Internal helper to remove a player from a room's player list."""
+        room_id, room = self.find_room_by_user(user_id)
+        if room:
+            room.players = [p for p in room.players if p.id != user_id]
+            return room_id, room
+        return None, None
 
     def remove_user_from_any_room(self, user_id: str):
         """Helper to find and remove a user from any room."""
@@ -61,9 +74,17 @@ class RoomManager:
                 room.host_id = room.players[0].id
                 print(f"Host transferred to {room.players[0].username} in room {room_id}.")
 
-
     async def create_room(self, host: User, room_name: str, manager: ConnectionManager):
         """Creates a new room, moves the host into it."""
+        # --- Check if user is already in another room ---
+        existing_room_id, existing_room = self.find_room_by_user(host.id)
+        if existing_room:
+            await manager.send_to_user(host.id, {
+                "type": "error",
+                "payload": {"message": f"You are already in room: {existing_room.name}"}
+            })
+            return
+
         if host.id not in self.lobby_users:
             print(f"Error: User {host.username} not in lobby, cannot create room.")
             return
@@ -73,7 +94,6 @@ class RoomManager:
         new_room.players.append(host)
         
         self.rooms[room_id] = new_room
-        del self.lobby_users[host.id]
 
         print(f"Room {room_id} created by {host.username}.")
         
@@ -90,6 +110,15 @@ class RoomManager:
 
     async def join_room(self, user: User, room_id: str, manager: ConnectionManager):
         """Allows a user from the lobby to join an existing room."""
+        # --- Check if user is already in another room ---
+        existing_room_id, existing_room = self.find_room_by_user(user.id)
+        if existing_room:
+            await manager.send_to_user(user.id, {
+                "type": "error",
+                "payload": {"message": f"You are already in room: {existing_room.name}"}
+            })
+            return
+
         if user.id not in self.lobby_users or room_id not in self.rooms:
             return
 
@@ -99,7 +128,6 @@ class RoomManager:
             return
 
         room.players.append(user)
-        del self.lobby_users[user.id]
 
         print(f"User {user.username} joined room {room_id}.")
         
@@ -112,29 +140,40 @@ class RoomManager:
         # Update the lobby for everyone.
         await self.broadcast_lobby_state(manager)
 
-    async def spectate_game(self, user: User, game_record_id: str, manager: ConnectionManager):
-        if user.id not in self.lobby_users:
-            return
-
-        room = next((r for r in self.rooms.values() if r.game_record_id == game_record_id), None)
-
-        if not room or room.status != 'in_game':
-            return
-
+    async def _handle_spectator_join(self, user: User, room: Room, manager: ConnectionManager):
+        """Internal helper to add a spectator to a room."""
         room.spectators.append(user)
-        del self.lobby_users[user.id]
         
-        print(f"User {user.username} is now spectating game {game_record_id} in room {room.id}.")
+        # This is the transition:
+        if user.id in self.lobby_users:
+            del self.lobby_users[user.id]
+            
+        print(f"User {user.username} is now spectating game in room {room.id}.")
         
-        # --- REFACTOR ---
-        # Send the *game state* to the spectator.
-        # The client's <StateGuard> will see this and force-navigate
-        # them to the /game/:gameId page.
         if self.game_manager:
-            await self.game_manager.broadcast_game_state(game_record_id, specific_user_id=user.id)
-        # --- END REFACTOR ---
-        
+            await self.game_manager.broadcast_game_state(room.game_record_id, specific_user_id=user.id)
+
         await self.broadcast_lobby_state(manager)
+
+    async def spectate_game(self, user: User, game_record_id: str, manager: ConnectionManager):
+        # --- Check if user is busy ---
+        existing_room_id, existing_room = self.find_room_by_user(user.id, include_spectators=True)
+        if existing_room:
+             await manager.send_to_user(user.id, {
+                "type": "error",
+                "payload": {"message": "You cannot spectate while in a room."}
+            })
+             return
+
+        # Find the room associated with the game_record_id
+        room = next((r for r in self.rooms.values() if r.game_record_id == game_record_id), None)
+        if room and room.status == 'in_game':
+            await self._handle_spectator_join(user, room, manager)
+        else:
+             await manager.send_to_user(user.id, {
+                "type": "error",
+                "payload": {"message": "Game not found or not in progress."}
+            })
 
     async def leave_room_pre_game(self, user: User, manager: ConnectionManager):
         """Handles a user leaving a room before the game starts."""
@@ -145,9 +184,6 @@ class RoomManager:
         # Remove user and check for host migration
         self.remove_user_from_any_room(user.id)
         print(f"User {user.username} left pre-game room {room_id}.")
-
-        # --- REFACTOR ---
-        # Client already navigated to /lobby.
         # We just need to update state for everyone.
         
         # If room still exists, update its members
@@ -158,8 +194,9 @@ class RoomManager:
         await manager.send_to_user(user.id, {"type": "force_to_lobby"})
         
         # Add user to lobby model and broadcast lobby
+        # This is safe because they are leaving a PRE-GAME room,
+        # so they should be in the lobby.
         await self.add_user_to_lobby(user, manager)
-        # --- END REFACTOR ---
 
     async def start_game(self, user: User, manager: ConnectionManager):
         """Delegates game creation to the GameManager."""
@@ -168,6 +205,11 @@ class RoomManager:
             return
         if not self.game_manager:
             return
+
+        # --- Remove players from lobby when game starts ---
+        for player in room.players:
+            if player.id in self.lobby_users:
+                del self.lobby_users[player.id]
 
         print(f"Host {user.username} is starting the game in room {room_id}.")
         
@@ -189,12 +231,10 @@ class RoomManager:
 
         room.status = "in_game"
         
-        # --- REFACTOR ---
         # GameManager will send 'game_state_update'.
         # Clients' <StateGuard> will handle navigation.
         await self.game_manager.create_game(game_record_id, participants)
         await self.broadcast_lobby_state(manager)
-        # --- END REFACTOR ---
 
     async def end_game(self, room: Room, record: GameRecord, manager: ConnectionManager, winner: Optional[User]):
         """Called by GameManager when GameInstance enters GAME_OVER."""
@@ -210,15 +250,12 @@ class RoomManager:
         if room.id in self.rooms:
             del self.rooms[room.id]
         
-        # --- REFACTOR ---
         # Send a specific 'game_result' message.
         # The client's <StateGuard> will handle navigation.
         await manager.broadcast_to_users(
             all_involved_ids, 
             {"type": "game_result", "payload": record.model_dump(mode="json")}
         )
-        # --- END REFACTOR ---
-        
         await self.broadcast_lobby_state(manager)
 
     async def send_user_current_state(self, user: User, manager: ConnectionManager) -> bool:
@@ -235,20 +272,24 @@ class RoomManager:
 
         # 2. Check for pre-game room
         room_id, room = self.find_room_by_user(user.id, include_spectators=True)
-        if room:
+        if room and room.status == 'lobby':
             print(f"Reconnecting user {user.username} to pre-game room {room.id}.")
+            await manager.send_to_user(user.id, {"type": "room_state", "payload": self.get_room_dump(room)})
+            return True
+        elif room and room.status == 'in_game': # Reconnected as spectator
+            print(f"Reconnecting user {user.username} as spectator to game {room.game_record_id}.")
+            await self._handle_spectator_join(user, room, manager)
             await manager.send_to_user(user.id, {"type": "room_state", "payload": self.get_room_dump(room)})
             return True
 
         # 3. User is not in a game or room.
         return False
 
-
     async def handle_disconnect(self, user_id: str, manager: ConnectionManager):
         """Handles a user disconnecting from anywhere."""
         print(f"Handling disconnection for user_id: {user_id}")
         
-        room_id, room = self.find_room_by_user(user_id, include_spectators=False)
+        room_id, room = self.find_room_by_user(user_id, include_spectators=True)
         
         if room and room.status == "in_game" and room.game_record_id and self.game_manager:
             # Delegate to GameManager
@@ -261,7 +302,11 @@ class RoomManager:
                     if participant and participant.status == PlayerStatus.ACTIVE:
                         participant.status = PlayerStatus.DISCONNECTED
                 await self.game_manager.handle_player_leave(user_obj, room.game_record_id, PlayerStatus.DISCONNECTED)
-            
+            else: # User was a spectator
+                room.spectators = [s for s in room.spectators if s.id != user_id]
+                print(f"Spectator {user_id} disconnected from game {room.game_record_id}.")
+                # No further broadcast needed
+
         elif room: # Disconnected from a pre-game room
             user_in_room = next((p for p in room.players if p.id == user_id), None)
             if user_in_room:
@@ -273,8 +318,9 @@ class RoomManager:
         elif user_id in self.lobby_users:
             del self.lobby_users[user_id]
         
-        # Broadcast lobby state regardless to show user disconnected
-        await self.broadcast_lobby_state(manager)
+        # --- FIX (v-next): This is causing a race condition. The broadcast
+        # will be moved to main.py *after* the disconnect is complete. ---
+        pass
             
     async def return_to_lobby(self, user: User, manager: ConnectionManager):
         """ Acknowledges post-game and returns to lobby."""

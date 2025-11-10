@@ -43,7 +43,7 @@ const StateGuard = ({ children }) => {
 
     // 2. The "Active Game" Rule (Unchanged)
     // If we have an active game, we MUST be on the game page.
-    const activeGameId = gameState?.id;
+    const activeGameId = gameState?.game_id;
     if (activeGameId && location.pathname !== `/game/${activeGameId}`) {
       console.log(
         "StateGuard: Active game detected, forcing navigation to game."
@@ -63,10 +63,10 @@ const StateGuard = ({ children }) => {
       return;
     }
 
-    // --- REMOVED in v2.1.0: The "Pre-Game Room" Rule ---
-    // We no longer force the user to the room page.
-    // Instead, a banner will be shown on other pages (like the lobby)
-    // to guide them back.
+    // --- REMOVED: The "Pre-Game Room" Rule from StateGuard ---
+    // As per request, StateGuard will no longer force navigation to the room page.
+    // Users in a room can now freely navigate to other pages (like Lobby or Profile).
+    // The CurrentRoomBanner will guide them back to their room.
 
     // 5. Cleanup Rules (Modified to include room cleanup)
     // If we are on a game page but have no game state, go to lobby.
@@ -81,11 +81,9 @@ const StateGuard = ({ children }) => {
       navigate("/lobby", { replace: true });
     }
 
-    // If we are on a room page but have no room state, go to lobby.
-    if (!roomState?.id && location.pathname.startsWith("/room/")) {
-      console.log("StateGuard: No room state, redirecting from room page.");
-      navigate("/lobby", { replace: true });
-    }
+    // The RoomPage.jsx component now handles its own loading state.
+    // The StateGuard was redirecting too quickly, causing a race condition
+    // when joining a room. The RoomPage will now show "Loading..." until the state arrives.
   }, [gameState, gameResult, token, roomState, location, navigate]); // Added roomState
 
   return children; // Render the route

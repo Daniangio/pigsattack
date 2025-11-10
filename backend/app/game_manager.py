@@ -162,7 +162,7 @@ class GameManager:
         
         if specific_user_id:
             # Send to just one user (e.g., on reconnect or spectator join)
-            state_payload = game.get_state(specific_user_id)
+            state_payload = game.state.get_redacted_state(specific_user_id)
             msg = {"type": "game_state_update", "payload": state_payload}
             await self.conn_manager.send_to_user(specific_user_id, msg)
             return
@@ -179,7 +179,7 @@ class GameManager:
             return
 
         # Get all states
-        all_states = game.get_all_player_states()
+        player_ids_in_game = set(game.state.players.keys())
         
         # Get all recipients
         player_ids = {p.id for p in room.players}
@@ -193,14 +193,14 @@ class GameManager:
                 continue
 
             payload_to_send = None
-            if user_id in all_states:
+            if user_id in player_ids_in_game:
                 # This user is a player (active, surrendered, etc.)
-                payload_to_send = all_states[user_id]
+                payload_to_send = game.state.get_redacted_state(user_id)
             else:
-                # This user is a pure spectator
+                # This user is a pure spectator (or someone in the room not in the game state)
                 if spectator_payload is None:
                     # "spectator" is a magic string for get_state
-                    spectator_payload = game.get_state("spectator") 
+                    spectator_payload = game.state.get_redacted_state("spectator")
                 payload_to_send = spectator_payload
             
             if payload_to_send:

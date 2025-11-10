@@ -52,9 +52,8 @@ const LobbyPage = ({ onLogout }) => { // --- REFACTOR: Added roomState ---
 
   const handleJoinRoom = (roomId) => {
     if (sendMessage && !isInRoom) {
-      // Send the message to the server. The server will respond with a
-      // 'room_state' update, and the StateGuard will handle navigation.
       sendMessage({ action: "join_room", payload: { room_id: roomId } });
+      navigate(`/room/${roomId}`);
     }
   };
 

@@ -2103,30 +2103,21 @@ const GameHeader = ({
 
 // --- MAIN GAME PAGE COMPONENT ---
 const GamePage = ({ onLogout }) => {
-  // --- FIX: Add `token` and get `rawGameState` ---
-  const { user, rawGameState, token } = useStore((state) => ({
+  // --- Add `token` and get `rawGameState` ---
+  const { user, gameState, token } = useStore((state) => ({
     user: state.user,
-    rawGameState: state.gameState, // <-- THE FIX: Select state.gameState and assign it to rawGameState
+    gameState: state.gameState, // <-- THE FIX: Select state.gameState and assign it to rawGameState
     token: state.token, // Get token for HTTP requests
   }));
 
-  // --- *** FIX *** ---
-  // Derive the *actual* game state from the raw message object
-  // This unwraps the { type: "...", data: {...} } or { type: "...", payload: {...} }
-  const gameState = useMemo(() => {
-    if (!rawGameState) return null;
-    if (rawGameState.data) return rawGameState.data; // Handle "data" key
-    if (rawGameState.payload) return rawGameState.payload; // Handle "payload" key
-    // If it has a game_id, it's *probably* the unwrapped state already
-    // (e.g., from a previous hot reload or state restoration)
-    if (rawGameState.game_id) return rawGameState;
-    return null; // Still loading or invalid state
-  }, [rawGameState]);
-  // --- *** END FIX ---
+  // --- *** REFACTOR *** ---
+  // The `useMemo` hook to unwrap the game state is no longer needed.
+  // The `store.js` `handleGameStateUpdate` sets `gameState` to the
+  // payload object directly, so `gameState` from the store *is* the
+  // correct state object.
+  // --- *** END REFACTOR *** ---
 
   const [showSurrenderModal, setShowSurrenderModal] = useState(false);
-  // --- FIX: Removed Logout Modal ---
-  // const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [viewingPlayerId, setViewingPlayerId] = useState(null);
   const [activePanel, setActivePanel] = useState("threats");
   const [selectedThreatId, setSelectedThreatId] = useState(null);
@@ -2257,7 +2248,7 @@ const GamePage = ({ onLogout }) => {
           )}
           {/* Keep this for debugging if you want */}
           <pre className="text-xs text-left overflow-auto p-2 bg-gray-800 rounded mt-4 max-w-lg max-h-64">
-            {JSON.stringify(rawGameState, null, 2)}
+            {JSON.stringify(gameState, null, 2)}
           </pre>
         </div>
       </div>
