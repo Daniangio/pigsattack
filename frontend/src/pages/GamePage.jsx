@@ -1706,7 +1706,8 @@ const PreviewDisplay = ({ preview, isLoading }) => {
     const original = preview.threat_original_stats[color];
     if (preview.threat_immune_to.includes(color)) return "Immune";
     // --- FIX: v1.8 Resistance is -1 scrap value, not x2 ---
-    if (preview.threat_resistant_to.includes(color)) return `${original} (Resist)`;
+    if (preview.threat_resistant_to.includes(color))
+      return `${original} (Resist)`;
     return original;
   };
 
@@ -1983,13 +1984,8 @@ const ActionPhaseActions = ({ sendGameAction, player, gameState }) => {
 
       {isMyTurn && myChoice === "SCHEME" && (
         <div className="pt-3 border-t border-gray-600 text-center">
-          <p className="text-gray-300 mb-2">
-            Confirm your Scheme action.
-          </p>
-          <button
-            onClick={handleSchemeConfirm}
-            className="btn btn-primary"
-          >
+          <p className="text-gray-300 mb-2">Confirm your Scheme action.</p>
+          <button onClick={handleSchemeConfirm} className="btn btn-primary">
             Confirm Scheme
           </button>
         </div>
@@ -2163,12 +2159,7 @@ const GamePage = ({ onLogout }) => {
         setActivePanel("threats");
       }
     }
-  }, [
-    user?.id,
-    viewingPlayerId,
-    gameState?.phase,
-    self?.plan?.action_card_id,
-  ]);
+  }, [user?.id, viewingPlayerId, gameState?.phase, self?.plan?.action_card_id]);
 
   // ---
   // --- *** THE FIX *** ---
@@ -2231,6 +2222,89 @@ const GamePage = ({ onLogout }) => {
   // We use a selector here so the component re-renders when it changes
   const sendMessageForLoadingCheck = useStore((state) => state.sendMessage);
 
+  const threatAssignments = useMemo(() => {
+    const assignments = {};
+    // --- Make null-safe ---
+    if (!gameState?.players || !gameState?.player_threat_assignment)
+      return assignments;
+
+    for (const [playerId, threatId] of Object.entries(
+      gameState.player_threat_assignment
+    )) {
+      const username = gameState.players[playerId]?.username;
+      if (username) {
+        assignments[threatId] = username;
+      }
+    }
+    return assignments;
+    // --- Add optional chaining to dependencies ---
+  }, [gameState?.players, gameState?.player_threat_assignment]);
+
+  const selectableThreats = useMemo(() => {
+    if (
+      // --- Make null-safe ---
+      gameState?.phase !== "ATTRACTION" ||
+      !self ||
+      self.user_id !== gameState?.attraction_turn_player_id
+    ) {
+      return [];
+    }
+    const myPlan = gameState.player_plans[self.user_id];
+    if (!myPlan) return [];
+
+    const available = gameState.current_threats.filter((t) =>
+      gameState.available_threat_ids.includes(t.id)
+    );
+    if (gameState.attraction_phase_state === "FIRST_PASS") {
+      const myLureCard = LURE_CARDS.find((c) => c.id === myPlan.lure_card_id);
+      if (!myLureCard) return [];
+      const lureNameMap = {
+        BLOODY_RAGS: "Rags",
+        STRANGE_NOISES: "Noises",
+        FALLEN_FRUIT: "Fruit",
+      };
+      const myLureName = lureNameMap[myLureCard.id];
+
+      return available.filter((t) => t.lure_type.includes(myLureName));
+    } else {
+      return available;
+    }
+    // --- Add optional chaining to dependencies ---
+  }, [
+    gameState?.phase,
+    self,
+    gameState?.attraction_turn_player_id,
+    gameState?.player_plans,
+    gameState?.current_threats,
+    gameState?.available_threat_ids,
+    gameState?.attraction_phase_state,
+  ]);
+
+  const threatsToShow = useMemo(() => {
+    // --- Make null-safe ---
+    const viewingPlayer =
+      viewingPlayerId && gameState?.players[viewingPlayerId];
+    if (!viewingPlayer) return gameState?.current_threats || []; // Default
+
+    const assignedThreatId =
+      gameState.player_threat_assignment[viewingPlayer.user_id];
+    const assignedThreat = gameState.current_threats.find(
+      (t) => t.id === assignedThreatId
+    );
+
+    if (assignedThreat) {
+      return [assignedThreat];
+    }
+    return gameState.current_threats;
+    // --- Add optional chaining to dependencies ---
+  }, [
+    viewingPlayerId,
+    gameState?.players,
+    gameState?.current_threats,
+    gameState?.player_threat_assignment,
+  ]);
+  // --- END FIX ---
+
   // --- FIX: The loading check now uses the *derived* gameState. ---
   // This will correctly wait until the state is unwrapped.
   if (!gameState || !user || !sendMessageForLoadingCheck) {
@@ -2255,6 +2329,9 @@ const GamePage = ({ onLogout }) => {
     );
   }
 
+  const canConfirmThreat = selectedThreatId !== null;
+
+  // This code is now safe, because the early return above caught null gameState
   const {
     phase,
     round,
@@ -2269,95 +2346,8 @@ const GamePage = ({ onLogout }) => {
     market,
     available_threat_ids,
     unassigned_player_ids,
-    player_threat_assignment, // --- FIX: Use this for assignments
-  } = gameState;
-
-  const canConfirmThreat = selectedThreatId !== null;
-
-  const threatAssignments = useMemo(() => {
-    // --- FIX: Use player_threat_assignment from backend ---
-    const assignments = {};
-    if (!gameState.players || !player_threat_assignment) return assignments;
-
-    for (const [playerId, threatId] of Object.entries(
-      player_threat_assignment
-    )) {
-      const username = gameState.players[playerId]?.username;
-      if (username) {
-        assignments[threatId] = username;
-      }
-    }
-    return assignments;
-  }, [gameState.players, player_threat_assignment]);
-
-  const selectableThreats = useMemo(() => {
-    if (
-      phase !== "ATTRACTION" ||
-      !self ||
-      self.user_id !== attraction_turn_player_id
-    ) {
-      return [];
-    }
-    const myPlan = player_plans[self.user_id];
-    if (!myPlan) return [];
-
-    const available = current_threats.filter((t) =>
-      available_threat_ids.includes(t.id)
-    );
-    if (gameState.attraction_phase_state === "FIRST_PASS") {
-      // --- FIX: Check my lure against threat's lure_type ---
-      const myLureCard = LURE_CARDS.find(
-        (c) => c.id === myPlan.lure_card_id
-      );
-      if (!myLureCard) return [];
-      // Convert "BLOODY_RAGS" to "Rags"
-      const lureNameMap = {
-        BLOODY_RAGS: "Rags",
-        STRANGE_NOISES: "Noises",
-        FALLEN_FRUIT: "Fruit",
-      };
-      const myLureName = lureNameMap[myLureCard.id];
-
-      return available.filter((t) => t.lure_type.includes(myLureName));
-    } else {
-      // Second pass, all available threats are selectable
-      return available;
-    }
-  }, [
-    phase,
-    self,
-    attraction_turn_player_id,
-    player_plans,
-    current_threats,
-    available_threat_ids,
-    gameState.attraction_phase_state,
-  ]);
-
-  const threatsToShow = useMemo(() => {
-    // --- FIX: Simplify this logic ---
-    const viewingPlayer = viewingPlayerId && gameState.players[viewingPlayerId];
-    if (!viewingPlayer) return current_threats; // Default
-
-    // Find the threat assigned to the viewing player
-    const assignedThreatId = player_threat_assignment[viewingPlayer.user_id];
-    const assignedThreat = current_threats.find(
-      (t) => t.id === assignedThreatId
-    );
-
-    if (assignedThreat) {
-      // If player has a threat, always show *only* that threat
-      // This is true in DEFENSE, ACTION, etc.
-      return [assignedThreat];
-    }
-
-    // If no assigned threat (e.g., PLANNING, ATTRACTION), show all.
-    return current_threats;
-  }, [
-    viewingPlayerId,
-    gameState.players,
-    current_threats,
     player_threat_assignment,
-  ]);
+  } = gameState;
 
   const getPlayerTurnStatus = (playerId) => {
     const player = gameState.players[playerId];
