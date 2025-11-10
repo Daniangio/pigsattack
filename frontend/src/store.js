@@ -76,7 +76,12 @@ export const useStore = create((set, get) => ({
   // --- NEW, SPECIFIC STATE HANDLERS ---
 
   handleLobbyState: (payload) => {
-    set({ lobbyState: payload, roomState: null, gameState: null, gameResult: null });
+    // If we are NOT in a room, receiving a lobby state should clear other states.
+    if (!get().roomState) {
+      set({ lobbyState: payload, gameState: null, gameResult: null });
+    } else { // If we ARE in a room, just update the lobby data in the background.
+      set({ lobbyState: payload });
+    }
   },
 
   handleRoomState: (payload) => {

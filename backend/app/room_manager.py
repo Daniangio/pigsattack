@@ -103,12 +103,14 @@ class RoomManager:
 
         print(f"User {user.username} joined room {room_id}.")
         
-        # --- REFACTOR ---
-        # The user's client *already navigated* to /room/:roomId.
-        # We just broadcast the new room state to everyone in it.
-        await self.broadcast_room_state(room_id, manager)
+        # Send the new room state to the user who just joined. This will
+        # trigger their client's StateGuard to navigate them to the room page.
+        await manager.send_to_user(user.id, {"type": "room_state", "payload": self.get_room_dump(room)})
+        
+        # Broadcast the updated room state to all *other* players in the room.
+        await self.broadcast_room_state(room_id, manager, exclude_user_id=user.id)
+        # Update the lobby for everyone.
         await self.broadcast_lobby_state(manager)
-        # --- END REFACTOR ---
 
     async def spectate_game(self, user: User, game_record_id: str, manager: ConnectionManager):
         if user.id not in self.lobby_users:
@@ -219,26 +221,27 @@ class RoomManager:
         
         await self.broadcast_lobby_state(manager)
 
-    async def send_user_current_state(self, user: User, manager: ConnectionManager):
-        """On connection/reconnection, send the correct state."""
+    async def send_user_current_state(self, user: User, manager: ConnectionManager) -> bool:
+        """
+        On connection/reconnection, send the correct state.
+        Returns True if user was reconnected to a game/room, False otherwise.
+        """
         # 1. Check for active game
         game_id = self.find_game_by_user(user.id)
         if game_id and self.game_manager and game_id in self.game_manager.active_games:
             print(f"Reconnecting user {user.username} to active game {game_id}.")
             await self.game_manager.broadcast_game_state(game_id, specific_user_id=user.id)
-            return
+            return True
 
         # 2. Check for pre-game room
         room_id, room = self.find_room_by_user(user.id, include_spectators=True)
         if room:
             print(f"Reconnecting user {user.username} to pre-game room {room.id}.")
             await manager.send_to_user(user.id, {"type": "room_state", "payload": self.get_room_dump(room)})
-            return
+            return True
 
-        # 3. Else, send lobby
-        print(f"Reconnecting user {user.username} to lobby.")
-        self.lobby_users[user.id] = user
-        await manager.send_to_user(user.id, {"type": "lobby_state", "payload": self.get_lobby_state()})
+        # 3. User is not in a game or room.
+        return False
 
 
     async def handle_disconnect(self, user_id: str, manager: ConnectionManager):
@@ -290,7 +293,7 @@ class RoomManager:
             room_dump['game_details'] = record.model_dump()
         return room_dump
 
-    async def broadcast_room_state(self, room_id: str, manager: ConnectionManager):
+    async def broadcast_room_state(self, room_id: str, manager: ConnectionManager, exclude_user_id: Optional[str] = None):
         """Broadcasts the detailed state of a specific pre-game room."""
         if room_id not in self.rooms:
             return
@@ -298,15 +301,14 @@ class RoomManager:
         room = self.rooms[room_id]
         room_dump = self.get_room_dump(room)
 
-        # --- REFACTOR ---
-        # No more 'view' or 'force'. Just send the state.
         state_update_msg = {
             "type": "room_state",
             "payload": room_dump
         }
-        # --- END REFACTOR ---
         
         all_user_ids = [p.id for p in room.players] + [s.id for s in room.spectators]
+        if exclude_user_id:
+            all_user_ids = [uid for uid in all_user_ids if uid != exclude_user_id]
         await manager.broadcast_to_users(all_user_ids, state_update_msg)
 
     def find_room_by_user(self, user_id: str, include_spectators: bool = False):

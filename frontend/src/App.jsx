@@ -63,24 +63,10 @@ const StateGuard = ({ children }) => {
       return;
     }
 
-    // --- REFACTOR: ADDED NEW RULE FOR PRE-GAME ROOM ---
-    // 4. The "Pre-Game Room" Rule
-    // If we have a room state, we MUST be on that room's page.
-    const activeRoomId = roomState?.id;
-    if (
-      activeRoomId &&
-      location.pathname !== `/room/${activeRoomId}` && // Not on our room page
-      !activeGameId && // And not in a game
-      !gameResultId // And not on a post-game screen
-    ) {
-      // This will catch the user trying to go to /lobby, /profile, etc.
-      console.log(
-        "StateGuard: Active room detected, forcing navigation to room page."
-      );
-      navigate(`/room/${activeRoomId}`, { replace: true });
-      return;
-    }
-    // --- END NEW RULE ---
+    // --- REMOVED in v2.1.0: The "Pre-Game Room" Rule ---
+    // We no longer force the user to the room page.
+    // Instead, a banner will be shown on other pages (like the lobby)
+    // to guide them back.
 
     // 5. Cleanup Rules (Modified to include room cleanup)
     // If we are on a game page but have no game state, go to lobby.
@@ -96,7 +82,7 @@ const StateGuard = ({ children }) => {
     }
 
     // If we are on a room page but have no room state, go to lobby.
-    if (!activeRoomId && location.pathname.startsWith("/room/")) {
+    if (!roomState?.id && location.pathname.startsWith("/room/")) {
       console.log("StateGuard: No room state, redirecting from room page.");
       navigate("/lobby", { replace: true });
     }
@@ -110,7 +96,7 @@ const StateGuard = ({ children }) => {
  * are available for useGameSocket.
  */
 function AppContent() {
-  const { token, clearAuth } = useStore();
+  const { token, clearAuth, roomState } = useStore();
   const navigate = useNavigate();
   
   // Pass navigate to the socket hook. This allows the hook
@@ -155,7 +141,7 @@ function AppContent() {
             <Route path="/lobby" element={token ? <LobbyPage {...layoutProps} /> : <Navigate to="/auth" />} />
             <Route path="/room/:roomId" element={token ? <RoomPage {...layoutProps} /> : <Navigate to="/auth" />} />
             <Route path="/game/:gameId" element={token ? <GamePage {...layoutProps} /> : <Navigate to="/auth" />} />
-            <Route path="/profile/:userId" element={token ? <ProfilePage /> : <Navigate to="/auth" />} />
+            <Route path="/profile/:userId" element={token ? <ProfilePage {...layoutProps} /> : <Navigate to="/auth" />} />
             <Route path="/post-game/:gameId" element={token ? <PostGamePage /> : <Navigate to="/auth" />} />
 
             {/* Default route */}

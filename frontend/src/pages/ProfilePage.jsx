@@ -2,19 +2,43 @@ import React, { useState, useEffect } from "react";
 import { useStore } from "../store";
 import { useParams, useNavigate } from "react-router-dom"; // Import hooks
 
+const CurrentRoomBanner = () => {
+  const { roomState, gameState } = useStore();
+  const navigate = useNavigate();
+
+  const isInRoom = roomState && !gameState;
+
+  if (!isInRoom) {
+    return null;
+  }
+
+  return (
+    <div className="bg-blue-900/80 backdrop-blur-sm text-white p-3 rounded-lg mb-6 flex justify-between items-center animate-fade-in-down border border-blue-700">
+      <p className="font-medium">
+        You are in room: <span className="font-bold text-orange-300">{roomState.name}</span>
+      </p>
+      <button
+        onClick={() => navigate(`/room/${roomState.id}`)}
+        className="py-1 px-4 font-semibold rounded-md shadow-md transition duration-200 ease-in-out bg-orange-600 hover:bg-orange-700 text-white"
+      >
+        Go to Room
+      </button>
+    </div>
+  );
+};
+
 // This component no longer needs props for navigation
-const ProfilePage = () => {
-  const { user, token } = useStore();
+const ProfilePage = ({ onLogout }) => {
+  const { user, token, roomState } = useStore();
   const { userId } = useParams(); // Get user ID from URL
   const navigate = useNavigate(); // Get navigation function
   
   const [profileData, setProfileData] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
-
-  // Button Style
   const btn = "py-2 px-4 font-semibold rounded-md shadow-md transition duration-200 ease-in-out disabled:opacity-50";
   const btnSecondary = `${btn} bg-gray-600 hover:bg-gray-500 text-white`;
+  const btnDanger = `${btn} bg-red-700 hover:bg-red-800 text-white`;
 
   useEffect(() => {
     // Use the userId from the URL param, not from the store
@@ -55,11 +79,6 @@ const ProfilePage = () => {
     navigate(`/post-game/${gameId}`);
   };
 
-  // --- REFACTOR: Changed to go back 1 step in history ---
-  const handleReturn = () => {
-    navigate(-1); // This goes back one step in browser history
-  };
-
   if (loading) {
     return (
       <div className="flex justify-center items-center h-full pt-20">
@@ -81,16 +100,28 @@ const ProfilePage = () => {
 
   return (
     <div className="bg-gray-800 p-6 rounded-lg border border-gray-700 max-w-3xl mx-auto animate-fade-in">
-      {/* --- REFACTOR: Changed button text and handler --- */}
-      <div className="flex justify-between items-start mb-4">
-        <h2 className="text-3xl font-bold text-orange-400">
-          Profile: {profileData.user.username}
-        </h2>
-        <button onClick={handleReturn} className={btnSecondary}>
-          Back
-        </button>
-      </div>
+      <header className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+        <h1 className="text-3xl font-bold text-orange-400">
+          Profile: <span className="text-gray-200">{profileData.user.username}</span>
+        </h1>
+        <div className="flex items-center gap-3">
+          <span className="text-lg text-gray-300">
+            Player: <span className="font-semibold text-orange-400">{user?.username}</span>
+          </span>
+          <button onClick={() => navigate('/lobby')} className={btnSecondary}>
+            Lobby
+          </button>
+          <button onClick={() => navigate(`/profile/${user.id}`)} className={btnSecondary} disabled={user.id === userId}>
+            Profile
+          </button>
+          <button onClick={onLogout} className={btnDanger}>
+            Logout
+          </button>
+        </div>
+      </header>
       
+      <CurrentRoomBanner />
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 text-lg bg-gray-900 p-4 rounded-md border border-gray-700">
         <p>
           <strong className="text-gray-400">Games Played:</strong>{" "}

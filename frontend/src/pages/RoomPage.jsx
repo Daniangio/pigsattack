@@ -31,6 +31,7 @@ const RoomPage = ({ onLogout }) => {
   const btn = "py-2 px-4 font-semibold rounded-md shadow-md transition duration-200 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed";
   const btnPrimary = `${btn} bg-orange-600 hover:bg-orange-700 text-white`;
   const btnSecondary = `${btn} bg-gray-600 hover:bg-gray-500 text-white`;
+  const btnInfo = `${btn} bg-blue-600 hover:bg-blue-700 text-white`;
   const btnDanger = `${btn} bg-red-700 hover:bg-red-800 text-white`;
 
   const isHost = user?.id === roomState.host_id;
@@ -57,6 +58,10 @@ const RoomPage = ({ onLogout }) => {
     navigate(`/profile/${user.id}`);
   };
 
+  const handleGoToLobby = () => {
+    navigate('/lobby');
+  };
+
   return (
     <div className="animate-fade-in">
       <header className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
@@ -67,6 +72,9 @@ const RoomPage = ({ onLogout }) => {
           <span className="text-lg text-gray-300">
             Player: <span className="font-semibold text-orange-400">{user?.username}</span>
           </span>
+          <button onClick={handleGoToLobby} className={btnSecondary}>
+            Lobby
+          </button>
           <button onClick={handleViewProfile} className={btnSecondary}>
             Profile
           </button>

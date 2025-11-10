@@ -2,8 +2,33 @@ import React, { useState } from "react";
 import { useStore } from "../store.js";
 import { useNavigate, Link } from "react-router-dom";
 
-const LobbyPage = ({ onLogout }) => {
-  const { user, lobbyState } = useStore();
+const CurrentRoomBanner = () => {
+  const { roomState, gameState } = useStore();
+  const navigate = useNavigate();
+
+  const isInRoom = roomState && !gameState;
+
+  if (!isInRoom) {
+    return null;
+  }
+
+  return (
+    <div className="bg-blue-900/80 backdrop-blur-sm text-white p-3 rounded-lg mb-6 flex justify-between items-center animate-fade-in-down border border-blue-700">
+      <p className="font-medium">
+        You are in room: <span className="font-bold text-orange-300">{roomState.name}</span>
+      </p>
+      <button
+        onClick={() => navigate(`/room/${roomState.id}`)}
+        className="py-1 px-4 font-semibold rounded-md shadow-md transition duration-200 ease-in-out bg-orange-600 hover:bg-orange-700 text-white"
+      >
+        Go to Room
+      </button>
+    </div>
+  );
+};
+
+const LobbyPage = ({ onLogout }) => { // --- REFACTOR: Added roomState ---
+  const { user, lobbyState, roomState } = useStore();
   const sendMessage = useStore((state) => state.sendMessage);
   const [newRoomName, setNewRoomName] = useState("");
   const navigate = useNavigate();
@@ -12,9 +37,11 @@ const LobbyPage = ({ onLogout }) => {
     return <div>Loading lobby...</div>;
   }
 
+  const isInRoom = !!roomState;
+
   const handleCreateRoom = (e) => {
     e.preventDefault();
-    if (newRoomName.trim() && sendMessage) {
+    if (newRoomName.trim() && sendMessage && !isInRoom) {
       sendMessage({
         action: "create_room",
         payload: { room_name: newRoomName },
@@ -24,17 +51,15 @@ const LobbyPage = ({ onLogout }) => {
   };
 
   const handleJoinRoom = (roomId) => {
-    if (sendMessage) {
-      // This is the correct logic:
-      // 1. Send the message to the server
+    if (sendMessage && !isInRoom) {
+      // Send the message to the server. The server will respond with a
+      // 'room_state' update, and the StateGuard will handle navigation.
       sendMessage({ action: "join_room", payload: { room_id: roomId } });
-      // 2. Proactively navigate the client
-      navigate(`/room/${roomId}`);
     }
   };
 
   const handleSpectateGame = (gameRecordId) => {
-    if (sendMessage) {
+    if (sendMessage && !isInRoom) {
       sendMessage({
         action: "spectate_game",
         payload: { game_record_id: gameRecordId },
@@ -52,6 +77,7 @@ const LobbyPage = ({ onLogout }) => {
   const btnPrimary = `${btn} bg-orange-600 hover:bg-orange-700 text-white`;
   const btnSecondary = `${btn} bg-gray-600 hover:bg-gray-500 text-white`;
   const btnDanger = `${btn} bg-red-700 hover:bg-red-800 text-white`;
+  const btnInfoAlt = `${btn} bg-blue-800 hover:bg-blue-700 text-white`;
   const btnInfo = `${btn} bg-blue-600 hover:bg-blue-700 text-white`;
 
   return (
@@ -73,6 +99,8 @@ const LobbyPage = ({ onLogout }) => {
         </div>
       </header>
 
+      <CurrentRoomBanner />
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Game Rooms List */}
         <div className="md:col-span-2 p-6 bg-gray-800 rounded-lg border border-gray-700">
@@ -85,10 +113,11 @@ const LobbyPage = ({ onLogout }) => {
               placeholder="New room name..."
               className="flex-grow px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
             />
-            <button type="submit" className={btnPrimary}>
+            <button type="submit" className={btnPrimary} disabled={isInRoom} title={isInRoom ? "You must leave your current room first" : ""}>
               Create Room
             </button>
           </form>
+          {isInRoom && <p className="text-center text-amber-400 mb-3 -mt-2 text-sm">You must leave your current room to create or join another.</p>}
           
           <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
             {lobbyState.rooms.length > 0 ? (
@@ -96,7 +125,9 @@ const LobbyPage = ({ onLogout }) => {
                 <div
                   key={room.id}
                   className="flex justify-between items-center p-3 bg-gray-700 rounded-md border border-gray-600 hover:bg-gray-600 transition-colors"
-                >
+                > {roomState?.id === room.id && (
+                    <div className="absolute -left-1 h-full w-1.5 bg-orange-500 rounded-l-md"></div>
+                  )}
                   <div>
                     <p className="font-semibold text-gray-100">{room.name}</p>
                     <div className="flex items-center gap-3 text-sm text-gray-400">
@@ -116,6 +147,8 @@ const LobbyPage = ({ onLogout }) => {
                     <button
                       onClick={() => handleSpectateGame(room.game_record_id)}
                       className={btnInfo}
+                      disabled={isInRoom}
+                      title={isInRoom ? "You must leave your current room first" : ""}
                     >
                       Spectate
                     </button>
@@ -123,6 +156,8 @@ const LobbyPage = ({ onLogout }) => {
                     <button
                       onClick={() => handleJoinRoom(room.id)}
                       className={btnSecondary}
+                      disabled={isInRoom}
+                      title={isInRoom ? "You must leave your current room first" : ""}
                     >
                       Join
                     </button>

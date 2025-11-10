@@ -93,9 +93,12 @@ async def websocket_endpoint(websocket: WebSocket):
         await connection_manager.add_connection(user.id, websocket)
         
         # --- RECONNECTION LOGIC ---
-        # Refactored to use a single, clean function
-        await room_manager.send_user_current_state(user, connection_manager)
-        # --- END RECONNECTION ---
+        # If send_user_current_state returns False, it means the user was not in a
+        # game or room, so we should add them to the lobby and broadcast.
+        is_reconnected = await room_manager.send_user_current_state(user, connection_manager)
+        if not is_reconnected:
+            await room_manager.add_user_to_lobby(user, connection_manager)
+        # --- END RECONNECTION/JOIN LOGIC ---
 
         # Main message loop
         while True:
