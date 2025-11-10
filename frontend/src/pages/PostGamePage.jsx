@@ -48,8 +48,8 @@ const PostGamePage = ({ onReturnToLobby }) => {
           <strong className="block mb-2">Participants:</strong>
           <ul className="space-y-1">
             {participants.map((p) => (
-              <li key={p.user.id}>
-                {p.user.username} -{" "}
+              <li key={p.id}>
+                {p.username} -{" "}
                 <span className="text-slate-400 capitalize">
                   {p.status.toLowerCase()}
                 </span>

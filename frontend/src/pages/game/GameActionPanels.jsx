@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { LURE_CARDS, ACTION_CARDS } from "./GameConstants.js";
+import { LURE_CARDS, ACTION_CARDS } from "./GameConstants.jsx";
 import { ScavengeChoiceModal } from "./GameModals.jsx";
 import { LureIcon } from "./GameUIHelpers.jsx";
 
@@ -11,7 +11,7 @@ export const PlanningPhaseActions = ({ sendGameAction, player }) => {
 
   useEffect(() => {
     if (!lure && player && player.lure_cards && player.lure_cards.length > 0) {
-      const firstAvailableLure = player.lure_cards[0];
+      const firstAvailableLure = player.lure_cards[0]?.id;
       if (firstAvailableLure) {
         setLure(firstAvailableLure);
       }
@@ -22,7 +22,7 @@ export const PlanningPhaseActions = ({ sendGameAction, player }) => {
       player.action_cards &&
       player.action_cards.length > 0
     ) {
-      setAction(player.action_cards[0]);
+      setAction(player.action_cards[0]?.id);
     }
   }, [player?.lure_cards, player?.action_cards]);
 
@@ -337,13 +337,8 @@ export const ActionPhaseActions = ({ sendGameAction, player, gameState }) => {
 
       {isMyTurn && myChoice === "SCHEME" && (
         <div className="pt-3 border-t border-gray-600 text-center">
-          <p className="text-gray-300 mb-2">
-            Confirm your Scheme action.
-          </p>
-          <button
-            onClick={handleSchemeConfirm}
-            className="btn btn-primary"
-          >
+          <p className="text-gray-300 mb-2">Confirm your Scheme action.</p>
+          <button onClick={handleSchemeConfirm} className="btn btn-primary">
             Confirm Scheme
           </button>
         </div>
@@ -352,7 +347,11 @@ export const ActionPhaseActions = ({ sendGameAction, player, gameState }) => {
   );
 };
 
-export const IntermissionPhaseActions = ({ sendGameAction, player, gameState }) => {
+export const IntermissionPhaseActions = ({
+  sendGameAction,
+  player,
+  gameState,
+}) => {
   const { intermission_turn_player_id, players } = gameState;
   const isMyTurn = player.user_id === intermission_turn_player_id;
 

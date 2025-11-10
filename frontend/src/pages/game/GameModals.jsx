@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { SCRAP_TYPES } from "./GameConstants.js";
+import { SCRAP_TYPES } from "./GameConstants.jsx";
 
 export const ConfirmationModal = ({
   title,

@@ -1,7 +1,7 @@
 import React from "react";
 import { MarketCard, ThreatCard } from "./GameCoreComponents.jsx";
 import { PlayerTag } from "./GameUIHelpers.jsx";
-import { SCRAP_TYPES } from "./GameConstants.js";
+import { SCRAP_TYPES } from "./GameConstants.jsx";
 
 export const ThreatsPanel = ({
   threats,

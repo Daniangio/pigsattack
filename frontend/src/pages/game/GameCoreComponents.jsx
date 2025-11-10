@@ -15,7 +15,7 @@ import {
   scrapsWiring,
   scrapsPlates,
   SCRAP_TYPES,
-} from "./GameConstants.js";
+} from "./GameConstants.jsx";
 import {
   TurnStatusIcon,
   ScrapIcon,
@@ -257,7 +257,13 @@ export const ThreatCard = ({
   );
 };
 
-export const MarketCard = ({ card, cardType, onClick, isSelectable, isDimmed }) => {
+export const MarketCard = ({
+  card,
+  cardType,
+  onClick,
+  isSelectable,
+  isDimmed,
+}) => {
   if (!card) return null;
 
   const costItems = Object.entries(card.cost).filter(([, val]) => val > 0);

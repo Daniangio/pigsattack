@@ -8,7 +8,7 @@ import {
   scrapsParts,
   scrapsWiring,
   scrapsPlates,
-} from "./GameConstants.js";
+} from "./GameConstants.jsx";
 import { OwnedCard } from "./GameCoreComponents.jsx";
 import { ScrapIcon } from "./GameUIHelpers.jsx";
 

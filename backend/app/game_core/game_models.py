@@ -1,16 +1,10 @@
 """
 Pydantic models for the core game state and logic.
 
-v1.9.2 - RULEBOOK COHERENCE FIXES
-- PlayerPlans: `upgrade_card_id` removed. This was a v1.9 artifact
--   that conflicted with the v1.8 rulebook's "Base Defense" mechanic.
-- PlayerDefense: `scrap_spent` interpretation clarified. The keys
--   are ScrapType, values are the *count* of scrap tokens.
-- GameState: `attraction_phase_state` changed from "drawing"/"assigning"
--   to "FIRST_PASS" / "SECOND_PASS" to support v1.8 rules.
-- GameState: Added `spoils_to_gain` to handle v1.8 rule
--   of Spoils being awarded in Cleanup phase.
-- Market: Added `faceup_limit` to support v1.8 market size rules.
+v1.9.3 - REFACTOR & VALIDATION
+- Added Pydantic models for all incoming player action payloads
+  (e.g., PlanPayload, DefensePayload). This replaces Dict[str, Any]
+  and provides automatic structure validation.
 """
 
 from pydantic import BaseModel, Field
@@ -19,7 +13,7 @@ from enum import Enum
 import random
 import uuid
 
-# --- NEW: Import effect enums ---
+# --- Import effect enums ---
 from .card_effects import OnFailEffect, UpgradeEffect, ArsenalEffect
 
 
@@ -38,7 +32,7 @@ class GamePhase(str, Enum):
 class PlayerStatus(str, Enum):
     ACTIVE = "ACTIVE"
     SURRENDERED = "SURRENDERED"
-    ELIMINATED = "ELIMINATED"
+    DISCONNECTED = "DISCONNECTED"
 
 class ScrapType(str, Enum):
     PARTS = "PARTS"
@@ -92,7 +86,6 @@ class PlayerPlans(BaseModel):
     action_card_id: str
 
 class PlayerDefense(BaseModel):
-    # --- FIX: This is a DICT of {ScrapType: *count*} ---
     scrap_spent: Dict[ScrapType, int] = Field(default_factory=dict)
     arsenal_card_ids: List[str] = Field(default_factory=list)
     special_target_stat: Optional[ScrapType] = None 
@@ -118,6 +111,7 @@ class PlayerState(BaseModel):
     
     plan: Optional[PlayerPlans] = None
     defense: Optional[PlayerDefense] = None
+    last_round_lure_id: Optional[str] = None
     
     def get_total_scrap(self) -> int:
         return sum(self.scrap.values())
@@ -128,13 +122,19 @@ class PlayerState(BaseModel):
 
     def pay_cost(self, cost: Dict[ScrapType, int]) -> bool:
         """Check if player can pay cost, and if so, deduct it."""
-        for scrap_type, amount in cost.items():
-            if self.scrap.get(scrap_type, 0) < amount:
-                return False # Cannot afford
+        if not self.can_afford(cost):
+            return False
         
         for scrap_type, amount in cost.items():
             self.scrap[scrap_type] -= amount
         
+        return True
+    
+    def can_afford(self, cost: Dict[ScrapType, int]) -> bool:
+        """Checks if player has enough scrap without deducting."""
+        for scrap_type, amount in cost.items():
+            if self.scrap.get(scrap_type, 0) < amount:
+                return False # Cannot afford
         return True
 
     def get_card_from_hand(self, card_id: str) -> Optional[Card]:
@@ -209,9 +209,6 @@ class GameState(BaseModel):
         for threat in self.current_threats:
             if threat.id == threat_id:
                 return threat
-        # --- FIX: Threat might have been killed and removed ---
-        # We need a way to find it.
-        # For now, this is ok. Killed threats don't need re-checking.
         return None
     
     
@@ -223,10 +220,13 @@ class GameState(BaseModel):
         hiding other players' hands and other secret info.
         """
         
+        # --- Handle Spectator ---
+        is_spectator = player_id == "spectator" or player_id not in self.players
+        
         # Redact other players' hands
         redacted_players = {}
         for pid, player in self.players.items():
-            if pid == player_id:
+            if not is_spectator and pid == player_id:
                 redacted_players[pid] = player.model_dump()
             else:
                 redacted_players[pid] = {
@@ -260,25 +260,22 @@ class GameState(BaseModel):
         # --- Redact defenses ---
         def get_redacted_defenses() -> Dict[str, Any]:
             redacted_defenses = {}
-            # Show submitted status during DEFENSE phase
             if self.phase == GamePhase.DEFENSE:
                 for pid in self.players:
-                    # Only show submitted if they have a threat
+                    if self.players[pid].status != PlayerStatus.ACTIVE:
+                        redacted_defenses[pid] = {"submitted": True} # Not playing
+                        continue
+                        
                     has_threat = self.get_assigned_threat(pid) is not None
                     if has_threat:
                         redacted_defenses[pid] = {"submitted": pid in self.player_defenses}
                     else:
                         redacted_defenses[pid] = {"submitted": True} # Auto-ready
-            # Show full defenses *after* DEFENSE phase
+            
             elif self.phase in [GamePhase.ACTION, GamePhase.CLEANUP, GamePhase.INTERMISSION, GamePhase.GAME_OVER]:
                 for pid, defense in self.player_defenses.items():
                     redacted_defenses[pid] = defense.model_dump()
-            # Default: show nothing
-            else:
-                for pid in self.players:
-                    if self.players[pid].status == PlayerStatus.ACTIVE:
-                        redacted_defenses[pid] = {"ready": True} # e.g. for attraction
-           
+            
             return redacted_defenses
 
         # Build the final payload
@@ -289,7 +286,7 @@ class GameState(BaseModel):
             "round": self.round,
             "players": redacted_players,
             "initiative_queue": self.initiative_queue,
-            "log": self.log,
+            "log": self.log[-50:], # <-- Only send last 50 log messages
             "market": self.market.model_dump(),
             "current_threats": [t.model_dump() for t in self.current_threats],
             "player_plans": get_redacted_plans(self.phase, self.player_plans),
@@ -308,3 +305,33 @@ class GameState(BaseModel):
         }
         
         return public_state
+
+
+# --- NEW: Action Payload Models ---
+# These models validate the *structure* of data from the client
+
+class PlanPayload(BaseModel):
+    lure_card_id: str
+    action_card_id: str
+
+class AssignThreatPayload(BaseModel):
+    threat_id: str
+
+class DefensePayload(BaseModel):
+    scrap_spent: Dict[ScrapType, int] = Field(default_factory=dict)
+    arsenal_card_ids: List[str] = Field(default_factory=list)
+    special_target_stat: Optional[ScrapType] = None
+    special_corrode_stat: Optional[ScrapType] = None
+    special_amp_spend: Dict[ScrapType, int] = Field(default_factory=dict)
+
+class ScavengePayload(BaseModel):
+    choices: List[ScrapType] = Field(default_factory=list)
+
+class FortifyPayload(BaseModel):
+    card_id: Optional[str] = None # Player can choose to take fallback
+
+class ArmoryRunPayload(BaseModel):
+    card_id: Optional[str] = None # Player can choose to take fallback
+
+class BuyPayload(BaseModel):
+    card_id: str

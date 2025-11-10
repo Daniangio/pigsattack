@@ -20,7 +20,6 @@ class GameParticipant(BaseModel):
     """Represents a player's state within a specific game."""
     user: User
     status: PlayerStatus = PlayerStatus.ACTIVE
-# --- END NEW ADDITIONS ---
 
 class Token(BaseModel):
     access_token: str

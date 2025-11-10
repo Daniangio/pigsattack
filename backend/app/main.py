@@ -14,6 +14,7 @@ from .security import get_current_user
 # --- GAME CORE IMPORTS ---
 from .game_manager import GameManager
 from .game_core.game_models import GamePhase, PlayerDefense, ScrapType
+from backend.app import security
 
 
 app = FastAPI()
@@ -84,9 +85,15 @@ async def websocket_endpoint(websocket: WebSocket):
         else:
             guest_id = f"guest_{str(uuid.uuid4())[:8]}"
             user = User(id=guest_id, username=guest_id)
+            # --- FIX: Create a token for the guest user ---
+            token = security.create_access_token(
+                data={"sub": user.username, "username": user.username}
+            )
             fake_users_db[guest_id] = user
             await websocket.send_json({
-                "type": "guest_auth_success", "payload": user.model_dump()
+                "type": "guest_auth_success", 
+                "payload": user.model_dump(),
+                "token": token # Send the token to the guest client
             })
 
         user_id_for_cleanup = user.id
