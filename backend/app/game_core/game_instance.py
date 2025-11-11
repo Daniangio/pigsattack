@@ -10,15 +10,15 @@ from typing import List, Dict, Any
 from pydantic import ValidationError
 
 # Import the services
-from .game_core.game_services.game_setup import GameSetupService
-from .game_core.game_services.validation import GameValidator
-from .game_core.game_services.calculation import GameCalculationService
-from .game_core.game_services.phase_manager import GamePhaseManager
-from .game_core.game_services.action_handler import GameActionHandler, ActionDispatcher
+from .game_services.game_setup import GameSetupService
+from .game_services.validation import GameValidator
+from .game_services.calculation import GameCalculationService
+from .game_services.phase_manager import GamePhaseManager
+from .game_services.action_handler import GameActionHandler, ActionDispatcher
 
 # Import models
-from .server_models import GameParticipant
-from .game_core.game_models import PlayerState, GameState, PlayerStatus
+from ..server_models import GameParticipant
+from .game_models import PlayerState, GameState, PlayerStatus
 
 # Custom exception for validation errors
 class InvalidActionError(ValueError):

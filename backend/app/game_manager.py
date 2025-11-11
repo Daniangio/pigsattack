@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from .room_manager import RoomManager
 
 from .server_models import User, Room, GameParticipant, PlayerStatus as ServerPlayerStatus
-from .game_instance import GameInstance
+from .game_core.game_instance import GameInstance
 from .game_core.game_models import GameState, PlayerState, GamePhase, PlayerStatus
 from .routers import fake_games_db 
 
