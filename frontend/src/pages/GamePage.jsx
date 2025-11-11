@@ -257,14 +257,15 @@ const GamePage = () => {
       return purchaseState !== 0 ? "WAITING" : "PENDING";
     }
     if (phase === "PLANNING") {
-      // --- FIX: Check player.plan (object) not player.plan_submitted (bool) ---
-      return player.plan ? "WAITING" : "ACTIVE";
+      // For 'self', player.plan will be an object. For other (redacted) players,
+      // it will be a boolean `plan_submitted`. We check for either.
+      log(player);
+      return player.plan || player.plan_submitted ? "WAITING" : "ACTIVE";
     }
     if (phase === "DEFENSE") {
       const hasThreat = !!player_threat_assignment[playerId];
       if (!hasThreat) return "NONE";
-      // --- FIX: Check player.defense (object) not player.defense_submitted (bool) ---
-      // Note: The redacted state *does* have defense_submitted, but self.defense is cleaner
+      // A player is 'WAITING' if they have submitted their defense.
       return player.defense ? "WAITING" : "ACTIVE";
     }
     return "NONE";

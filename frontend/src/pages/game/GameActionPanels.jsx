@@ -10,16 +10,14 @@ export const PlanningPhaseActions = ({ sendGameAction, player }) => {
   const failSafeTimeoutRef = useRef(null);
 
   useEffect(() => {
-    // No default selection logic, player must choose.
-  }, []);
-
-  useEffect(() => {
-    if (player.plan_submitted && failSafeTimeoutRef.current) {
+    // If the plan is submitted (player.plan exists) and there's a timeout running,
+    // clear it and reset the loading state.
+    if (player.plan && failSafeTimeoutRef.current) {
       clearTimeout(failSafeTimeoutRef.current);
       failSafeTimeoutRef.current = null;
       setIsLoading(false);
     }
-  }, [player.plan_submitted]);
+  }, [player.plan]);
 
   useEffect(() => {
     return () => {
@@ -29,10 +27,9 @@ export const PlanningPhaseActions = ({ sendGameAction, player }) => {
     };
   }, []);
 
-  // This check is now correct. When the plan is submitted,
-  // player.plan_submitted will be true, and this component will
-  // correctly show the "Waiting..." message.
-  if (player?.plan_submitted) {
+  // If the player object has a 'plan' property, it means they have successfully
+  // submitted their plan for the round.
+  if (player?.plan) {
     return (
       <div className="text-center p-4">
         <h3 className="text-lg text-green-400">
