@@ -84,6 +84,8 @@ class ArsenalCard(Card):
 class PlayerPlans(BaseModel):
     lure_card_id: str
     action_card_id: str
+    lure_card_key: str
+    action_card_key: str
 
 class PlayerDefense(BaseModel):
     scrap_spent: Dict[ScrapType, int] = Field(default_factory=dict)

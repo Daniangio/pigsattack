@@ -1,11 +1,5 @@
 """
 The GameManager singleton.
-...
-v1.9.7 - ConnectionManager Fix
-- Received connection_manager.py and updated all
-  broadcast loops to use the correct
-  `conn_manager.broadcast_to_users` method instead
-  of a manual `for` loop.
 """
 
 from typing import Dict, List, Optional, Any
@@ -49,7 +43,12 @@ class GameManager:
             print(f"Warning: Game {game_id} already exists. Overwriting.")
             
         try:
-            game = GameInstance.create(game_id, participants)
+            # --- REFACTOR FIX ---
+            # Changed this from `GameInstance.create` to the constructor.
+            # The new `GameInstance`'s __init__ now handles all setup.
+            game = GameInstance(game_id, participants)
+            # --- END FIX ---
+            
             self.active_games[game_id] = game
             print(f"GameInstance {game_id} created with {len(participants)} players.")
             
@@ -252,7 +251,7 @@ class GameManager:
 
     async def _handle_game_over(self, game_id: str, final_state: GameState):
         """
-_        Handles the end-of-game process.
+        Handles the end-of-game process.
         """
         if not self.room_manager:
             print("Error: RoomManager not set in GameManager. Cannot end game.")

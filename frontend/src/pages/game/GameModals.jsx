@@ -133,16 +133,27 @@ export const DefenseSubmission = ({
     if (debounceTimeout.current) {
       clearTimeout(debounceTimeout.current);
     }
-    if (!threat) return;
+    if (!threat) return; // Don't run if no threat
+
     const payload = {
       scrap_spent: scrap,
       arsenal_card_ids: Array.from(selectedArsenal),
-      special_target_stat: null,
+      special_target_stat: null, // These will be null for now
       special_corrode_stat: null,
       special_amp_spend: {},
     };
 
     debounceTimeout.current = setTimeout(async () => {
+      // --- FIX: Add guard clause for token ---
+      if (!token) {
+        console.error("No auth token available for defense preview.");
+        setDefensePreview({
+          error: "Auth token is missing. Cannot get preview.",
+        });
+        return;
+      }
+      // --- END FIX ---
+
       setIsPreviewLoading(true);
       try {
         const response = await fetch(`/api/game/${game_id}/preview_defense`, {
@@ -155,13 +166,15 @@ export const DefenseSubmission = ({
         });
         if (!response.ok) {
           const err = await response.json();
+          // Log the full error from the server
+          console.error("Defense preview API error:", err);
           throw new Error(err.detail || "Preview failed");
         }
         const previewData = await response.json();
         setDefensePreview(previewData);
       } catch (error) {
         console.error("Error fetching defense preview:", error);
-        setDefensePreview({ error: `Could not get preview: ${error.message}` });
+        setDefensePreview({ error: `${error.message}` }); // Show the error message
       }
       setIsPreviewLoading(false);
     }, 300);
@@ -199,14 +212,15 @@ export const DefenseSubmission = ({
     const payload = {
       scrap_spent: scrap,
       arsenal_card_ids: Array.from(selectedArsenal),
-      special_target_stat: null,
+      special_target_stat: null, // These will be null for now
       special_corrode_stat: null,
       special_amp_spend: {},
     };
     sendGameAction("submit_defense", payload);
   };
 
-  if (player.defense_submitted) {
+  // --- FIX: Check player.defense (object) not player.defense_submitted (bool) ---
+  if (player.defense) {
     return (
       <div className="text-center p-4">
         <h3 className="text-lg text-green-400">

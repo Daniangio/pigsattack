@@ -1,5 +1,5 @@
 import React from "react";
-import { useStore } from "../store.js";
+import { useStore } from "../../store.js";
 import {
   LURE_CARDS,
   ACTION_CARDS,
@@ -37,23 +37,27 @@ export const PlayerCard = ({
   turnStatus,
   portrait,
   turnOrder,
-  plan, // This is the PlayerPlans object { lure_card_id, action_card_id }
+  plan, // This is the PlayerPlans object { lure_card_key, action_card_key, ... }
   isViewing,
   onClick,
 }) => {
   if (!player) return null;
   const { scrap, injuries, username, status } = player;
   const isInactive = status !== "ACTIVE";
-  const phase = useStore((state) => state.gameState?.payload?.phase);
+  const phase = useStore((state) => state.gameState?.phase); // Simplified selector
   let showLure = false;
   let showAction = false;
-  const lureCardId = plan?.lure_card_id;
-  const actionCardId = plan?.action_card_id;
+
+  // --- FIX: Use plan.lure_card_key and plan.action_card_key ---
+  const lureCardKey = plan?.lure_card_key;
+  const actionCardKey = plan?.action_card_key;
 
   if (plan) {
     switch (phase) {
       case "PLANNING":
-        if (isSelf && player.plan_submitted) {
+        // --- FIX: Check player.plan (object) not player.plan_submitted (bool) ---
+        // Note: `plan` is passed from `player_plans[pid]`, so we also check `isSelf`
+        if (isSelf && player.plan) {
           showLure = true;
           showAction = true;
         }
@@ -116,24 +120,24 @@ export const PlayerCard = ({
               <img
                 src={
                   showLure
-                    ? LURE_CARDS.find((c) => c.id === lureCardId)?.image
+                    ? LURE_CARDS.find((c) => c.id === lureCardKey)?.image // <-- Use key
                     : unknownLureCard
                 }
-                alt={showLure ? lureCardId : "Hidden"}
+                alt={showLure ? lureCardKey : "Hidden"}
                 className="w-8 h-10 object-cover rounded-sm shadow-md"
-                title={`Lure: ${showLure ? lureCardId : "Hidden"}`}
+                title={`Lure: ${showLure ? lureCardKey : "Hidden"}`}
               />
             )}
             {plan && (
               <img
                 src={
                   showAction
-                    ? ACTION_CARDS.find((c) => c.id === actionCardId)?.image
+                    ? ACTION_CARDS.find((c) => c.id === actionCardKey)?.image // <-- Use key
                     : unknownCard
                 }
-                alt={showAction ? actionCardId : "Hidden"}
+                alt={showAction ? actionCardKey : "Hidden"}
                 className="w-8 h-10 object-cover rounded-sm shadow-md"
-                title={`Action: ${showAction ? actionCardId : "Hidden"}`}
+                title={`Action: ${showAction ? actionCardKey : "Hidden"}`}
               />
             )}
           </div>
@@ -165,9 +169,13 @@ export const PlayerCard = ({
           { type: "PARTS", img: scrapsParts, count: scrap.PARTS || 0 },
           { type: "WIRING", img: scrapsWiring, count: scrap.WIRING || 0 },
           { type: "PLATES", img: scrapsPlates, count: scrap.PLATES || 0 },
-        ].map(({ img, count }) => (
-          <ScrapIcon key={img} image={img} count={count} size="w-7 h-7" />
-        ))}
+        ].map(
+          (
+            { type, img, count } // <-- Added type for key
+          ) => (
+            <ScrapIcon key={type} image={img} count={count} size="w-7 h-7" />
+          )
+        )}
       </div>
     </div>
   );

@@ -10,21 +10,8 @@ export const PlanningPhaseActions = ({ sendGameAction, player }) => {
   const failSafeTimeoutRef = useRef(null);
 
   useEffect(() => {
-    if (!lure && player && player.lure_cards && player.lure_cards.length > 0) {
-      const firstAvailableLure = player.lure_cards[0]?.id;
-      if (firstAvailableLure) {
-        setLure(firstAvailableLure);
-      }
-    }
-    if (
-      !action &&
-      player &&
-      player.action_cards &&
-      player.action_cards.length > 0
-    ) {
-      setAction(player.action_cards[0]?.id);
-    }
-  }, [player?.lure_cards, player?.action_cards]);
+    // No default selection logic, player must choose.
+  }, []);
 
   useEffect(() => {
     if (player.plan_submitted && failSafeTimeoutRef.current) {
@@ -42,6 +29,9 @@ export const PlanningPhaseActions = ({ sendGameAction, player }) => {
     };
   }, []);
 
+  // This check is now correct. When the plan is submitted,
+  // player.plan_submitted will be true, and this component will
+  // correctly show the "Waiting..." message.
   if (player?.plan_submitted) {
     return (
       <div className="text-center p-4">
@@ -72,6 +62,7 @@ export const PlanningPhaseActions = ({ sendGameAction, player }) => {
       }, 5000);
 
       try {
+        // Send the constant IDs (e.g., "BLOODY_RAGS")
         sendGameAction("submit_plan", {
           lure_card_id: lure,
           action_card_id: action,
@@ -86,13 +77,6 @@ export const PlanningPhaseActions = ({ sendGameAction, player }) => {
     }
   };
 
-  const actionCardsInHand = player.action_cards.map((backendCard) =>
-    ACTION_CARDS.find((c) => c.name === backendCard.name)
-  );
-  const lureCardsInHand = player.lure_cards.map((backendCard) =>
-    LURE_CARDS.find((c) => c.name === backendCard.name)
-  );
-
   return (
     <div className="space-y-3 p-3 bg-gray-700 bg-opacity-80 rounded-lg">
       <div className="text-center p-2 bg-black bg-opacity-25 rounded-lg">
@@ -105,25 +89,36 @@ export const PlanningPhaseActions = ({ sendGameAction, player }) => {
       <div>
         <h4 className="text-white font-semibold mb-2">Choose Lure:</h4>
         <div className="flex justify-center gap-2">
-          {lureCardsInHand.map((card) => {
-            if (!card) return null;
-            const isUnavailable = false; // Original v1.8 rule disabled
+          {player.lure_cards.map((backendCard) => {
+            // backendCard is {id: "uuid-123", name: "Bloody Rags", ...}
+            const constantCard = LURE_CARDS.find(
+              (c) => c.name === backendCard.name
+            );
+            if (!constantCard) return null; // constantCard is {id: "BLOODY_RAGS", ...}
+
+            // This check remains correct.
+            // player.last_round_lure_id is the UUID from the *previous* round.
+            // backendCard.id is the UUID of the card in hand.
+            const isUnavailable = backendCard.id === player.last_round_lure_id;
+
             return (
               <img
-                key={card.id}
-                src={card.image}
-                alt={card.name}
-                onClick={() => !isUnavailable && setLure(card.id)}
+                // Key and onClick use the constantCard.id (e.g., "BLOODY_RAGS")
+                key={constantCard.id}
+                src={constantCard.image}
+                alt={constantCard.name}
+                onClick={() => !isUnavailable && setLure(constantCard.id)}
                 className={`w-20 h-28 object-cover rounded-md shadow-md transition-all ${
                   isUnavailable
                     ? "opacity-30 cursor-not-allowed"
                     : "cursor-pointer"
                 } ${
-                  lure === card.id
+                  // Compare state against constantCard.id
+                  lure === constantCard.id
                     ? "ring-4 ring-blue-400"
                     : "ring-2 ring-gray-600 hover:ring-blue-300"
                 }`}
-                title={isUnavailable ? `Used last round` : card.name}
+                title={isUnavailable ? `Used last round` : constantCard.name}
               />
             );
           })}
@@ -133,20 +128,26 @@ export const PlanningPhaseActions = ({ sendGameAction, player }) => {
       <div>
         <h4 className="text-white font-semibold mb-2">Choose Action:</h4>
         <div className="flex justify-center gap-2">
-          {actionCardsInHand.map((card) => {
-            if (!card) return null;
+          {player.action_cards.map((backendCard) => {
+            const constantCard = ACTION_CARDS.find(
+              (c) => c.name === backendCard.name
+            );
+            if (!constantCard) return null;
+
             return (
               <img
-                key={card.id}
-                src={card.image}
-                alt={card.name}
-                onClick={() => setAction(card.id)}
+                // Key and onClick use the constantCard.id (e..g, "SCAVENGE")
+                key={constantCard.id}
+                src={constantCard.image}
+                alt={constantCard.name}
+                onClick={() => setAction(constantCard.id)}
                 className={`w-20 h-28 object-cover rounded-md shadow-md transition-all cursor-pointer ${
-                  action === card.id
+                  // Compare state against constantCard.id
+                  action === constantCard.id
                     ? "ring-4 ring-blue-400"
                     : "ring-2 ring-gray-600 hover:ring-blue-300"
                 }`}
-                title={card.name}
+                title={constantCard.name}
               />
             );
           })}
@@ -178,7 +179,11 @@ export const AttractionPhaseActions = ({
   const { attraction_turn_player_id, attraction_phase_state, players } =
     gameState;
   const isMyTurn = player.user_id === attraction_turn_player_id;
-  const myLure = player.plan ? player.plan.lure_card_id : "NONE";
+  const myLureKey = player.plan ? player.plan.lure_card_key : null;
+  const myLureCard = myLureKey
+    ? LURE_CARDS.find((c) => c.id === myLureKey) // "BLOODY_RAGS" === "BLOODY_RAGS"
+    : null;
+  const myLureName = myLureCard ? myLureCard.name : "NONE";
 
   const handleSubmit = () => {
     if (canConfirm) {
@@ -202,7 +207,8 @@ export const AttractionPhaseActions = ({
               It's your turn to choose!
             </p>
             <p className="text-sm text-gray-200">
-              Your Lure: <LureIcon lure={myLure} />
+              {/* This will now find the name correctly */}
+              Your Lure: <LureIcon lure={myLureName} />
             </p>
             <p className="text-xs text-gray-400">
               Phase: ATTRACTION (
@@ -237,16 +243,24 @@ export const AttractionPhaseActions = ({
 export const ActionPhaseActions = ({ sendGameAction, player, gameState }) => {
   const { action_turn_player_id, players } = gameState;
   const isMyTurn = player.user_id === action_turn_player_id;
-  const myChoice = player.plan ? player.plan.action_card_id : null;
+
+  // --- REFACTORED FIX ---
+  // The backend now sends player.plan.action_card_key (e.g., "SCAVENGE")
+  const myActionKey = player.plan ? player.plan.action_card_key : null;
+  const myActionCard = myActionKey
+    ? ACTION_CARDS.find((c) => c.id === myActionKey) // "SCAVENGE" === "SCAVENGE"
+    : null;
+  const myChoiceName = myActionCard ? myActionCard.name.toUpperCase() : null;
+
   const [showScavengeModal, setShowScavengeModal] = useState(false);
 
   useEffect(() => {
-    if (isMyTurn && myChoice === "SCAVENGE") {
+    if (isMyTurn && myChoiceName === "SCAVENGE") {
       setShowScavengeModal(true);
     } else {
       setShowScavengeModal(false);
     }
-  }, [isMyTurn, myChoice]);
+  }, [isMyTurn, myChoiceName]);
 
   const handleScavengeConfirm = (choices) => {
     try {
@@ -296,7 +310,10 @@ export const ActionPhaseActions = ({ sendGameAction, player, gameState }) => {
             <p className="text-lg text-blue-300 animate-pulse">
               It's your turn to act!
             </p>
-            <p className="text-sm text-gray-200">Your Action: {myChoice}</p>
+            <p className="text-sm text-gray-200">
+              {/* This will now find the name correctly */}
+              Your Action: {myChoiceName || "NONE"}
+            </p>
             <p className="text-xs text-gray-400">Phase: ACTION</p>
           </>
         ) : (
@@ -306,22 +323,23 @@ export const ActionPhaseActions = ({ sendGameAction, player, gameState }) => {
         )}
       </div>
 
-      {isMyTurn && (myChoice === "FORTIFY" || myChoice === "ARMORY_RUN") && (
-        <div className="pt-3 border-t border-gray-600 text-center">
-          <p className="text-gray-300 mb-2">
-            Select a card from the market to buy, or Pass to gain 2 random
-            scrap.
-          </p>
-          <button
-            onClick={() => handlePass(myChoice)}
-            className="btn btn-warning"
-          >
-            Pass Action (Gain 2 Scrap)
-          </button>
-        </div>
-      )}
+      {isMyTurn &&
+        (myChoiceName === "FORTIFY" || myChoiceName === "ARMORY_RUN") && (
+          <div className="pt-3 border-t border-gray-600 text-center">
+            <p className="text-gray-300 mb-2">
+              Select a card from the market to buy, or Pass to gain 2 random
+              scrap.
+            </p>
+            <button
+              onClick={() => handlePass(myChoiceName)}
+              className="btn btn-warning"
+            >
+              Pass Action (Gain 2 Scrap)
+            </button>
+          </div>
+        )}
 
-      {isMyTurn && myChoice === "SCAVENGE" && (
+      {isMyTurn && myChoiceName === "SCAVENGE" && (
         <div className="pt-3 border-t border-gray-600 text-center">
           <p className="text-gray-300 mb-2">
             Choose your scrap from the supply.
@@ -335,7 +353,7 @@ export const ActionPhaseActions = ({ sendGameAction, player, gameState }) => {
         </div>
       )}
 
-      {isMyTurn && myChoice === "SCHEME" && (
+      {isMyTurn && myChoiceName === "SCHEME" && (
         <div className="pt-3 border-t border-gray-600 text-center">
           <p className="text-gray-300 mb-2">Confirm your Scheme action.</p>
           <button onClick={handleSchemeConfirm} className="btn btn-primary">

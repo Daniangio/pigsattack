@@ -34,15 +34,17 @@ const CurrentPlanDisplay = ({
     let newTitle = "Current Plan";
 
     if (isSelf && playerPlan) {
-      lureId = playerPlan.lure_card_id;
-      actionId = playerPlan.action_card_id;
+      // --- FIX: Use KEY not ID ---
+      lureId = playerPlan.lure_card_key;
+      actionId = playerPlan.action_card_key;
       newTitle = "Your Plan";
 
-      if (phase === "PLANNING" && !player.plan_submitted) {
+      // --- FIX: Check player.plan (object) not player.plan_submitted (bool) ---
+      if (phase === "PLANNING" && !player.plan) {
         newTitle = "Planning...";
         lureId = null;
         actionId = null;
-      } else if (phase === "PLANNING" && player.plan_submitted) {
+      } else if (phase === "PLANNING" && player.plan) {
         newTitle = "Planned";
       }
     } else {
@@ -51,7 +53,8 @@ const CurrentPlanDisplay = ({
           newTitle = "Planning...";
           break;
         case "PLANNING":
-          if (player.plan_submitted) {
+          // --- FIX: Check player.plan (object) not player.plan_submitted (bool) ---
+          if (player.plan) {
             lureId = "UNKNOWN_LURE";
             actionId = "UNKNOWN_ACTION";
             newTitle = "Planned";
@@ -62,16 +65,19 @@ const CurrentPlanDisplay = ({
         case "ATTRACTION":
         case "DEFENSE":
           if (playerPlan) {
-            lureId = playerPlan.lure_card_id;
+            // --- FIX: Use KEY not ID ---
+            lureId = playerPlan.lure_card_key;
           }
           actionId = "UNKNOWN_ACTION";
           newTitle = "Current Plan";
           break;
         case "ACTION":
           if (playerPlan) {
-            lureId = playerPlan.lure_card_id;
+            // --- FIX: Use KEY not ID ---
+            lureId = playerPlan.lure_card_key;
             if (turnStatus === "ACTIVE" || turnStatus === "WAITING") {
-              actionId = playerPlan.action_card_id;
+              // --- FIX: Use KEY not ID ---
+              actionId = playerPlan.action_card_key;
             } else {
               actionId = "UNKNOWN_ACTION";
             }
@@ -82,8 +88,9 @@ const CurrentPlanDisplay = ({
         case "INTERMISSION":
         case "GAME_OVER":
           if (playerPlan) {
-            lureId = playerPlan.lure_card_id;
-            actionId = playerPlan.action_card_id;
+            // --- FIX: Use KEY not ID ---
+            lureId = playerPlan.lure_card_key;
+            actionId = playerPlan.action_card_key;
           }
           newTitle = "Revealed Plan";
           break;
@@ -111,7 +118,8 @@ const CurrentPlanDisplay = ({
         : null
     );
     setTitle(newTitle);
-  }, [player.plan_submitted, playerPlan, phase, turnStatus, isSelf]);
+    // --- FIX: Add player.plan to dependency array ---
+  }, [player.plan, playerPlan, phase, turnStatus, isSelf]);
 
   if (!lureCard && !actionCard) {
     return (
