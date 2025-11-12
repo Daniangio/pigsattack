@@ -156,6 +156,7 @@ export const DefenseSubmission = ({
 
       setIsPreviewLoading(true);
       try {
+        console.log(token);
         const response = await fetch(`/api/game/${game_id}/preview_defense`, {
           method: "POST",
           headers: {

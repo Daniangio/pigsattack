@@ -259,7 +259,6 @@ const GamePage = () => {
     if (phase === "PLANNING") {
       // For 'self', player.plan will be an object. For other (redacted) players,
       // it will be a boolean `plan_submitted`. We check for either.
-      log(player);
       return player.plan || player.plan_submitted ? "WAITING" : "ACTIVE";
     }
     if (phase === "DEFENSE") {

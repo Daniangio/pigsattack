@@ -3,7 +3,7 @@ import { useStore } from "../store.js";
 
 const useGameSocket = (navigate) => {
   const socketRef = useRef(null);
-  
+
   const navigateRef = useRef(navigate);
   useEffect(() => {
     navigateRef.current = navigate;
@@ -21,21 +21,19 @@ const useGameSocket = (navigate) => {
     handleGameResult,
     handleForceToLobby,
     setSendMessage,
-  } = useStore(
-    (state) => ({
-      setConnectionStatus: state.setConnectionStatus,
-      handleAuthSuccess: state.handleAuthSuccess,
-      handleGuestAuth: state.handleGuestAuth,
-      handleError: state.handleError,
-      clearAuth: state.clearAuth,
-      handleLobbyState: state.handleLobbyState,
-      handleRoomState: state.handleRoomState,
-      handleGameStateUpdate: state.handleGameStateUpdate,
-      handleGameResult: state.handleGameResult,
-      handleForceToLobby: state.handleForceToLobby,
-      setSendMessage: state.setSendMessage,
-    })
-  );
+  } = useStore((state) => ({
+    setConnectionStatus: state.setConnectionStatus,
+    handleAuthSuccess: state.handleAuthSuccess,
+    handleGuestAuth: state.handleGuestAuth,
+    handleError: state.handleError,
+    clearAuth: state.clearAuth,
+    handleLobbyState: state.handleLobbyState,
+    handleRoomState: state.handleRoomState,
+    handleGameStateUpdate: state.handleGameStateUpdate,
+    handleGameResult: state.handleGameResult,
+    handleForceToLobby: state.handleForceToLobby,
+    setSendMessage: state.setSendMessage,
+  }));
 
   const connect = useCallback(
     (token) => {
@@ -63,7 +61,10 @@ const useGameSocket = (navigate) => {
         const { type, payload } = message;
 
         const actions = {
-          guest_auth_success: handleGuestAuth,
+          guest_auth_success: (ignoredPayload) => {
+            // Pass the entire message object to the handler
+            handleGuestAuth(message);
+          },
           auth_success: handleAuthSuccess,
           error: handleError,
           lobby_state: handleLobbyState,
@@ -89,7 +90,7 @@ const useGameSocket = (navigate) => {
         console.log(`WebSocket disconnected: ${e.code} ${e.reason}`);
         socketRef.current = null;
         setConnectionStatus(false);
-        if (e.code !== 1000) { 
+        if (e.code !== 1000) {
           console.log("Abnormal disconnect, clearing auth.");
           clearAuth();
         }
@@ -124,14 +125,20 @@ const useGameSocket = (navigate) => {
     }
   }, []);
 
-  const sendMessage = useCallback((message) => {
-    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      socketRef.current.send(JSON.stringify(message));
-    } else {
-      console.warn("WebSocket not connected. Message not sent:", message);
-      handleError({ message: "Not connected to server." });
-    }
-  }, [handleError]);
+  const sendMessage = useCallback(
+    (message) => {
+      if (
+        socketRef.current &&
+        socketRef.current.readyState === WebSocket.OPEN
+      ) {
+        socketRef.current.send(JSON.stringify(message));
+      } else {
+        console.warn("WebSocket not connected. Message not sent:", message);
+        handleError({ message: "Not connected to server." });
+      }
+    },
+    [handleError]
+  );
 
   useEffect(() => {
     setSendMessage(sendMessage);

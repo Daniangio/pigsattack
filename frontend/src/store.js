@@ -54,10 +54,12 @@ export const useStore = create((set, get) => ({
 
   setConnectionStatus: (status) => set({ isConnected: status }),
 
-  handleGuestAuth: (payload) => {
-    const user = { id: payload.id, username: payload.username };
-    // The <StateGuard> will handle navigation to /lobby.
-    set({ user, token: 'guest' });
+  handleGuestAuth: (message) => {
+    // The user object is the payload, the token is a top-level property
+    const user = { id: message.payload.id, username: message.payload.username };
+    const token = message.token;
+    sessionStorage.setItem("authToken", token);
+    set({ user, token });
   },
 
   handleAuthSuccess: (payload) => {
@@ -79,7 +81,8 @@ export const useStore = create((set, get) => ({
     // If we are NOT in a room, receiving a lobby state should clear other states.
     if (!get().roomState) {
       set({ lobbyState: payload, gameState: null, gameResult: null });
-    } else { // If we ARE in a room, just update the lobby data in the background.
+    } else {
+      // If we ARE in a room, just update the lobby data in the background.
       set({ lobbyState: payload });
     }
   },
@@ -89,7 +92,7 @@ export const useStore = create((set, get) => ({
     // allowing the user to navigate back to the lobby and see its contents.
     set({ roomState: payload });
   },
-  
+
   handleForceToLobby: () => {
     // Server is telling us we are no longer in a room (e.g., we left/were kicked)
     set({ roomState: null, gameState: null, gameResult: null });
@@ -111,24 +114,24 @@ export const useStore = create((set, get) => ({
   },
 
   // --- Reusable Authenticated Fetch (Unchanged) ---
-  httpGameRequest: async (gameId, endpoint, method = 'POST', body = {}) => {
+  httpGameRequest: async (gameId, endpoint, method = "POST", body = {}) => {
     // ... (this logic is fine and remains unchanged) ...
     const { token, handleError } = get();
-    
-    if (!token || token === 'guest') {
+
+    if (!token || token === "guest") {
       console.error("Attempted HTTP request as guest.");
       handleError({ message: "Guests cannot perform this action." });
       return null;
     }
-    
+
     const url = `http://localhost:8000/api/game/${gameId}/${endpoint}`;
-    
+
     try {
       const response = await fetch(url, {
         method: method,
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(body),
       });
@@ -137,14 +140,12 @@ export const useStore = create((set, get) => ({
         const errData = await response.json();
         throw new Error(errData.detail || `HTTP Error: ${response.statusText}`);
       }
-      
+
       return await response.json(); // Return the JSON response
-    
     } catch (err) {
       console.error(`HTTP request to ${url} failed:`, err);
       handleError({ message: err.message || "A network error occurred." });
       return null;
     }
   },
-
 }));

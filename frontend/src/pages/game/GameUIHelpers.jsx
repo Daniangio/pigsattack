@@ -98,17 +98,18 @@ export const LureIcon = ({ lure }) => {
     RAGS: "bg-red-700 text-red-100 border-red-500",
     NOISES: "bg-blue-700 text-blue-100 border-blue-500",
     FRUIT: "bg-green-700 text-green-100 border-green-500",
-    BLOODY_RAGS: "bg-red-700 text-red-100 border-red-500",
-    STRANGE_NOISES: "bg-blue-700 text-blue-100 border-blue-500",
-    FALLEN_FRUIT: "bg-green-700 text-green-100 border-green-500",
+    "BLOODY RAGS": "bg-red-700 text-red-100 border-red-500",
+    "STRANGE NOISES": "bg-blue-700 text-blue-100 border-blue-500",
+    "FALLEN FRUIT": "bg-green-700 text-green-100 border-green-500",
+    UNKNOWN: "bg-gray-700 text-gray-100 border-gray-500",
   };
   const lureText = {
     RAGS: "Rags",
     NOISES: "Noises",
     FRUIT: "Fruit",
-    BLOODY_RAGS: "Bloody Rags",
-    STRANGE_NOISES: "Strange Noises",
-    FALLEN_FRUIT: "Fallen Fruit",
+    "BLOODY RAGS": "Bloody Rags",
+    "STRANGE NOISES": "Strange Noises",
+    "FALLEN FRUIT": "Fallen Fruit",
   };
   return (
     <span

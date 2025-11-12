@@ -263,7 +263,7 @@ class GameManager:
         await self.broadcast_game_state(game_id)
         
         # 2. Find the GameRecord
-        record = self.room_manager.db.get_game_record(game_id)
+        record = fake_games_db.get(game_id)
         if not record:
             print(f"Error: GameRecord {game_id} not found. Cannot update stats.")
             await self.remove_game(game_id)
@@ -281,7 +281,7 @@ class GameManager:
         # 4. Find the server-level User object for the winner
         winner_user: Optional[User] = None
         if winner_state:
-            participant = next((p for p in record.participants if p.id == winner_state.user_id), None)
+            participant = next((p for p in record.participants if p.user.id == winner_state.user_id), None)
             if participant:
                 winner_user = participant.user
                 print(f"Winner found: {winner_user.username}")
