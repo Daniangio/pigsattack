@@ -7,7 +7,6 @@ export const ThreatsPanel = ({
   threats,
   threatAssignments,
   onThreatSelect,
-  selectableThreats,
   selectedThreatId,
   gameState,
 }) => {
@@ -25,9 +24,10 @@ export const ThreatsPanel = ({
     <div className="w-full h-full p-2 bg-gray-800 bg-opacity-70 rounded-lg overflow-y-auto">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {threats.map((threat) => {
+          const selectableThreats = gameState?.selectableThreats || [];
           const assignedTo = threatAssignments[threat.id];
           const isAvailable = !assignedTo;
-          const isSelectable = selectableThreats.some(
+          const isSelectable = selectableThreats?.some(
             (t) => t.id === threat.id
           );
           const isSelected = threat.id === selectedThreatId;
@@ -62,7 +62,7 @@ const canAfford = (playerScrap, cardCost, isFree = false) => {
   return true;
 };
 
-const UpgradesMarket = ({
+export const UpgradesMarket = ({
   upgrade_market,
   myTurn,
   phase,
@@ -75,41 +75,47 @@ const UpgradesMarket = ({
   const isMyTurnToBuyUpgrades = isActionBuy || isIntermissionBuy;
 
   return (
-    <div className="p-3 bg-gray-800 bg-opacity-70 rounded-lg shadow-lg h-full flex items-center gap-4">
-      <h2 className="text-lg font-semibold text-green-400 flex-shrink-0">
+    <div className="p-2 bg-gray-800 bg-opacity-70 rounded-lg shadow-lg h-full flex flex-col gap-2">
+      <h2 className="text-base font-semibold text-green-400 text-center flex-shrink-0">
         Upgrades
       </h2>
-      <div className="flex-1 flex gap-2 overflow-x-auto pb-2">
-        {(upgrade_market || []).map((card) => {
-          const isAffordable = canAfford(
-            playerScrap,
-            card.cost,
-            isIntermissionBuy
-          );
-          const isSelectable = isMyTurnToBuyUpgrades && isAffordable;
-          const isDimmed =
-            myTurn &&
-            (phase === "ACTION" || phase === "INTERMISSION") &&
-            choiceType !== "ARMORY_RUN" &&
-            !isSelectable;
+      <div className="flex-grow flex flex-col gap-2 overflow-y-auto px-1">
+        {(upgrade_market || []).length > 0 ? (
+          (upgrade_market || []).map((card) => {
+            const isAffordable = canAfford(
+              playerScrap,
+              card.cost,
+              isIntermissionBuy
+            );
+            const isSelectable = isMyTurnToBuyUpgrades && isAffordable;
+            const isDimmed =
+              myTurn &&
+              (phase === "ACTION" || phase === "INTERMISSION") &&
+              choiceType !== "ARMORY_RUN" &&
+              !isSelectable;
 
-          return (
-            <MarketCard
-              key={card.id}
-              card={card}
-              cardType="UPGRADE"
-              isSelectable={isSelectable}
-              isDimmed={isDimmed}
-              onClick={() => isSelectable && onCardSelect("UPGRADE", card.id)}
-            />
-          );
-        })}
+            return (
+              <MarketCard
+                key={card.id}
+                card={card}
+                cardType="UPGRADE"
+                isSelectable={isSelectable}
+                isDimmed={isDimmed}
+                onClick={() => isSelectable && onCardSelect("UPGRADE", card.id)}
+              />
+            );
+          })
+        ) : (
+          <p className="text-gray-500 text-sm italic text-center m-auto">
+            Empty
+          </p>
+        )}
       </div>
     </div>
   );
 };
 
-const ArsenalMarket = ({
+export const ArsenalMarket = ({
   arsenal_market,
   myTurn,
   phase,
@@ -123,69 +129,41 @@ const ArsenalMarket = ({
   const isMyTurnToBuyArsenal = isActionBuy || isIntermissionBuy;
 
   return (
-    <div className="p-3 bg-gray-800 bg-opacity-70 rounded-lg shadow-lg h-full flex items-center gap-4">
-      <h2 className="text-lg font-semibold text-red-400 flex-shrink-0">
+    <div className="p-2 bg-gray-800 bg-opacity-70 rounded-lg shadow-lg h-full flex flex-col gap-2">
+      <h2 className="text-base font-semibold text-red-400 text-center flex-shrink-0">
         Arsenal
       </h2>
-      <div className="flex-1 flex gap-2 overflow-x-auto pb-2">
-        {(arsenal_market || []).map((card) => {
-          const isAffordable = canAfford(
-            playerScrap,
-            card.cost,
-            isIntermissionBuy
-          );
-          const isSelectable = isMyTurnToBuyArsenal && isAffordable;
-          const isDimmed =
-            myTurn &&
-            (phase === "ACTION" || phase === "INTERMISSION") &&
-            choiceType !== "FORTIFY" &&
-            !isSelectable;
+      <div className="flex-grow flex flex-col gap-2 overflow-y-auto px-1">
+        {(arsenal_market || []).length > 0 ? (
+          (arsenal_market || []).map((card) => {
+            const isAffordable = canAfford(
+              playerScrap,
+              card.cost,
+              isIntermissionBuy
+            );
+            const isSelectable = isMyTurnToBuyArsenal && isAffordable;
+            const isDimmed =
+              myTurn &&
+              (phase === "ACTION" || phase === "INTERMISSION") &&
+              choiceType !== "FORTIFY" &&
+              !isSelectable;
 
-          return (
-            <MarketCard
-              key={card.id}
-              card={card}
-              cardType="ARSENAL"
-              isSelectable={isSelectable}
-              isDimmed={isDimmed}
-              onClick={() => isSelectable && onCardSelect("ARSENAL", card.id)}
-            />
-          );
-        })}
-      </div>
-    </div>
-  );
-};
-
-export const MarketPanel = ({
-  market,
-  myTurn,
-  phase,
-  choiceType,
-  onCardSelect,
-  playerScrap,
-}) => {
-  return (
-    <div className="w-full h-full flex flex-col gap-2 p-2 bg-gray-800 bg-opacity-70 rounded-lg">
-      <div className="flex-1 overflow-hidden">
-        <UpgradesMarket
-          upgrade_market={market.upgrade_faceup}
-          myTurn={myTurn}
-          phase={phase}
-          choiceType={choiceType}
-          onCardSelect={onCardSelect}
-          playerScrap={playerScrap}
-        />
-      </div>
-      <div className="flex-1 overflow-hidden">
-        <ArsenalMarket
-          arsenal_market={market.arsenal_faceup}
-          myTurn={myTurn}
-          phase={phase}
-          choiceType={choiceType}
-          onCardSelect={onCardSelect}
-          playerScrap={playerScrap}
-        />
+            return (
+              <MarketCard
+                key={card.id}
+                card={card}
+                cardType="ARSENAL"
+                isSelectable={isSelectable}
+                isDimmed={isDimmed}
+                onClick={() => isSelectable && onCardSelect("ARSENAL", card.id)}
+              />
+            );
+          })
+        ) : (
+          <p className="text-gray-500 text-sm italic text-center m-auto">
+            Empty
+          </p>
+        )}
       </div>
     </div>
   );

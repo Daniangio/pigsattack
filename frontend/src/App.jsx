@@ -77,7 +77,9 @@ const StateGuard = ({ children }) => {
 
     // If we are on a post-game page but have no result, go to lobby.
     if (!gameResultId && location.pathname.startsWith("/post-game/")) {
-      console.log("StateGuard: No game result, redirecting from post-game page.");
+      console.log(
+        "StateGuard: No game result, redirecting from post-game page."
+      );
       navigate("/lobby", { replace: true });
     }
 
@@ -96,14 +98,15 @@ const StateGuard = ({ children }) => {
 function AppContent() {
   const { token, clearAuth, roomState } = useStore();
   const navigate = useNavigate();
-  
+  const location = useLocation();
+
   // Pass navigate to the socket hook. This allows the hook
   // to handle the 'room_created' message and navigate the user.
   const { connect, disconnect, isConnected } = useGameSocket(navigate);
 
   // Effect: Manage WebSocket connection
   useEffect(() => {
-    if (token && !isConnected && token !== 'guest') {
+    if (token && !isConnected && token !== "guest") {
       console.log("AppContent: Token found, connecting...");
       connect(token);
     }
@@ -126,26 +129,60 @@ function AppContent() {
     onLogout: handleLogout,
   };
 
+  const isGamePage = location.pathname.startsWith("/game/");
+
+  const routes = (
+    <Routes>
+      {/* Public Route */}
+      <Route
+        path="/auth"
+        element={<AuthPage onGuestLogin={handleGuestLogin} />}
+      />
+
+      {/* Protected Routes */}
+      <Route
+        path="/lobby"
+        element={
+          token ? <LobbyPage {...layoutProps} /> : <Navigate to="/auth" />
+        }
+      />
+      <Route
+        path="/room/:roomId"
+        element={
+          token ? <RoomPage {...layoutProps} /> : <Navigate to="/auth" />
+        }
+      />
+      <Route
+        path="/game/:gameId"
+        element={
+          token ? <GamePage {...layoutProps} /> : <Navigate to="/auth" />
+        }
+      />
+      <Route
+        path="/profile/:userId"
+        element={
+          token ? <ProfilePage {...layoutProps} /> : <Navigate to="/auth" />
+        }
+      />
+      <Route
+        path="/post-game/:gameId"
+        element={token ? <PostGamePage /> : <Navigate to="/auth" />}
+      />
+
+      {/* Default route */}
+      <Route path="*" element={<Navigate to={token ? "/lobby" : "/auth"} />} />
+    </Routes>
+  );
+
   return (
     // Base styles
     <div className="bg-gray-900 min-h-screen text-gray-200 font-sans selection:bg-orange-500 selection:text-white">
       <StateGuard>
-        <div className="container mx-auto p-4 md:p-6">
-          <Routes>
-            {/* Public Route */}
-            <Route path="/auth" element={<AuthPage onGuestLogin={handleGuestLogin} />} />
-
-            {/* Protected Routes */}
-            <Route path="/lobby" element={token ? <LobbyPage {...layoutProps} /> : <Navigate to="/auth" />} />
-            <Route path="/room/:roomId" element={token ? <RoomPage {...layoutProps} /> : <Navigate to="/auth" />} />
-            <Route path="/game/:gameId" element={token ? <GamePage {...layoutProps} /> : <Navigate to="/auth" />} />
-            <Route path="/profile/:userId" element={token ? <ProfilePage {...layoutProps} /> : <Navigate to="/auth" />} />
-            <Route path="/post-game/:gameId" element={token ? <PostGamePage /> : <Navigate to="/auth" />} />
-
-            {/* Default route */}
-            <Route path="*" element={<Navigate to={token ? "/lobby" : "/auth"} />} />
-          </Routes>
-        </div>
+        {isGamePage ? (
+          routes
+        ) : (
+          <div className="container mx-auto p-4 md:p-6">{routes}</div>
+        )}
       </StateGuard>
     </div>
   );

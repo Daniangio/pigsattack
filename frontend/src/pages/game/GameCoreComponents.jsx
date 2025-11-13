@@ -31,49 +31,46 @@ export const playerPortraits = [
   playerIcon5,
 ];
 
-export const PlayerCard = ({
+export const PlayerInfoCard = ({
   player,
   isSelf,
   turnStatus,
   portrait,
   turnOrder,
-  plan, // This is the PlayerPlans object { lure_card_key, action_card_key, ... }
+  plan,
   isViewing,
   onClick,
 }) => {
   if (!player) return null;
   const { scrap, injuries, username, status } = player;
   const isInactive = status !== "ACTIVE";
-  const phase = useStore((state) => state.gameState?.phase); // Simplified selector
+  const phase = useStore((state) => state.gameState?.phase);
+
   let showLure = false;
   let showAction = false;
 
-  // --- FIX: Use plan.lure_card_key and plan.action_card_key ---
   const lureCardKey = plan?.lure_card_key;
   const actionCardKey = plan?.action_card_key;
 
   if (plan) {
     switch (phase) {
       case "PLANNING":
-        // --- FIX: Check player.plan (object) not player.plan_submitted (bool) ---
-        // Note: `plan` is passed from `player_plans[pid]`, so we also check `isSelf`
         if (isSelf && player.plan) {
+          // For self, plan is an object
           showLure = true;
           showAction = true;
         }
         break;
       case "ATTRACTION":
       case "DEFENSE":
-        showLure = true;
-        if (isSelf) {
-          showAction = true;
-        }
+        showLure = true; // Lure is revealed for everyone
+        if (isSelf) showAction = true; // Action is only visible to self
         break;
       case "ACTION":
       case "CLEANUP":
       case "INTERMISSION":
       case "GAME_OVER":
-        showLure = true;
+        showLure = true; // All cards revealed
         showAction = true;
         break;
       default:
@@ -82,100 +79,91 @@ export const PlayerCard = ({
   }
 
   return (
-    <div className="flex items-center gap-1 cursor-pointer" onClick={onClick}>
-      <div className="flex flex-col items-center">
-        <div
-          className={`relative w-32 h-32 flex-shrink-0 transition-all duration-200 ${
-            isInactive ? "opacity-50" : ""
-          } ${
-            isViewing
-              ? "ring-4 ring-yellow-300 shadow-lg"
-              : isSelf
-              ? "shadow-[0_0_12px_2px_rgba(59,130,246,0.7)]"
-              : ""
-          }`}
-        >
-          <img
-            src={portrait}
-            alt="Player Portrait"
-            className="absolute top-1/2 left-1/2 h-[80%] w-[80%] -translate-x-1/2 -translate-y-1/2 rounded-md object-cover"
+    <div
+      className={`w-full flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-all duration-200 ${
+        isInactive ? "opacity-50" : ""
+      } ${
+        isViewing
+          ? "bg-yellow-500 bg-opacity-20 ring-2 ring-yellow-400"
+          : "bg-black bg-opacity-30"
+      }`}
+      onClick={onClick}
+    >
+      {/* Left side: Portrait */}
+      <div className="relative w-16 h-16 flex-shrink-0">
+        <img
+          src={portrait}
+          alt="Player Portrait"
+          className="w-full h-full rounded-full object-cover"
+        />
+        <div className="absolute inset-0 flex items-center justify-center">
+          <TurnStatusIcon
+            turnStatus={turnStatus}
+            size="h-8 w-8"
+            isGlowing={true}
           />
-          <img
-            src={playerFrame}
-            alt="Player Frame"
-            className="absolute inset-0 w-full h-full z-10"
-          />
-
-          <div className="absolute top-1.5 left-1.5 z-20 bg-black bg-opacity-70 rounded-full w-6 h-6 flex items-center justify-center">
-            <span
-              className="text-white font-bold text-sm"
-              style={{ textShadow: "1px 1px 2px black" }}
-            >
-              {turnOrder}
-            </span>
-          </div>
-
-          <div className="absolute -top left-1/2 -translate-x-1/2 z-20 flex items-center space-x-1">
-            {plan && (
-              <img
-                src={
-                  showLure
-                    ? LURE_CARDS.find((c) => c.id === lureCardKey)?.image // <-- Use key
-                    : unknownLureCard
-                }
-                alt={showLure ? lureCardKey : "Hidden"}
-                className="w-8 h-10 object-cover rounded-sm shadow-md"
-                title={`Lure: ${showLure ? lureCardKey : "Hidden"}`}
-              />
-            )}
-            {plan && (
-              <img
-                src={
-                  showAction
-                    ? ACTION_CARDS.find((c) => c.id === actionCardKey)?.image // <-- Use key
-                    : unknownCard
-                }
-                alt={showAction ? actionCardKey : "Hidden"}
-                className="w-8 h-10 object-cover rounded-sm shadow-md"
-                title={`Action: ${showAction ? actionCardKey : "Hidden"}`}
-              />
-            )}
-          </div>
-
-          <div className="absolute top-0.5 right-0.5 z-20">
-            <TurnStatusIcon turnStatus={turnStatus} size="h-5 w-5" />
-          </div>
-          <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-[90%] z-20">
-            <div className="bg-black bg-opacity-60 rounded px-1 py-0.5 text-center">
-              <span
-                className={`text-xs font-bold truncate block ${
-                  isSelf ? "text-blue-300" : "text-white"
-                }`}
-              >
-                {username}
-              </span>
-            </div>
-          </div>
+        </div>
+        <div className="absolute -top-1 -left-1 bg-black bg-opacity-70 rounded-full w-6 h-6 flex items-center justify-center">
+          <span className="text-white font-bold text-sm">{turnOrder}</span>
         </div>
       </div>
-      <div className="flex flex-col items-center justify-center space-y-1">
-        <ScrapIcon
-          icon={<InjuryIcon />}
-          count={injuries}
-          textColor="text-red-500"
-          size="w-7 h-7"
-        />
-        {[
-          { type: "PARTS", img: scrapsParts, count: scrap.PARTS || 0 },
-          { type: "WIRING", img: scrapsWiring, count: scrap.WIRING || 0 },
-          { type: "PLATES", img: scrapsPlates, count: scrap.PLATES || 0 },
-        ].map(
-          (
-            { type, img, count } // <-- Added type for key
-          ) => (
-            <ScrapIcon key={type} image={img} count={count} size="w-7 h-7" />
-          )
-        )}
+
+      {/* Right side: Info */}
+      <div className="flex-grow flex flex-col gap-1">
+        <span
+          className={`text-sm font-bold truncate ${
+            isSelf ? "text-blue-300" : "text-white"
+          }`}
+        >
+          {username}
+        </span>
+        {/* Planned Cards */}
+        <div className="flex items-center gap-1">
+          <img
+            src={
+              showLure
+                ? LURE_CARDS.find((c) => c.id === lureCardKey)?.image
+                : unknownLureCard
+            }
+            alt={showLure ? lureCardKey : "Hidden Lure"}
+            className="w-8 h-10 object-cover rounded-sm shadow-md"
+            title={`Lure: ${showLure ? lureCardKey : "Hidden"}`}
+          />
+          <img
+            src={
+              showAction
+                ? ACTION_CARDS.find((c) => c.id === actionCardKey)?.image
+                : unknownCard
+            }
+            alt={showAction ? actionCardKey : "Hidden Action"}
+            className="w-8 h-10 object-cover rounded-sm shadow-md"
+            title={`Action: ${showAction ? actionCardKey : "Hidden"}`}
+          />
+        </div>
+        {/* Stats */}
+        <div className="flex items-center gap-2">
+          <ScrapIcon
+            icon={<InjuryIcon />}
+            count={injuries}
+            textColor="text-red-400"
+            size="w-5 h-5"
+          />
+          <ScrapIcon
+            image={scrapsParts}
+            count={scrap.PARTS || 0}
+            size="w-5 h-5"
+          />
+          <ScrapIcon
+            image={scrapsWiring}
+            count={scrap.WIRING || 0}
+            size="w-5 h-5"
+          />
+          <ScrapIcon
+            image={scrapsPlates}
+            count={scrap.PLATES || 0}
+            size="w-5 h-5"
+          />
+        </div>
       </div>
     </div>
   );

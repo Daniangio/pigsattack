@@ -1,19 +1,18 @@
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useStore } from "../store";
 
 // Import all components from their respective files
-import {
-  gameBackground,
-  LURE_CARDS,
-  ACTION_CARDS,
-  // playerPortraits, // <-- Removed from here
-} from "./game/GameConstants.jsx";
+import { gameBackground, LURE_CARDS } from "./game/GameConstants.jsx";
 import GameHeader from "./game/GameHeader.jsx";
 import { PlayerAssets } from "./game/PlayerBoard.jsx";
 // Import PlayerCard AND playerPortraits from GameCoreComponents
-import { PlayerCard, playerPortraits } from "./game/GameCoreComponents.jsx";
+import { playerPortraits, PlayerInfoCard } from "./game/GameCoreComponents.jsx";
 import { GameLog } from "./game/GameUIHelpers.jsx";
-import { MarketPanel, ThreatsPanel } from "./game/GamePanels.jsx";
+import {
+  ArsenalMarket,
+  UpgradesMarket,
+  ThreatsPanel,
+} from "./game/GamePanels.jsx";
 import { ConfirmationModal, DefenseSubmission } from "./game/GameModals.jsx";
 import {
   PlanningPhaseActions,
@@ -32,7 +31,6 @@ const GamePage = () => {
 
   const [showSurrenderModal, setShowSurrenderModal] = useState(false);
   const [viewingPlayerId, setViewingPlayerId] = useState(null);
-  const [activePanel, setActivePanel] = useState("threats");
   const [selectedThreatId, setSelectedThreatId] = useState(null);
   const [isLogCollapsed, setIsLogCollapsed] = useState(false);
 
@@ -55,32 +53,7 @@ const GamePage = () => {
     if (user?.id && !viewingPlayerId) {
       setViewingPlayerId(user.id);
     }
-
-    if (viewingPlayerId === user.id && self && gameState) {
-      const myActionKey = self.plan ? self.plan.action_card_key : null;
-
-      if (gameState.phase === "ACTION" && myActionKey) {
-        if (["FORTIFY", "ARMORY_RUN"].includes(myActionKey)) {
-          setActivePanel("market");
-        } else {
-          setActivePanel("threats"); // Default
-        }
-      } else if (gameState.phase === "INTERMISSION") {
-        setActivePanel("market");
-      } else if (
-        ["PLANNING", "ATTRACTION", "DEFENSE", "WILDERNESS", "CLEANUP"].includes(
-          gameState.phase
-        )
-      ) {
-        setActivePanel("threats");
-      }
-    }
-  }, [
-    user?.id,
-    viewingPlayerId,
-    gameState?.phase,
-    self?.plan?.action_card_key,
-  ]);
+  }, [user?.id, viewingPlayerId]);
 
   const sendGameAction = (actionName, data) => {
     const sendMessage = useStore.getState().sendMessage;
@@ -320,13 +293,15 @@ const GamePage = () => {
 
   return (
     <div
-      className="h-screen w-screen text-white bg-cover bg-center bg-fixed flex flex-col"
+      className="w-[200vw] h-[200vh] text-white bg-cover bg-center bg-fixed flex flex-col"
       style={{
         backgroundImage: `url(${gameBackground})`,
         onError: (e) => {
           e.target.style.backgroundImage = "none";
           e.target.style.backgroundColor = "#1a202c";
         },
+        transform: "scale(0.5)",
+        transformOrigin: "top left",
       }}
     >
       {showSurrenderModal && (
@@ -351,55 +326,24 @@ const GamePage = () => {
         />
       </header>
 
-      <div
-        className="flex-shrink-0 flex justify-center items-center gap-4 p-1 overflow-x-auto bg-black bg-opacity-20"
-        style={{ height: "25vh" }}
-      >
-        {initiative_queue.map((pid, index) => {
-          const isViewing = pid === viewingPlayerId;
-          return (
-            <React.Fragment key={pid}>
-              <PlayerCard
-                player={gameState.players[pid]}
-                isSelf={pid === user.id}
-                portrait={playerPortraitsMap[pid]}
-                turnStatus={getPlayerTurnStatus(pid)}
-                turnOrder={index + 1}
-                plan={player_plans[pid]}
-                isViewing={isViewing}
-                onClick={() => setViewingPlayerId(pid)}
-              />
-              {index < initiative_queue.length - 1 && (
-                <span className="text-3xl text-indigo-300 font-light opacity-70">
-                  &rarr;
-                </span>
-              )}
-            </React.Fragment>
-          );
-        })}
-      </div>
-
       <main
         className="flex-grow flex gap-2 p-2 overflow-hidden"
-        style={{ height: "45vh" }}
+        style={{ height: "65vh" }}
       >
-        <div className="flex-shrink-0 flex flex-col items-center gap-2 p-2 bg-black bg-opacity-20 rounded-lg">
-          <button
-            onClick={() => setActivePanel("threats")}
-            className={`btn btn-sm w-full ${
-              activePanel === "threats" ? "btn-primary" : "btn-ghost"
-            }`}
-          >
-            Threats
-          </button>
-          <button
-            onClick={() => setActivePanel("market")}
-            className={`btn btn-sm w-full ${
-              activePanel === "market" ? "btn-primary" : "btn-ghost"
-            }`}
-          >
-            Market
-          </button>
+        <div className="w-[25%] h-full flex flex-col justify-center items-center gap-2 p-2 bg-black bg-opacity-20 rounded-lg overflow-y-auto">
+          {initiative_queue.map((pid, index) => (
+            <PlayerInfoCard
+              key={pid}
+              player={gameState.players[pid]}
+              isSelf={pid === user.id}
+              portrait={playerPortraitsMap[pid]}
+              turnStatus={getPlayerTurnStatus(pid)}
+              turnOrder={index + 1}
+              plan={player_plans[pid]}
+              isViewing={pid === viewingPlayerId}
+              onClick={() => setViewingPlayerId(pid)}
+            />
+          ))}
         </div>
 
         <div className="flex-grow h-full overflow-y-auto">
@@ -418,30 +362,39 @@ const GamePage = () => {
               </button>
             </div>
           ) : (
-            <div className="flex h-full gap-2">
-              <div className="w-1/2 h-full overflow-y-auto">
-                {activePanel === "threats" && (
-                  <ThreatsPanel
-                    threats={threatsToShow}
-                    threatAssignments={threatAssignments}
-                    onThreatSelect={handleThreatSelect}
-                    selectableThreats={selectableThreats}
-                    gameState={gameState}
-                    selectedThreatId={selectedThreatId}
-                  />
-                )}
-                {activePanel === "market" && (
-                  <MarketPanel
-                    market={market}
+            <div className="flex flex-col h-full gap-2">
+              <div className="flex-grow-0 h-[45%] flex gap-2">
+                <div className="w-1/3 h-full">
+                  <UpgradesMarket
+                    upgrade_market={market.upgrade_faceup}
                     myTurn={isMyTurnForMarket}
                     phase={phase}
                     choiceType={myActionKey}
                     onCardSelect={handleMarketCardSelect}
                     playerScrap={self.scrap}
                   />
-                )}
+                </div>
+                <div className="w-1/3 h-full">
+                  <ThreatsPanel
+                    threats={threatsToShow}
+                    threatAssignments={threatAssignments}
+                    onThreatSelect={handleThreatSelect}
+                    selectableThreats={selectableThreats}
+                    selectedThreatId={selectedThreatId}
+                  />
+                </div>
+                <div className="w-1/3 h-full">
+                  <ArsenalMarket
+                    arsenal_market={market.arsenal_faceup}
+                    myTurn={isMyTurnForMarket}
+                    phase={phase}
+                    choiceType={myActionKey}
+                    onCardSelect={handleMarketCardSelect}
+                    playerScrap={self.scrap}
+                  />
+                </div>
               </div>
-              <div className="w-1/2 h-full overflow-y-auto">
+              <div className="flex-grow h-[55%] overflow-y-auto">
                 {phase === "PLANNING" && (
                   <PlanningPhaseActions
                     sendGameAction={sendGameAction}
@@ -543,7 +496,7 @@ const GamePage = () => {
 
       <footer
         className="flex-shrink-0 p-1 bg-black bg-opacity-20"
-        style={{ height: "20vh" }}
+        style={{ height: "25vh" }}
       >
         <div className="w-full h-full bg-black bg-opacity-20 rounded-lg p-2">
           <PlayerAssets
