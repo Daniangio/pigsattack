@@ -178,23 +178,26 @@ const GamePage = () => {
   ]);
 
   const threatsToShow = useMemo(() => {
-    const viewingPlayer =
-      viewingPlayerId && gameState?.players[viewingPlayerId];
-    if (!viewingPlayer) return gameState?.current_threats || [];
-
-    const assignedThreatId =
-      gameState.player_threat_assignment[viewingPlayer.user_id];
-    const assignedThreat = gameState.current_threats.find(
-      (t) => t.id === assignedThreatId
-    );
-
-    if (assignedThreat) {
-      return [assignedThreat];
+    if (!gameState) return [];
+    // During PLANNING, players need to see the threats that are currently in play
+    // from the previous round to inform their lure choice.
+    if (gameState.phase === "PLANNING") {
+      return gameState.current_threats || [];
     }
-    return gameState.current_threats;
+    // In other phases, if a player has an assigned threat, only show that one.
+    const viewingPlayer = gameState.players[viewingPlayerId];
+    if (viewingPlayer) {
+      const assignedThreatId =
+        gameState.player_threat_assignment[viewingPlayer.user_id];
+      const assignedThreat = gameState.current_threats.find(
+        (t) => t.id === assignedThreatId
+      );
+      if (assignedThreat) return [assignedThreat];
+    }
+    // Otherwise, show all threats for the current round.
+    return gameState.current_threats || [];
   }, [
-    viewingPlayerId,
-    gameState?.players,
+    gameState?.phase,
     gameState?.current_threats,
     gameState?.player_threat_assignment,
   ]);

@@ -14,7 +14,7 @@ from pydantic import ValidationError
 BASE_DEFENSE_MAP = {
     "SCAVENGE": {ScrapType.WIRING: 2},
     "FORTIFY": {ScrapType.PLATES: 2},
-    "ARMORY RUN": {ScrapType.PARTS: 2},
+    "ARMORY_RUN": {ScrapType.PARTS: 2},
     "SCHEME": {ScrapType.PARTS: 1, ScrapType.WIRING: 1, ScrapType.PLATES: 1},
 }
 

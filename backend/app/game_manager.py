@@ -43,11 +43,10 @@ class GameManager:
             print(f"Warning: Game {game_id} already exists. Overwriting.")
             
         try:
-            # --- REFACTOR FIX ---
-            # Changed this from `GameInstance.create` to the constructor.
-            # The new `GameInstance`'s __init__ now handles all setup.
+            # 1. Create the instance (synchronous)
             game = GameInstance(game_id, participants)
-            # --- END FIX ---
+            # 2. Perform async setup (draw scrap, start first round)
+            await game.async_setup()
             
             self.active_games[game_id] = game
             print(f"GameInstance {game_id} created with {len(participants)} players.")

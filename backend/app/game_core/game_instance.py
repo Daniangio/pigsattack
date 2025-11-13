@@ -54,19 +54,21 @@ class GameInstance:
         
         self.state.add_log(f"Game instance {game_id} created and services initialized.")
         
-        # 3. Perform initial state setup (scrap, market)
-        #    (This was missing from game_setup.py)
+    async def async_setup(self):
+        """
+        Performs asynchronous setup tasks like drawing initial scrap and starting
+        the first round, which cannot be done in a synchronous __init__.
+        """
+        # 1. Perform initial state setup (scrap, market)
         for player in self.state.players.values():
             if player.status == PlayerStatus.ACTIVE:
                 self.phase_manager.draw_random_scrap(player, 2)
         
         self.phase_manager.refill_market()
         self.state.add_log("Initial scrap drawn and market stocked.")
-        
-        # 4. Log initial game state
-        self.state.add_log(f"--- ROUND {self.state.round} (Era {self.state.era}) ---")
-        self.state.add_log("--- PLANNING PHASE ---")
-        self.state.add_log("All players: Plan your Lure and Action cards.")
+
+        # 2. Start the first round, which will advance to WILDERNESS and then PLANNING.
+        await self.phase_manager._start_new_round()
 
     async def player_action(
         self, 

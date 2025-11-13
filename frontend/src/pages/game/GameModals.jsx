@@ -144,7 +144,6 @@ export const DefenseSubmission = ({
     };
 
     debounceTimeout.current = setTimeout(async () => {
-      // --- FIX: Add guard clause for token ---
       if (!token) {
         console.error("No auth token available for defense preview.");
         setDefensePreview({
@@ -152,11 +151,9 @@ export const DefenseSubmission = ({
         });
         return;
       }
-      // --- END FIX ---
 
       setIsPreviewLoading(true);
       try {
-        console.log(token);
         const response = await fetch(`/api/game/${game_id}/preview_defense`, {
           method: "POST",
           headers: {

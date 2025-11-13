@@ -27,7 +27,6 @@ class GamePhaseManager:
         self.state.add_log("Plans revealed! Calculating initiative...")
         
         self._set_initiative_order()
-        self._draw_threats()
         
         # Setup Attraction Phase
         active_players = self.state.get_active_players_in_order()
@@ -39,10 +38,6 @@ class GamePhaseManager:
         await self.advance_attraction_turn()
 
     async def advance_attraction_turn(self):
-        """
-        FIXED: Ported logic from old_game_instance.py
-        This now correctly handles the First Pass / Second Pass logic.
-        """
         if not self.state.available_threat_ids or not self.state.unassigned_player_ids:
             self.state.add_log("All threats or players assigned.")
             await self.advance_to_defense()
@@ -213,7 +208,7 @@ class GamePhaseManager:
         elif self.state.round >= 15: # >= to be safe
             await self.end_game()
         else:
-            self._start_new_round()
+            await self._start_new_round()
 
     async def advance_to_intermission(self):
         self.state.phase = GamePhase.INTERMISSION
@@ -249,7 +244,7 @@ class GamePhaseManager:
             self.state.intermission_turn_player_id = None
             self.state.add_log("Refilling markets for new Era.")
             self.refill_market()
-            self._start_new_round() 
+            await self._start_new_round() 
 
     async def end_game(self):
         if self.state.phase == GamePhase.GAME_OVER: return
@@ -273,8 +268,7 @@ class GamePhaseManager:
             self.state.add_log(
                 f"  {i+1}. {p.username} (Injuries: {p.injuries}, Trophies: {len(p.trophies)}, Scrap: {p.get_total_scrap()})"
             )
-            
-    # --- NEW: Moved from action_handler.py ---
+
     def apply_special_effect(
         self, 
         player: PlayerState, 
@@ -335,20 +329,25 @@ class GamePhaseManager:
 
     def _draw_threats(self):
         """Draws threats from the deck for the round."""
-        num_to_draw = len(self.state.get_active_players_in_order())
-        drawn_threats = []
-        for _ in range(num_to_draw):
+        num_active_players = len(self.state.get_active_players_in_order())
+        num_threats_needed = num_active_players - len(self.state.current_threats)
+
+        if num_threats_needed <= 0:
+            self.state.add_log("Threats from last round carry over. No new threats drawn.")
+            return
+
+        newly_drawn_threats = []
+        for _ in range(num_threats_needed):
             if not self.state.threat_deck:
                 self.state.add_log("Threat deck is empty!")
                 break
-            drawn_threats.append(self.state.threat_deck.pop(0))
+            newly_drawn_threats.append(self.state.threat_deck.pop(0))
         
-        self.state.current_threats = drawn_threats
-        self.state.available_threat_ids = [t.id for t in drawn_threats]
+        self.state.current_threats.extend(newly_drawn_threats)
+        self.state.available_threat_ids = [t.id for t in self.state.current_threats]
         
-        self.state.add_log(f"Drawing {len(drawn_threats)} threats: {', '.join([t.name for t in drawn_threats])}")
+        self.state.add_log(f"Revealed {len(newly_drawn_threats)} new threats: {', '.join([t.name for t in newly_drawn_threats])}")
 
-    # --- NEW: Helper for advance_attraction_turn ---
     def _get_valid_threats_for_player(self, player: PlayerState) -> List[ThreatCard]:
         """
         Copied from old_game_instance.py
@@ -488,15 +487,24 @@ class GamePhaseManager:
             player.defense = None
             player.action_prevented = False
 
-    def _start_new_round(self):
-        self.state.round += 1
-        self.state.phase = GamePhase.WILDERNESS # This is temp
-        self.state.add_log(f"--- ROUND {self.state.round} (Era {self.state.era}) ---")
-        # TODO: In future, _advance_to_wilderness should be real
-        # For now, skip to planning
+    async def _advance_to_wilderness(self):
+        """Handles the start-of-round events, primarily drawing new threats."""
+        self.state.phase = GamePhase.WILDERNESS
+        self.state.add_log("The wilderness stirs...")
+        self._draw_threats()
+        # After wilderness events, immediately move to planning.
+        await self._advance_to_planning()
+
+    async def _advance_to_planning(self):
+        """Sets the game to the PLANNING phase for players to act."""
         self.state.phase = GamePhase.PLANNING
         self.state.add_log("--- PLANNING PHASE ---")
         self.state.add_log("All players: Plan your Lure and Action cards.")
+
+    async def _start_new_round(self):
+        self.state.round += 1
+        self.state.add_log(f"--- ROUND {self.state.round} (Era {self.state.era}) ---")
+        await self._advance_to_wilderness()
 
     def _get_next_active_player(
         self, 
