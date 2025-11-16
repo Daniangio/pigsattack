@@ -22,6 +22,15 @@ import playerIcon2 from "../../images/player-icon-2.png";
 import playerIcon3 from "../../images/player-icon-3.png";
 import playerIcon4 from "../../images/player-icon-4.png";
 import playerIcon5 from "../../images/player-icon-5.png";
+
+// --- NEW V1.1 ICON IMPORTS ---
+import ferocityIcon from "../../images/icons/ferocity-icon.png";
+import cunningIcon from "../../images/icons/cunning-icon.png";
+import massIcon from "../../images/icons/mass-icon.png";
+import lureRagsIcon from "../../images/icons/lure-bloody-rags-icon.png";
+import lureNoisesIcon from "../../images/icons/lure-strange-noises-icon.png";
+import lureFruitIcon from "../../images/icons/lure-fallen-fruit-icon.png";
+
 // --- END ORIGINAL IMAGE IMPORTS ---
 
 // --- EXPORT IMAGES ---
@@ -46,6 +55,13 @@ export {
   playerIcon3,
   playerIcon4,
   playerIcon5,
+  // NEW ICONS
+  ferocityIcon,
+  cunningIcon,
+  massIcon,
+  lureRagsIcon,
+  lureNoisesIcon,
+  lureFruitIcon,
 };
 // --- END EXPORT IMAGES ---
 
@@ -75,17 +91,31 @@ export const SCRAP_TYPES = {
     color: "text-red-400",
     bg: "bg-red-900",
     img: scrapsParts,
+    statIcon: ferocityIcon, // Ferocity is Red (Parts)
   },
   WIRING: {
     name: "Wiring",
     color: "text-blue-400",
     bg: "bg-blue-900",
     img: scrapsWiring,
+    statIcon: cunningIcon, // Cunning is Blue (Wiring)
   },
   PLATES: {
     name: "Plates",
     color: "text-green-400",
     bg: "bg-green-900",
     img: scrapsPlates,
+    statIcon: massIcon, // Mass is Green (Plates)
   },
+};
+
+// NEW LURE ICON MAP
+export const LURE_ICON_MAP = {
+  RAGS: lureRagsIcon,
+  NOISES: lureNoisesIcon,
+  FRUIT: lureFruitIcon,
+  "BLOODY RAGS": lureRagsIcon,
+  "STRANGE NOISES": lureNoisesIcon,
+  "FALLEN FRUIT": lureFruitIcon,
+  UNKNOWN: unknownLureCard, // Fallback
 };

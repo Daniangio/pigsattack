@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from "react";
+import { LURE_ICON_MAP } from "./GameConstants.jsx";
 
 export const InjuryIcon = () => (
   <svg
@@ -72,7 +73,8 @@ export const PlayerStatusPill = ({ status }) => {
   );
 };
 
-export const GameLog = ({ logs }) => {
+// Added className prop to allow passing styles
+export const GameLog = ({ logs, className = "" }) => {
   const logEndRef = useRef(null);
   const gameLogs = logs || [];
   useEffect(() => {
@@ -80,29 +82,30 @@ export const GameLog = ({ logs }) => {
   }, [gameLogs]);
 
   return (
-    <div className="w-full h-full bg-gray-900 bg-opacity-80 rounded-lg p-3 font-mono text-xs text-white overflow-y-auto shadow-inner flex flex-col">
-      {gameLogs.map((log, index) => (
-        <p key={index} className="text-green-400">
-          <span className="text-gray-500 mr-2">&gt;</span>
-          {log}
-        </p>
-      ))}
+    <div
+      className={`w-full h-full bg-gray-900 bg-opacity-80 rounded-lg p-3 font-mono text-xs text-white overflow-y-auto shadow-inner flex flex-col ${className}`}
+    >
+      {gameLogs.length > 0 ? (
+        gameLogs.map((log, index) => (
+          <p key={index} className="text-green-400">
+            <span className="text-gray-500 mr-2">&gt;</span>
+            {log}
+          </p>
+        ))
+      ) : (
+        <p className="text-gray-500 m-auto">Game log is empty.</p>
+      )}
       <div ref={logEndRef} />
     </div>
   );
 };
 
-export const LureIcon = ({ lure }) => {
+// --- UPDATED LURE ICON ---
+// Now renders an image instead of a text pill
+export const LureIcon = ({ lure, size = "w-8 h-8" }) => {
   const primaryLure = lure ? lure.split("/")[0].toUpperCase() : "UNKNOWN";
-  const lureStyles = {
-    RAGS: "bg-red-700 text-red-100 border-red-500",
-    NOISES: "bg-blue-700 text-blue-100 border-blue-500",
-    FRUIT: "bg-green-700 text-green-100 border-green-500",
-    "BLOODY RAGS": "bg-red-700 text-red-100 border-red-500",
-    "STRANGE NOISES": "bg-blue-700 text-blue-100 border-blue-500",
-    "FALLEN FRUIT": "bg-green-700 text-green-100 border-green-500",
-    UNKNOWN: "bg-gray-700 text-gray-100 border-gray-500",
-  };
+  const iconSrc = LURE_ICON_MAP[primaryLure] || LURE_ICON_MAP.UNKNOWN;
+
   const lureText = {
     RAGS: "Rags",
     NOISES: "Noises",
@@ -111,14 +114,15 @@ export const LureIcon = ({ lure }) => {
     "STRANGE NOISES": "Strange Noises",
     "FALLEN FRUIT": "Fallen Fruit",
   };
+
   return (
-    <span
-      className={`px-2 py-0.5 text-xs font-semibold rounded-full border ${
-        lureStyles[primaryLure] || "bg-gray-700"
-      }`}
-    >
-      {lureText[primaryLure] || "Unknown Lure"}
-    </span>
+    <img
+      src={iconSrc}
+      alt={lureText[primaryLure] || "Lure"}
+      title={lureText[primaryLure] || "Unknown Lure"}
+      className={`${size} object-contain`}
+      onError={(e) => (e.target.style.display = "none")}
+    />
   );
 };
 

@@ -20,9 +20,10 @@ export const ThreatsPanel = ({
     );
   }
 
+  // Use a responsive grid that can handle 1 or more items gracefully
   return (
     <div className="w-full h-full p-2 bg-gray-800 bg-opacity-70 rounded-lg overflow-y-auto">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div className="flex flex-row flex-wrap gap-x-6 gap-y-8 p-4 justify-center">
         {threats.map((threat) => {
           const selectableThreats = gameState?.selectableThreats || [];
           const assignedTo = threatAssignments[threat.id];
@@ -62,6 +63,10 @@ const canAfford = (playerScrap, cardCost, isFree = false) => {
   return true;
 };
 
+// --- REFACTORED MARKET COMPONENTS ---
+// They now use flex-row and overflow-x-auto to scroll horizontally
+// The h-full prop from the parent sets their height.
+
 export const UpgradesMarket = ({
   upgrade_market,
   myTurn,
@@ -75,11 +80,11 @@ export const UpgradesMarket = ({
   const isMyTurnToBuyUpgrades = isActionBuy || isIntermissionBuy;
 
   return (
-    <div className="p-2 bg-gray-800 bg-opacity-70 rounded-lg shadow-lg h-full flex flex-col gap-2">
+    <div className="p-2 bg-gray-800 bg-opacity-70 rounded-lg shadow-lg h-full flex flex-col gap-1">
       <h2 className="text-base font-semibold text-green-400 text-center flex-shrink-0">
         Upgrades
       </h2>
-      <div className="flex-grow flex flex-col gap-2 overflow-y-auto px-1">
+      <div className="flex-grow flex flex-row gap-2 overflow-x-auto overflow-y-hidden p-1">
         {(upgrade_market || []).length > 0 ? (
           (upgrade_market || []).map((card) => {
             const isAffordable = canAfford(
@@ -95,14 +100,18 @@ export const UpgradesMarket = ({
               !isSelectable;
 
             return (
-              <MarketCard
-                key={card.id}
-                card={card}
-                cardType="UPGRADE"
-                isSelectable={isSelectable}
-                isDimmed={isDimmed}
-                onClick={() => isSelectable && onCardSelect("UPGRADE", card.id)}
-              />
+              // Add a fixed width to market cards so they flow horizontally
+              <div key={card.id} className="w-36 flex-shrink-0 h-full">
+                <MarketCard
+                  card={card}
+                  cardType="UPGRADE"
+                  isSelectable={isSelectable}
+                  isDimmed={isDimmed}
+                  onClick={() =>
+                    isSelectable && onCardSelect("UPGRADE", card.id)
+                  }
+                />
+              </div>
             );
           })
         ) : (
@@ -129,11 +138,11 @@ export const ArsenalMarket = ({
   const isMyTurnToBuyArsenal = isActionBuy || isIntermissionBuy;
 
   return (
-    <div className="p-2 bg-gray-800 bg-opacity-70 rounded-lg shadow-lg h-full flex flex-col gap-2">
+    <div className="p-2 bg-gray-800 bg-opacity-70 rounded-lg shadow-lg h-full flex flex-col gap-1">
       <h2 className="text-base font-semibold text-red-400 text-center flex-shrink-0">
         Arsenal
       </h2>
-      <div className="flex-grow flex flex-col gap-2 overflow-y-auto px-1">
+      <div className="flex-grow flex flex-row gap-2 overflow-x-auto overflow-y-hidden p-1">
         {(arsenal_market || []).length > 0 ? (
           (arsenal_market || []).map((card) => {
             const isAffordable = canAfford(
@@ -149,14 +158,18 @@ export const ArsenalMarket = ({
               !isSelectable;
 
             return (
-              <MarketCard
-                key={card.id}
-                card={card}
-                cardType="ARSENAL"
-                isSelectable={isSelectable}
-                isDimmed={isDimmed}
-                onClick={() => isSelectable && onCardSelect("ARSENAL", card.id)}
-              />
+              // Add a fixed width to market cards so they flow horizontally
+              <div key={card.id} className="w-36 flex-shrink-0 h-full">
+                <MarketCard
+                  card={card}
+                  cardType="ARSENAL"
+                  isSelectable={isSelectable}
+                  isDimmed={isDimmed}
+                  onClick={() =>
+                    isSelectable && onCardSelect("ARSENAL", card.id)
+                  }
+                />
+              </div>
             );
           })
         ) : (

@@ -5,7 +5,6 @@ import { useStore } from "../store";
 import { gameBackground, LURE_CARDS } from "./game/GameConstants.jsx";
 import GameHeader from "./game/GameHeader.jsx";
 import { PlayerAssets } from "./game/PlayerBoard.jsx";
-// Import PlayerCard AND playerPortraits from GameCoreComponents
 import { playerPortraits, PlayerInfoCard } from "./game/GameCoreComponents.jsx";
 import { GameLog } from "./game/GameUIHelpers.jsx";
 import {
@@ -20,12 +19,13 @@ import {
   ActionPhaseActions,
   IntermissionPhaseActions,
 } from "./game/GameActionPanels.jsx";
+import GameMenu from "./game/GameMenu.jsx"; // Import the new menu
 
-// --- MAIN GAME PAGE COMPONENT ---
+// --- MAIN GAME PAGE COMPONENT (REFACTORED) ---
 const GamePage = () => {
   const { user, gameState, token } = useStore((state) => ({
     user: state.user,
-    gameState: state.gameState, // This is the unwrapped state payload
+    gameState: state.gameState,
     token: state.token,
   }));
 
@@ -46,8 +46,8 @@ const GamePage = () => {
   }, [gameState?.initiative_queue, gameState?.players]);
 
   const self = useMemo(() => {
-    return gameState?.players ? gameState.players[user.id] : null;
-  }, [gameState, user.id]);
+    return gameState?.players ? gameState.players[user?.id] : null;
+  }, [gameState, user?.id]);
 
   useEffect(() => {
     if (user?.id && !viewingPlayerId) {
@@ -125,7 +125,6 @@ const GamePage = () => {
       gameState.available_threat_ids.includes(t.id)
     );
     if (gameState.attraction_phase_state === "FIRST_PASS") {
-      // Use the simple key from the plan
       const myLureKey = myPlan.lure_card_key;
       const myLureCard = LURE_CARDS.find((c) => c.id === myLureKey);
       if (!myLureCard) return [];
@@ -152,12 +151,9 @@ const GamePage = () => {
 
   const threatsToShow = useMemo(() => {
     if (!gameState) return [];
-    // During PLANNING, players need to see the threats that are currently in play
-    // from the previous round to inform their lure choice.
     if (gameState.phase === "PLANNING") {
       return gameState.current_threats || [];
     }
-    // In other phases, if a player has an assigned threat, only show that one.
     const viewingPlayer = gameState.players[viewingPlayerId];
     if (viewingPlayer) {
       const assignedThreatId =
@@ -167,7 +163,6 @@ const GamePage = () => {
       );
       if (assignedThreat) return [assignedThreat];
     }
-    // Otherwise, show all threats for the current round.
     return gameState.current_threats || [];
   }, [
     gameState?.phase,
@@ -178,8 +173,14 @@ const GamePage = () => {
   if (!gameState || !user || !sendMessageForLoadingCheck) {
     return (
       <div
-        className="flex justify-center items-center min-h-screen bg-gray-900 text-white bg-cover bg-top bg-fixed"
-        style={{ backgroundImage: `url(${gameBackground})` }}
+        className="flex justify-center items-center min-h-screen bg-gray-900 text-white bg-cover bg-center bg-fixed"
+        style={{
+          backgroundImage: `url(${gameBackground})`,
+          onError: (e) => {
+            e.target.style.backgroundImage = "none";
+            e.target.style.backgroundColor = "#1a202c";
+          },
+        }}
       >
         <div className="text-center p-6 bg-black bg-opacity-70 rounded-lg">
           <span className="loading loading-spinner loading-lg text-blue-400"></span>
@@ -233,14 +234,11 @@ const GamePage = () => {
       return purchaseState !== 0 ? "WAITING" : "PENDING";
     }
     if (phase === "PLANNING") {
-      // For 'self', player.plan will be an object. For other (redacted) players,
-      // it will be a boolean `plan_submitted`. We check for either.
       return player.plan || player.plan_submitted ? "WAITING" : "ACTIVE";
     }
     if (phase === "DEFENSE") {
       const hasThreat = !!player_threat_assignment[playerId];
       if (!hasThreat) return "NONE";
-      // A player is 'WAITING' if they have submitted their defense.
       return player.defense ? "WAITING" : "ACTIVE";
     }
     return "NONE";
@@ -292,16 +290,15 @@ const GamePage = () => {
   );
 
   return (
+    // Root container: Full screen, no scroll, flex column
     <div
-      className="w-[200vw] h-[200vh] text-white bg-cover bg-center bg-fixed flex flex-col"
+      className="flex flex-col h-screen w-screen overflow-hidden text-white bg-cover bg-center bg-fixed"
       style={{
         backgroundImage: `url(${gameBackground})`,
         onError: (e) => {
           e.target.style.backgroundImage = "none";
           e.target.style.backgroundColor = "#1a202c";
         },
-        transform: "scale(0.5)",
-        transformOrigin: "top left",
       }}
     >
       {showSurrenderModal && (
@@ -314,39 +311,74 @@ const GamePage = () => {
         />
       )}
 
-      <header className="flex-shrink-0" style={{ height: "10vh" }}>
-        <GameHeader
-          round={round}
-          era={era}
-          phase={phase}
-          onSurrender={() => setShowSurrenderModal(true)}
-          isSpectator={isPureSpectator}
-          hasLeft={hasLeft}
-          onReturnToLobby={handleReturnToLobby}
-        />
+      {/* 1. Top Bar: Markets + Game State + Menu */}
+      <header className="w-full flex-shrink-0 p-2 bg-black bg-opacity-60 shadow-lg z-10">
+        <div className="flex justify-between items-start gap-4">
+          {/* Left Market */}
+          <div className="flex-1 max-w-xs h-[16vh]">
+            <UpgradesMarket
+              upgrade_market={market.upgrade_faceup}
+              myTurn={isMyTurnForMarket}
+              phase={phase}
+              choiceType={myActionKey}
+              onCardSelect={handleMarketCardSelect}
+              playerScrap={self?.scrap}
+            />
+          </div>
+
+          {/* Center Info */}
+          <div className="flex-shrink-0 pt-2">
+            <GameHeader round={round} era={era} phase={phase} />
+          </div>
+
+          {/* Right Market */}
+          <div className="flex-1 max-w-xs h-[16vh]">
+            <ArsenalMarket
+              arsenal_market={market.arsenal_faceup}
+              myTurn={isMyTurnForMarket}
+              phase={phase}
+              choiceType={myActionKey}
+              onCardSelect={handleMarketCardSelect}
+              playerScrap={self?.scrap}
+            />
+          </div>
+
+          {/* Menu Trigger */}
+          <div className="flex-shrink-0">
+            <GameMenu
+              onSurrender={() => setShowSurrenderModal(true)}
+              onReturnToLobby={handleReturnToLobby}
+              isSpectator={isPureSpectator}
+              hasLeft={hasLeft}
+              phase={phase}
+            />
+          </div>
+        </div>
       </header>
 
-      <main
-        className="flex-grow flex gap-2 p-2 overflow-hidden"
-        style={{ height: "65vh" }}
-      >
-        <div className="w-[25%] h-full flex flex-col justify-center items-center gap-2 p-2 bg-black bg-opacity-20 rounded-lg overflow-y-auto">
-          {initiative_queue.map((pid, index) => (
-            <PlayerInfoCard
-              key={pid}
-              player={gameState.players[pid]}
-              isSelf={pid === user.id}
-              portrait={playerPortraitsMap[pid]}
-              turnStatus={getPlayerTurnStatus(pid)}
-              turnOrder={index + 1}
-              plan={player_plans[pid]}
-              isViewing={pid === viewingPlayerId}
-              onClick={() => setViewingPlayerId(pid)}
-            />
-          ))}
+      {/* 2. Main Board: Initiative + Threats/Actions + Log */}
+      <main className="flex-grow flex gap-2 p-2 overflow-hidden">
+        {/* Left: Initiative Track */}
+        <div className="w-1/5 flex-shrink-0 h-full p-2 bg-black bg-opacity-30 rounded-lg overflow-y-auto">
+          <div className="flex flex-col gap-2">
+            {initiative_queue.map((pid, index) => (
+              <PlayerInfoCard
+                key={pid}
+                player={gameState.players[pid]}
+                isSelf={pid === user.id}
+                portrait={playerPortraitsMap[pid]}
+                turnStatus={getPlayerTurnStatus(pid)}
+                turnOrder={index + 1}
+                plan={player_plans[pid]}
+                isViewing={pid === viewingPlayerId}
+                onClick={() => setViewingPlayerId(pid)}
+              />
+            ))}
+          </div>
         </div>
 
-        <div className="flex-grow h-full overflow-y-auto">
+        {/* Center: Play Area */}
+        <div className="flex-grow h-full flex flex-col gap-2">
           {isSpectator ? (
             <div className="text-center p-4 bg-gray-800 bg-opacity-70 rounded-lg h-full flex flex-col justify-center items-center">
               <p className="text-lg text-yellow-300 mb-4">
@@ -362,39 +394,20 @@ const GamePage = () => {
               </button>
             </div>
           ) : (
-            <div className="flex flex-col h-full gap-2">
-              <div className="flex-grow-0 h-[45%] flex gap-2">
-                <div className="w-1/3 h-full">
-                  <UpgradesMarket
-                    upgrade_market={market.upgrade_faceup}
-                    myTurn={isMyTurnForMarket}
-                    phase={phase}
-                    choiceType={myActionKey}
-                    onCardSelect={handleMarketCardSelect}
-                    playerScrap={self.scrap}
-                  />
-                </div>
-                <div className="w-1/3 h-full">
-                  <ThreatsPanel
-                    threats={threatsToShow}
-                    threatAssignments={threatAssignments}
-                    onThreatSelect={handleThreatSelect}
-                    selectableThreats={selectableThreats}
-                    selectedThreatId={selectedThreatId}
-                  />
-                </div>
-                <div className="w-1/3 h-full">
-                  <ArsenalMarket
-                    arsenal_market={market.arsenal_faceup}
-                    myTurn={isMyTurnForMarket}
-                    phase={phase}
-                    choiceType={myActionKey}
-                    onCardSelect={handleMarketCardSelect}
-                    playerScrap={self.scrap}
-                  />
-                </div>
+            <>
+              {/* Top Half: Threats */}
+              <div className="h-1/2 overflow-hidden">
+                <ThreatsPanel
+                  threats={threatsToShow}
+                  threatAssignments={threatAssignments}
+                  onThreatSelect={handleThreatSelect}
+                  selectableThreats={selectableThreats}
+                  selectedThreatId={selectedThreatId}
+                  gameState={gameState}
+                />
               </div>
-              <div className="flex-grow h-[55%] overflow-y-auto">
+              {/* Bottom Half: Action Panel */}
+              <div className="h-1/2 overflow-hidden bg-gray-800 bg-opacity-50 rounded-lg">
                 {phase === "PLANNING" && (
                   <PlanningPhaseActions
                     sendGameAction={sendGameAction}
@@ -434,7 +447,7 @@ const GamePage = () => {
                   />
                 )}
                 {["CLEANUP", "WILDERNESS"].includes(phase) && (
-                  <div className="text-center p-4 bg-gray-800 bg-opacity-70 rounded-lg h-full flex flex-col justify-center items-center">
+                  <div className="text-center p-4 h-full flex flex-col justify-center items-center">
                     <h3 className="text-xl text-gray-300">Phase: {phase}</h3>
                     <span className="loading loading-spinner loading-lg text-blue-400 mt-4"></span>
                     <p className="text-gray-400 mt-4">
@@ -443,7 +456,7 @@ const GamePage = () => {
                   </div>
                 )}
                 {phase === "GAME_OVER" && (
-                  <div className="text-center p-4 bg-gray-800 bg-opacity-70 rounded-lg h-full flex flex-col justify-center items-center">
+                  <div className="text-center p-4 h-full flex flex-col justify-center items-center">
                     <h3 className="text-xl text-yellow-300">GAME OVER</h3>
                     <p className="text-gray-200 text-lg">
                       Winner: {gameState.winner?.username || "N/A"}
@@ -457,19 +470,20 @@ const GamePage = () => {
                   </div>
                 )}
               </div>
-            </div>
+            </>
           )}
         </div>
 
+        {/* Right: Game Log */}
         <div
           className={`flex-shrink-0 transition-all duration-300 ease-in-out ${
-            isLogCollapsed ? "w-10" : "w-[25%]"
+            isLogCollapsed ? "w-10" : "w-1/5"
           }`}
         >
           <div className="w-full h-full relative">
             <button
               onClick={() => setIsLogCollapsed(!isLogCollapsed)}
-              className="absolute top-1 -left-3 z-20 bg-gray-700 hover:bg-gray-600 text-white p-1 rounded-full"
+              className="absolute top-1/2 -left-3 z-20 bg-gray-700 hover:bg-gray-600 text-white p-1 rounded-full -translate-y-1/2"
               title={isLogCollapsed ? "Expand Log" : "Collapse Log"}
             >
               <svg
@@ -489,15 +503,18 @@ const GamePage = () => {
                 />
               </svg>
             </button>
-            {!isLogCollapsed && <GameLog logs={log} />}
+            {!isLogCollapsed && (
+              <GameLog
+                logs={log}
+                className="bg-black bg-opacity-30 rounded-lg"
+              />
+            )}
           </div>
         </div>
       </main>
 
-      <footer
-        className="flex-shrink-0 p-1 bg-black bg-opacity-20"
-        style={{ height: "25vh" }}
-      >
+      {/* 3. Bottom: Player Assets */}
+      <footer className="w-full flex-shrink-0 h-[25vh] p-1 bg-black bg-opacity-50 shadow-inner-top">
         <div className="w-full h-full bg-black bg-opacity-20 rounded-lg p-2">
           <PlayerAssets
             player={viewingPlayerId ? gameState.players[viewingPlayerId] : null}

@@ -34,12 +34,10 @@ const CurrentPlanDisplay = ({
     let newTitle = "Current Plan";
 
     if (isSelf && playerPlan) {
-      // --- FIX: Use KEY not ID ---
       lureId = playerPlan.lure_card_key;
       actionId = playerPlan.action_card_key;
       newTitle = "Your Plan";
 
-      // --- FIX: Check player.plan (object) not player.plan_submitted (bool) ---
       if (phase === "PLANNING" && !player.plan) {
         newTitle = "Planning...";
         lureId = null;
@@ -53,7 +51,6 @@ const CurrentPlanDisplay = ({
           newTitle = "Planning...";
           break;
         case "PLANNING":
-          // --- FIX: Check player.plan (object) not player.plan_submitted (bool) ---
           if (player.plan) {
             lureId = "UNKNOWN_LURE";
             actionId = "UNKNOWN_ACTION";
@@ -65,7 +62,6 @@ const CurrentPlanDisplay = ({
         case "ATTRACTION":
         case "DEFENSE":
           if (playerPlan) {
-            // --- FIX: Use KEY not ID ---
             lureId = playerPlan.lure_card_key;
           }
           actionId = "UNKNOWN_ACTION";
@@ -73,10 +69,8 @@ const CurrentPlanDisplay = ({
           break;
         case "ACTION":
           if (playerPlan) {
-            // --- FIX: Use KEY not ID ---
             lureId = playerPlan.lure_card_key;
             if (turnStatus === "ACTIVE" || turnStatus === "WAITING") {
-              // --- FIX: Use KEY not ID ---
               actionId = playerPlan.action_card_key;
             } else {
               actionId = "UNKNOWN_ACTION";
@@ -88,7 +82,6 @@ const CurrentPlanDisplay = ({
         case "INTERMISSION":
         case "GAME_OVER":
           if (playerPlan) {
-            // --- FIX: Use KEY not ID ---
             lureId = playerPlan.lure_card_key;
             actionId = playerPlan.action_card_key;
           }
@@ -118,16 +111,15 @@ const CurrentPlanDisplay = ({
         : null
     );
     setTitle(newTitle);
-    // --- FIX: Add player.plan to dependency array ---
   }, [player.plan, playerPlan, phase, turnStatus, isSelf]);
 
   if (!lureCard && !actionCard) {
     return (
-      <div className="flex-shrink-0">
+      <div className="flex-shrink-0 h-full flex flex-col">
         <h4 className="text-sm font-bold text-gray-400 mb-2 text-center">
           {title}
         </h4>
-        <div className="flex gap-2 p-2 rounded min-h-[140px] w-48 items-center justify-center bg-black bg-opacity-20">
+        <div className="flex-grow flex gap-2 p-2 rounded w-48 items-center justify-center bg-black bg-opacity-20">
           <p className="text-gray-500 text-sm italic px-2">Choosing...</p>
         </div>
       </div>
@@ -135,11 +127,11 @@ const CurrentPlanDisplay = ({
   }
 
   return (
-    <div className="flex-shrink-0">
+    <div className="flex-shrink-0 h-full flex flex-col">
       <h4 className="text-sm font-bold text-gray-400 mb-2 text-center">
         {title}
       </h4>
-      <div className="flex gap-2 p-2 rounded min-h-[140px] items-center bg-black bg-opacity-20">
+      <div className="flex-grow flex gap-2 p-2 rounded items-center bg-black bg-opacity-20">
         {lureCard && (
           <img
             src={lureCard.image}
@@ -162,28 +154,28 @@ const CurrentPlanDisplay = ({
 };
 
 const PlayerUpgrades = ({ player }) => (
-  <div className="flex-shrink-0">
+  <div className="flex-shrink-0 h-full flex flex-col">
     <h4 className="text-sm font-bold text-gray-400 mb-2 text-center">
       Upgrades
     </h4>
-    <div className="flex gap-2 p-2 rounded min-h-[140px] items-center bg-black bg-opacity-20">
+    <div className="flex-grow flex gap-2 p-2 rounded min-w-[12rem] items-center bg-black bg-opacity-20 overflow-x-auto">
       {(player.upgrade_cards || []).length > 0 ? (
         (player.upgrade_cards || []).map((card) => (
           <OwnedCard key={card.id} card={card} cardType="UPGRADE" />
         ))
       ) : (
-        <p className="text-gray-500 text-sm italic px-2">None</p>
+        <p className="text-gray-500 text-sm italic px-2 m-auto">None</p>
       )}
     </div>
   </div>
 );
 
 const PlayerArsenal = ({ player, isSelf }) => (
-  <div className="flex-shrink-0">
+  <div className="flex-shrink-0 h-full flex flex-col">
     <h4 className="text-sm font-bold text-gray-400 mb-2 text-center">
       Arsenal
     </h4>
-    <div className="flex gap-2 p-2 rounded min-h-[140px] items-center bg-black bg-opacity-20">
+    <div className="flex-grow flex gap-2 p-2 rounded min-w-[12rem] items-center bg-black bg-opacity-20 overflow-x-auto">
       {isSelf ? (
         (player.arsenal_cards || []).length > 0 ? (
           (player.arsenal_cards || []).map((card, index) => (
@@ -194,7 +186,7 @@ const PlayerArsenal = ({ player, isSelf }) => (
             />
           ))
         ) : (
-          <p className="text-gray-500 text-sm italic px-2">Empty</p>
+          <p className="text-gray-500 text-sm italic px-2 m-auto">Empty</p>
         )
       ) : (player.arsenal_cards_count || 0) > 0 ? (
         [...Array(player.arsenal_cards_count || 0)].map((_, index) => (
@@ -209,7 +201,7 @@ const PlayerArsenal = ({ player, isSelf }) => (
           />
         ))
       ) : (
-        <p className="text-gray-500 text-sm italic px-2">Empty</p>
+        <p className="text-gray-500 text-sm italic px-2 m-auto">Empty</p>
       )}
     </div>
   </div>
@@ -217,11 +209,11 @@ const PlayerArsenal = ({ player, isSelf }) => (
 
 const PlayerTrophies = ({ player }) => {
   return (
-    <div className="flex-shrink-0">
+    <div className="flex-shrink-0 h-full flex flex-col">
       <h4 className="text-sm font-bold text-gray-400 mb-2 text-center">
         Trophies ({player.trophies.length})
       </h4>
-      <div className="flex flex-col gap-1 p-3 rounded min-h-[140px] max-w-xs items-start bg-black bg-opacity-20 overflow-y-auto">
+      <div className="flex-grow flex flex-col gap-1 p-3 rounded w-48 items-start bg-black bg-opacity-20 overflow-y-auto">
         {player.trophies.length > 0 ? (
           player.trophies.map((trophyName, index) => (
             <span
@@ -232,7 +224,7 @@ const PlayerTrophies = ({ player }) => {
             </span>
           ))
         ) : (
-          <p className="text-gray-500 text-sm italic px-2">None</p>
+          <p className="text-gray-500 text-sm italic px-2 m-auto">None</p>
         )}
       </div>
     </div>
@@ -275,7 +267,8 @@ export const PlayerAssets = ({
         )}
       </div>
 
-      <>
+      {/* This section is now a flex container that will scroll if needed */}
+      <div className="flex-grow flex items-start gap-4 h-full py-2">
         <CurrentPlanDisplay
           player={player}
           playerPlan={playerPlan}
@@ -283,7 +276,7 @@ export const PlayerAssets = ({
           turnStatus={turnStatus}
           isSelf={isSelf}
         />
-        <div className="flex-shrink-0 flex flex-col items-center p-2 rounded-lg bg-black bg-opacity-20">
+        <div className="flex-shrink-0 flex flex-col items-center p-2 rounded-lg bg-black bg-opacity-20 h-full justify-center">
           <h4 className="text-sm font-bold text-gray-400 mb-2">Scrap</h4>
           <div className="flex items-center space-x-3">
             <ScrapIcon
@@ -306,7 +299,7 @@ export const PlayerAssets = ({
         <PlayerArsenal player={player} isSelf={isSelf} />
         <PlayerUpgrades player={player} />
         <PlayerTrophies player={player} />
-      </>
+      </div>
     </div>
   );
 };

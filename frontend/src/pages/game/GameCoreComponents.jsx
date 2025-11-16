@@ -15,12 +15,13 @@ import {
   scrapsWiring,
   scrapsPlates,
   SCRAP_TYPES,
+  LURE_ICON_MAP,
 } from "./GameConstants.jsx";
 import {
   TurnStatusIcon,
   ScrapIcon,
   InjuryIcon,
-  LureIcon,
+  // LureIcon is no longer used by ThreatCard, but still used by PlayerInfoCard via GameUIHelpers
 } from "./GameUIHelpers.jsx";
 
 export const playerPortraits = [
@@ -31,6 +32,72 @@ export const playerPortraits = [
   playerIcon5,
 ];
 
+// --- HELPER FUNCTION: Get Threat Image Path (from previous request) ---
+// Creates a dynamic path to the threat image based on its name and lure type.
+// Assumes threat images are in the `public/images/threats/` folder.
+const getThreatImagePath = (threatName, lureType) => {
+  if (!threatName) {
+    return `https://placehold.co/200x280/1a202c/9ca3af?text=No+Threat`;
+  }
+
+  // 1. Format the threat name
+  const formattedName = threatName
+    .toLowerCase()
+    .replace(/'/g, "") // Remove apostrophes (e.g., Tinker's)
+    .replace(/:/g, "") // Remove colons
+    .replace(/ /g, "-"); // Replace spaces with hyphens
+
+  // 2. Format the lure name
+  // The first lure in the list (e.g., Rags from Rags/Noises/Fruit) determines the image
+  const primaryLure = lureType ? lureType.split("/")[0] : "unknown";
+  const formattedLure = primaryLure.toLowerCase().replace(/ /g, "-");
+
+  // 3. Combine them for the final path
+  return `/images/threats/${formattedName}-${formattedLure}.png`;
+};
+
+// --- HELPER COMPONENT: Threat Stat Bubble (from previous request) ---
+const ThreatStatIcon = ({ iconSrc, value, valueColor, alt }) => (
+  <div className="relative w-10 h-10" title={alt}>
+    <img
+      src={iconSrc}
+      alt={alt}
+      className="w-full h-full object-contain drop-shadow-lg"
+      onError={(e) => (e.target.style.display = "none")}
+    />
+    <div className="absolute -top-1 -right-1 bg-black bg-opacity-80 rounded-full w-6 h-6 flex items-center justify-center border border-gray-900">
+      <span className={`font-bold text-sm ${valueColor}`}>{value}</span>
+    </div>
+  </div>
+);
+
+// --- HELPER COMPONENT: Lure Icon for Card (from previous request) ---
+const ThreatLureIcon = ({ lure }) => {
+  const primaryLure = lure ? lure.split("/")[0].toUpperCase() : "UNKNOWN";
+  const iconSrc = LURE_ICON_MAP[primaryLure] || LURE_ICON_MAP.UNKNOWN;
+
+  const lureText = {
+    RAGS: "Rags",
+    NOISES: "Noises",
+    FRUIT: "Fruit",
+  };
+
+  return (
+    <div
+      className="absolute top-2 -left-3 z-10"
+      title={lureText[primaryLure] || "Unknown Lure"}
+    >
+      <img
+        src={iconSrc}
+        alt={lureText[primaryLure] || "Lure"}
+        className="w-10 h-10 object-contain drop-shadow-lg"
+        onError={(e) => (e.target.style.display = "none")}
+      />
+    </div>
+  );
+};
+
+// --- CORRECTED PLAYER INFO CARD ---
 export const PlayerInfoCard = ({
   player,
   isSelf,
@@ -56,7 +123,6 @@ export const PlayerInfoCard = ({
     switch (phase) {
       case "PLANNING":
         if (isSelf && player.plan) {
-          // For self, plan is an object
           showLure = true;
           showAction = true;
         }
@@ -85,7 +151,7 @@ export const PlayerInfoCard = ({
       } ${
         isViewing
           ? "bg-yellow-500 bg-opacity-20 ring-2 ring-yellow-400"
-          : "bg-black bg-opacity-30"
+          : "bg-black bg-opacity-40 hover:bg-black hover:bg-opacity-60"
       }`}
       onClick={onClick}
     >
@@ -109,7 +175,7 @@ export const PlayerInfoCard = ({
       </div>
 
       {/* Right side: Info */}
-      <div className="flex-grow flex flex-col gap-1">
+      <div className="flex-grow flex flex-col gap-1 min-w-0">
         <span
           className={`text-sm font-bold truncate ${
             isSelf ? "text-blue-300" : "text-white"
@@ -169,6 +235,7 @@ export const PlayerInfoCard = ({
   );
 };
 
+// --- CORRECTED EXPORTED THREAT CARD ---
 export const ThreatCard = ({
   threat,
   onClick,
@@ -178,82 +245,82 @@ export const ThreatCard = ({
 }) => {
   if (!threat) return null;
 
+  // Base styles for the card
   const baseStyle =
-    "bg-gray-800 bg-opacity-90 rounded-lg shadow-lg p-3 border flex flex-col justify-between transition-all duration-200 h-full";
-  let borderStyle = "border-gray-700";
+    "relative w-20 h-28 flex-shrink-0 rounded-lg transition-all duration-200 overflow-visible";
   let cursorStyle = "cursor-default";
   let opacityStyle = "opacity-100";
-  let positionStyle = "relative";
+  let ringStyle = "ring-gray-700"; // Default ring
 
+  // Apply styles based on state
   if (!isAvailable) {
-    borderStyle = "border-gray-900";
     opacityStyle = "opacity-40";
+    ringStyle = "ring-gray-900";
   } else if (isSelectable) {
-    borderStyle = "border-blue-400";
-    cursorStyle = "cursor-pointer hover:border-blue-300";
+    cursorStyle = "cursor-pointer";
+    ringStyle = "ring-blue-400 hover:ring-blue-300 ring-2";
   }
 
   if (isSelected) {
-    borderStyle = "border-green-500 ring-2 ring-green-500";
     opacityStyle = "opacity-100";
+    ringStyle = "ring-green-500 ring-4"; // Emphasize selection
   }
 
-  const resistantText = threat.resistant?.join(", ");
-  const immuneText = threat.immune?.join(", ");
+  const threatImagePath = getThreatImagePath(threat.name, threat.lure_type);
 
   return (
     <div
-      className={`${baseStyle} ${borderStyle} ${cursorStyle} ${opacityStyle} ${positionStyle}`}
+      className={`${baseStyle} ${cursorStyle} ${opacityStyle} ${ringStyle}`}
       onClick={onClick}
     >
-      <div>
-        <div className="flex justify-between items-center mb-1">
-          <h4 className="text-base font-bold text-red-300">{threat.name}</h4>
-          <LureIcon lure={threat.lure_type} />
-        </div>
-        <p className="text-xs text-gray-300 mb-2 italic">
-          {threat.abilities_text ? (
-            <span className="text-yellow-400 font-semibold">
-              {threat.abilities_text}
-            </span>
-          ) : (
-            "No 'On Fail' effect."
-          )}
-        </p>
-        <div className="text-xs space-y-1 mb-2">
-          {resistantText && (
-            <p>
-              <span className="font-semibold text-yellow-400">Resistant: </span>
-              <span className="text-gray-300">{resistantText}</span>
-            </p>
-          )}
-          {immuneText && (
-            <p>
-              <span className="font-semibold text-red-500">Immune: </span>
-              <span className="text-gray-300">{immuneText}</span>
-            </p>
-          )}
-        </div>
+      {/* 1. Main Threat Image (as background) */}
+      <img
+        src={threatImagePath}
+        alt={threat.name}
+        className="absolute inset-0 w-full h-full object-cover rounded-md z-0"
+        // Robust fallback image
+        onError={(e) => {
+          e.target.onerror = null;
+          const formattedName = threat.name.replace(/ /g, "+");
+          e.target.src = `https://placehold.co/200x280/1a202c/9ca3af?text=${formattedName}`;
+        }}
+      />
+
+      {/* 2. Lure Icon (Left, half-out) */}
+      <ThreatLureIcon lure={threat.lure_type} />
+
+      {/* 3. Stat Icons (Right, half-out) */}
+      <div className="absolute top-1 -right-3 flex flex-col gap-2 z-10">
+        <ThreatStatIcon
+          iconSrc={SCRAP_TYPES.PARTS.statIcon}
+          value={threat.ferocity}
+          valueColor={SCRAP_TYPES.PARTS.color}
+          alt="Ferocity"
+        />
+        <ThreatStatIcon
+          iconSrc={SCRAP_TYPES.WIRING.statIcon}
+          value={threat.cunning}
+          valueColor={SCRAP_TYPES.WIRING.color}
+          alt="Cunning"
+        />
+        <ThreatStatIcon
+          iconSrc={SCRAP_TYPES.PLATES.statIcon}
+          value={threat.mass}
+          valueColor={SCRAP_TYPES.PLATES.color}
+          alt="Mass"
+        />
       </div>
-      <div className="flex justify-around text-center p-1.5 bg-black bg-opacity-20 rounded mt-auto">
-        <div>
-          <span className="text-red-400 font-semibold text-xs">Ferocity</span>
-          <p className="text-lg font-bold">{threat.ferocity}</p>
-        </div>
-        <div>
-          <span className="text-blue-400 font-semibold text-xs">Cunning</span>
-          <p className="text-lg font-bold">{threat.cunning}</p>
-        </div>
-        <div>
-          <span className="text-green-400 font-semibold text-xs">Mass</span>
-          <p className="text-lg font-bold">{threat.mass}</p>
-        </div>
-      </div>
+
+      {/* 4. Selection Ring (sits on top of image but behind icons) */}
+      <div
+        className={`absolute inset-0 rounded-md transition-all ${ringStyle} z-5`}
+      ></div>
     </div>
   );
 };
 
 export const MarketCard = ({
+  // ... (MarketCard logic remains unchanged)
   card,
   cardType,
   onClick,
@@ -318,7 +385,7 @@ export const OwnedCard = ({ card, cardType, onClick, isSelectable }) => {
       : "border-red-700 bg-red-900 bg-opacity-30";
   const costItems = Object.entries(card.cost).filter(([, val]) => val > 0);
 
-  const baseStyle = `bg-gray-800 rounded-md shadow-md p-2 border ${cardColor} w-40 flex-shrink-0 transition-all`;
+  const baseStyle = `bg-gray-800 rounded-md shadow-md p-2 border ${cardColor} w-40 flex-shrink-0 transition-all h-full`;
   const selectableStyle = isSelectable
     ? "cursor-pointer ring-2 ring-blue-400 hover:ring-blue-300"
     : "cursor-default";
