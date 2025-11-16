@@ -17,12 +17,7 @@ import {
   SCRAP_TYPES,
   LURE_ICON_MAP,
 } from "./GameConstants.jsx";
-import {
-  TurnStatusIcon,
-  ScrapIcon,
-  InjuryIcon,
-  // LureIcon is no longer used by ThreatCard, but still used by PlayerInfoCard via GameUIHelpers
-} from "./GameUIHelpers.jsx";
+import { TurnStatusIcon, ScrapIcon, InjuryIcon } from "./GameUIHelpers.jsx";
 
 export const playerPortraits = [
   playerIcon1,
@@ -33,8 +28,6 @@ export const playerPortraits = [
 ];
 
 // --- HELPER FUNCTION: Get Threat Image Path (from previous request) ---
-// Creates a dynamic path to the threat image based on its name and lure type.
-// Assumes threat images are in the `public/images/threats/` folder.
 const getThreatImagePath = (threatName, lureType) => {
   if (!threatName) {
     return `https://placehold.co/200x280/1a202c/9ca3af?text=No+Threat`;
@@ -48,7 +41,6 @@ const getThreatImagePath = (threatName, lureType) => {
     .replace(/ /g, "-"); // Replace spaces with hyphens
 
   // 2. Format the lure name
-  // The first lure in the list (e.g., Rags from Rags/Noises/Fruit) determines the image
   const primaryLure = lureType ? lureType.split("/")[0] : "unknown";
   const formattedLure = primaryLure.toLowerCase().replace(/ /g, "-");
 
@@ -97,7 +89,7 @@ const ThreatLureIcon = ({ lure }) => {
   );
 };
 
-// --- CORRECTED PLAYER INFO CARD ---
+// --- CORRECTED PLAYER INFO CARD (Logic unchanged) ---
 export const PlayerInfoCard = ({
   player,
   isSelf,
@@ -235,7 +227,7 @@ export const PlayerInfoCard = ({
   );
 };
 
-// --- CORRECTED EXPORTED THREAT CARD ---
+// --- EXPORTED THREAT CARD (with clickable overlay fix) ---
 export const ThreatCard = ({
   threat,
   onClick,
@@ -269,20 +261,24 @@ export const ThreatCard = ({
   const threatImagePath = getThreatImagePath(threat.name, threat.lure_type);
 
   return (
-    <div
-      className={`${baseStyle} ${cursorStyle} ${opacityStyle} ${ringStyle}`}
-      onClick={onClick}
-    >
+    <div className={`${baseStyle} ${opacityStyle}`}>
       {/* 1. Main Threat Image (as background) */}
       <img
         src={threatImagePath}
         alt={threat.name}
         className="absolute inset-0 w-full h-full object-cover rounded-md z-0"
-        // Robust fallback image
+        // --- TWO-STAGE FALLBACK IMPLEMENTATION ---
         onError={(e) => {
-          e.target.onerror = null;
-          const formattedName = threat.name.replace(/ /g, "+");
-          e.target.src = `https://placehold.co/200x280/1a202c/9ca3af?text=${formattedName}`;
+          // 1. If original image fails, try the specified default-threat.png
+          if (!e.target.dataset.fallbackTried) {
+            e.target.src = "/images/threats/default-threat.png";
+            e.target.dataset.fallbackTried = "true"; // Mark that we've tried the first fallback
+          } else {
+            // 2. If default-threat.png also failed, use the ultimate placeholder
+            e.target.onerror = null;
+            const formattedName = threat.name.replace(/ /g, "+");
+            e.target.src = `https://placehold.co/200x280/1a202c/9ca3af?text=${formattedName}`;
+          }
         }}
       />
 
@@ -311,9 +307,10 @@ export const ThreatCard = ({
         />
       </div>
 
-      {/* 4. Selection Ring (sits on top of image but behind icons) */}
+      {/* 4. Clickable Overlay and Selection Ring (z-index 20 ensures clickability) */}
       <div
-        className={`absolute inset-0 rounded-md transition-all ${ringStyle} z-5`}
+        className={`absolute inset-0 rounded-md transition-all ${ringStyle} ${cursorStyle} z-20`}
+        onClick={() => isSelectable && onClick()}
       ></div>
     </div>
   );

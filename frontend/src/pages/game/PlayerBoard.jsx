@@ -10,7 +10,7 @@ import {
   scrapsPlates,
 } from "./GameConstants.jsx";
 import { OwnedCard } from "./GameCoreComponents.jsx";
-import { ScrapIcon } from "./GameUIHelpers.jsx";
+import { ScrapIcon, InjuryIcon } from "./GameUIHelpers.jsx"; // Import InjuryIcon
 
 const LastRoundActionsDisplay = ({ player }) => {
   // This component is currently disabled as per your file logic
@@ -231,43 +231,23 @@ const PlayerTrophies = ({ player }) => {
   );
 };
 
+// PlayerAssets is now simplified, used only inside CollapsiblePlayerAssets
 export const PlayerAssets = ({
   player,
   isSelf,
-  onReturn,
   phase,
   playerPlan,
-  portrait,
   turnStatus,
 }) => {
   if (!player) return null;
 
   return (
+    // Full-detail view of the player board
     <div className="w-full h-full flex items-center gap-6 overflow-x-auto px-4">
-      <div className="flex-shrink-0 flex flex-col items-center gap-2">
-        <h3 className="text-lg font-semibold text-gray-300 whitespace-nowrap">
-          {isSelf ? "Your Board" : `${player.username}'s Board`}
-        </h3>
-        <div className="relative w-24 h-24">
-          <img
-            src={portrait}
-            alt="Player Portrait"
-            className="absolute top-1/2 left-1/2 h-[80%] w-[80%] -translate-x-1/2 -translate-y-1/2 rounded-md object-cover"
-          />
-          <img
-            src={playerFrame}
-            alt="Player Frame"
-            className="absolute inset-0 w-full h-full z-10"
-          />
-        </div>
-        {!isSelf && (
-          <button onClick={onReturn} className="btn btn-primary btn-sm">
-            &larr; Return to My Board
-          </button>
-        )}
-      </div>
+      {/* Removed: Player Portrait, "Your Board" title, and "Return" button
+       */}
 
-      {/* This section is now a flex container that will scroll if needed */}
+      {/* Main Asset Display (Scrollable) */}
       <div className="flex-grow flex items-start gap-4 h-full py-2">
         <CurrentPlanDisplay
           player={player}
@@ -299,6 +279,142 @@ export const PlayerAssets = ({
         <PlayerArsenal player={player} isSelf={isSelf} />
         <PlayerUpgrades player={player} />
         <PlayerTrophies player={player} />
+      </div>
+    </div>
+  );
+};
+
+// --- NEW WRAPPER COMPONENT FOR COLLAPSIBLE ASSETS ---
+export const CollapsiblePlayerAssets = ({
+  player,
+  isAssetsOpen,
+  toggleAssets,
+  portrait,
+  ...props
+}) => {
+  if (!player) return null;
+
+  const isSelf = player.user_id === props.user.id;
+  const isViewingSelf = player.user_id === props.viewingPlayerId;
+
+  const handleToggle = () => {
+    // If viewing another player, clicking the button returns to self's board
+    if (!isViewingSelf) {
+      props.onReturn();
+    }
+    toggleAssets();
+  };
+
+  return (
+    <div
+      className={`fixed bottom-0 left-0 w-full bg-black bg-opacity-80 shadow-2xl z-40 transition-transform duration-300 ${
+        isAssetsOpen ? "h-[50vh] translate-y-0" : "h-20 translate-y-0"
+      }`}
+      style={{
+        transform: isAssetsOpen
+          ? "translateY(0)"
+          : "translateY(calc(100% - 5rem))", // 5rem is h-20
+      }}
+    >
+      {/* Toggle Bar / Collapsed View (Always visible) */}
+      <div
+        className="h-20 flex items-center justify-between p-3 cursor-pointer bg-gray-900 bg-opacity-80 border-t border-gray-700"
+        onClick={handleToggle}
+      >
+        <div className="flex items-center space-x-4">
+          <div className="relative w-12 h-12 flex-shrink-0">
+            <img
+              src={portrait}
+              alt="Player Portrait"
+              className={`w-full h-full rounded-full object-cover ring-2 ${
+                isViewingSelf ? "ring-blue-500" : "ring-yellow-500"
+              }`}
+            />
+          </div>
+          <span className="text-lg font-bold text-white hidden sm:block">
+            {isViewingSelf ? "Your Assets" : `${player.username}'s Assets`}
+          </span>
+          <ScrapIcon
+            icon={<InjuryIcon />}
+            count={player.injuries}
+            textColor="text-red-400"
+            size="w-6 h-6"
+          />
+        </div>
+
+        {/* Scrap Icons (The "popping out" effect) */}
+        <div className="flex items-center space-x-3">
+          <ScrapIcon
+            image={scrapsParts}
+            count={player.scrap.PARTS || 0}
+            size="w-8 h-8"
+          />
+          <ScrapIcon
+            image={scrapsWiring}
+            count={player.scrap.WIRING || 0}
+            size="w-8 h-8"
+          />
+          <ScrapIcon
+            image={scrapsPlates}
+            count={player.scrap.PLATES || 0}
+            size="w-8 h-8"
+          />
+        </div>
+
+        {/* Arrow/Toggle Icon */}
+        <button className="btn btn-ghost p-1">
+          {/* Change icon based on state AND if viewing self or another player */}
+          {isAssetsOpen ? (
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className={`h-6 w-6 transform transition-transform rotate-180`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 9l-7 7-7-7"
+              />
+            </svg>
+          ) : isViewingSelf ? (
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className={`h-6 w-6 transform transition-transform rotate-0`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 9l-7 7-7-7"
+              />
+            </svg>
+          ) : (
+            <span className="text-xs font-bold text-yellow-300">
+              Viewing {player.username}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* Full Content (Visible only when open) */}
+      <div
+        className={`h-[calc(100%-5rem)] overflow-y-auto ${
+          isAssetsOpen ? "block" : "hidden"
+        }`}
+      >
+        <PlayerAssets
+          player={player}
+          isSelf={isSelf}
+          phase={props.phase}
+          playerPlan={props.playerPlan}
+          turnStatus={props.turnStatus}
+        />
       </div>
     </div>
   );
