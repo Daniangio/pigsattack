@@ -170,7 +170,14 @@ const PlayerUpgrades = ({ player }) => (
   </div>
 );
 
-const PlayerArsenal = ({ player, isSelf }) => (
+// --- PlayerArsenal: Now accepts new props for interaction ---
+const PlayerArsenal = ({
+  player,
+  isSelf,
+  phase,
+  defenseArsenal,
+  onArsenalToggle,
+}) => (
   <div className="flex-shrink-0 h-full flex flex-col">
     <h4 className="text-sm font-bold text-gray-400 mb-2 text-center">
       Arsenal
@@ -178,13 +185,19 @@ const PlayerArsenal = ({ player, isSelf }) => (
     <div className="flex-grow flex gap-2 p-2 rounded min-w-[12rem] items-center bg-black bg-opacity-20 overflow-x-auto">
       {isSelf ? (
         (player.arsenal_cards || []).length > 0 ? (
-          (player.arsenal_cards || []).map((card, index) => (
-            <OwnedCard
-              key={card.id || `hidden-${index}`}
-              card={card}
-              cardType="ARSENAL"
-            />
-          ))
+          (player.arsenal_cards || []).map((card, index) => {
+            const isDefense = isSelf && phase === "DEFENSE";
+            return (
+              <OwnedCard
+                key={card.id || `hidden-${index}`}
+                card={card}
+                cardType="ARSENAL"
+                isSelectable={isDefense}
+                isSelected={defenseArsenal.has(card.id)}
+                onClick={isDefense ? () => onArsenalToggle(card.id) : undefined}
+              />
+            );
+          })
         ) : (
           <p className="text-gray-500 text-sm italic px-2 m-auto">Empty</p>
         )
@@ -231,23 +244,29 @@ const PlayerTrophies = ({ player }) => {
   );
 };
 
-// PlayerAssets is now simplified, used only inside CollapsiblePlayerAssets
+// --- PlayerAssets: Now accepts new props for interaction ---
 export const PlayerAssets = ({
   player,
   isSelf,
   phase,
   playerPlan,
   turnStatus,
+  defenseScrap,
+  defenseArsenal,
+  onScrapSpend,
+  onArsenalToggle,
 }) => {
   if (!player) return null;
 
-  return (
-    // Full-detail view of the player board
-    <div className="w-full h-full flex items-center gap-6 overflow-x-auto px-4">
-      {/* Removed: Player Portrait, "Your Board" title, and "Return" button
-       */}
+  const isDefense = isSelf && phase === "DEFENSE";
+  const availableParts = (player.scrap.PARTS || 0) - (defenseScrap.PARTS || 0);
+  const availableWiring =
+    (player.scrap.WIRING || 0) - (defenseScrap.WIRING || 0);
+  const availablePlates =
+    (player.scrap.PLATES || 0) - (defenseScrap.PLATES || 0);
 
-      {/* Main Asset Display (Scrollable) */}
+  return (
+    <div className="w-full h-full flex items-center gap-6 overflow-x-auto px-4">
       <div className="flex-grow flex items-start gap-4 h-full py-2">
         <CurrentPlanDisplay
           player={player}
@@ -256,27 +275,55 @@ export const PlayerAssets = ({
           turnStatus={turnStatus}
           isSelf={isSelf}
         />
-        <div className="flex-shrink-0 flex flex-col items-center p-2 rounded-lg bg-black bg-opacity-20 h-full justify-center">
+        {/* --- Scrap: Now interactive --- */}
+        <div
+          className={`flex-shrink-0 flex flex-col items-center p-2 rounded-lg bg-black bg-opacity-20 h-full justify-center ${
+            isDefense ? "ring-2 ring-blue-400" : ""
+          }`}
+          title={isDefense ? "Click icons to add scrap to defense" : "Scrap"}
+        >
           <h4 className="text-sm font-bold text-gray-400 mb-2">Scrap</h4>
           <div className="flex items-center space-x-3">
             <ScrapIcon
               image={scrapsParts}
-              count={player.scrap.PARTS || 0}
+              count={availableParts}
               size="w-10 h-10"
+              onClick={
+                isDefense && availableParts > 0
+                  ? () => onScrapSpend("PARTS", 1)
+                  : undefined
+              }
             />
             <ScrapIcon
               image={scrapsWiring}
-              count={player.scrap.WIRING || 0}
+              count={availableWiring}
               size="w-10 h-10"
+              onClick={
+                isDefense && availableWiring > 0
+                  ? () => onScrapSpend("WIRING", 1)
+                  : undefined
+              }
             />
             <ScrapIcon
               image={scrapsPlates}
-              count={player.scrap.PLATES || 0}
+              count={availablePlates}
               size="w-10 h-10"
+              onClick={
+                isDefense && availablePlates > 0
+                  ? () => onScrapSpend("PLATES", 1)
+                  : undefined
+              }
             />
           </div>
         </div>
-        <PlayerArsenal player={player} isSelf={isSelf} />
+        {/* Pass new props to PlayerArsenal */}
+        <PlayerArsenal
+          player={player}
+          isSelf={isSelf}
+          phase={phase}
+          defenseArsenal={defenseArsenal}
+          onArsenalToggle={onArsenalToggle}
+        />
         <PlayerUpgrades player={player} />
         <PlayerTrophies player={player} />
       </div>
@@ -284,12 +331,16 @@ export const PlayerAssets = ({
   );
 };
 
-// --- NEW WRAPPER COMPONENT FOR COLLAPSIBLE ASSETS ---
+// --- CollapsiblePlayerAssets: Now accepts and passes down new props ---
 export const CollapsiblePlayerAssets = ({
   player,
   isAssetsOpen,
   toggleAssets,
   portrait,
+  defenseScrap, // NEW
+  defenseArsenal, // NEW
+  onScrapSpend, // NEW
+  onArsenalToggle, // NEW
   ...props
 }) => {
   if (!player) return null;
@@ -298,12 +349,18 @@ export const CollapsiblePlayerAssets = ({
   const isViewingSelf = player.user_id === props.viewingPlayerId;
 
   const handleToggle = () => {
-    // If viewing another player, clicking the button returns to self's board
     if (!isViewingSelf) {
       props.onReturn();
     }
     toggleAssets();
   };
+
+  // Calculate remaining scrap to show in the collapsed bar
+  const availableParts = (player.scrap.PARTS || 0) - (defenseScrap.PARTS || 0);
+  const availableWiring =
+    (player.scrap.WIRING || 0) - (defenseScrap.WIRING || 0);
+  const availablePlates =
+    (player.scrap.PLATES || 0) - (defenseScrap.PLATES || 0);
 
   return (
     <div
@@ -313,10 +370,9 @@ export const CollapsiblePlayerAssets = ({
       style={{
         transform: isAssetsOpen
           ? "translateY(0)"
-          : "translateY(calc(100% - 5rem))", // 5rem is h-20
+          : "translateY(calc(100% - 5rem))",
       }}
     >
-      {/* Toggle Bar / Collapsed View (Always visible) */}
       <div
         className="h-20 flex items-center justify-between p-3 cursor-pointer bg-gray-900 bg-opacity-80 border-t border-gray-700"
         onClick={handleToggle}
@@ -333,6 +389,11 @@ export const CollapsiblePlayerAssets = ({
           </div>
           <span className="text-lg font-bold text-white hidden sm:block">
             {isViewingSelf ? "Your Assets" : `${player.username}'s Assets`}
+            {isSelf && props.phase === "DEFENSE" && (
+              <span className="text-xs text-blue-300 block animate-pulse">
+                Click your Scrap/Arsenal to add to defense!
+              </span>
+            )}
           </span>
           <ScrapIcon
             icon={<InjuryIcon />}
@@ -342,28 +403,26 @@ export const CollapsiblePlayerAssets = ({
           />
         </div>
 
-        {/* Scrap Icons (The "popping out" effect) */}
         <div className="flex items-center space-x-3">
+          {/* Show *remaining available* scrap in collapsed bar */}
           <ScrapIcon
             image={scrapsParts}
-            count={player.scrap.PARTS || 0}
+            count={availableParts}
             size="w-8 h-8"
           />
           <ScrapIcon
             image={scrapsWiring}
-            count={player.scrap.WIRING || 0}
+            count={availableWiring}
             size="w-8 h-8"
           />
           <ScrapIcon
             image={scrapsPlates}
-            count={player.scrap.PLATES || 0}
+            count={availablePlates}
             size="w-8 h-8"
           />
         </div>
 
-        {/* Arrow/Toggle Icon */}
         <button className="btn btn-ghost p-1">
-          {/* Change icon based on state AND if viewing self or another player */}
           {isAssetsOpen ? (
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -402,18 +461,22 @@ export const CollapsiblePlayerAssets = ({
         </button>
       </div>
 
-      {/* Full Content (Visible only when open) */}
       <div
         className={`h-[calc(100%-5rem)] overflow-y-auto ${
           isAssetsOpen ? "block" : "hidden"
         }`}
       >
+        {/* Pass all new props down to PlayerAssets */}
         <PlayerAssets
           player={player}
           isSelf={isSelf}
           phase={props.phase}
           playerPlan={props.playerPlan}
           turnStatus={props.turnStatus}
+          defenseScrap={defenseScrap}
+          defenseArsenal={defenseArsenal}
+          onScrapSpend={onScrapSpend}
+          onArsenalToggle={onArsenalToggle}
         />
       </div>
     </div>

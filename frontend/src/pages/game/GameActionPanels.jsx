@@ -181,9 +181,12 @@ export const AttractionPhaseActions = ({
   const { attraction_turn_player_id, attraction_phase_state, players } =
     gameState;
   const isMyTurn = player.user_id === attraction_turn_player_id;
-  const myLureKey = player.plan ? player.plan.lure_card_key : null;
+
+  // Use player.user_id (which is the key) to get the plan
+  const myPlan = gameState.player_plans[player.user_id];
+  const myLureKey = myPlan ? myPlan.lure_card_key : null;
   const myLureCard = myLureKey
-    ? LURE_CARDS.find((c) => c.id === myLureKey) // "BLOODY_RAGS" === "BLOODY_RAGS"
+    ? LURE_CARDS.find((c) => c.id === myLureKey)
     : null;
   const myLureName = myLureCard ? myLureCard.name : "NONE";
 
@@ -201,22 +204,23 @@ export const AttractionPhaseActions = ({
     players[attraction_turn_player_id]?.username || "A player";
 
   return (
-    <div className="space-y-3 p-3 bg-gray-700 bg-opacity-80 rounded-lg">
-      <div className="text-center p-2 bg-black bg-opacity-25 rounded-lg">
+    <div className="h-full flex flex-col justify-center items-center space-y-3 p-3 bg-gray-700 bg-opacity-80 rounded-lg">
+      <div className="text-center p-2 bg-black bg-opacity-25 rounded-lg w-full max-w-md">
         {isMyTurn ? (
           <>
             <p className="text-lg text-blue-300 animate-pulse">
-              It's your turn to choose!
+              It's your turn to choose a Threat!
             </p>
-            <p className="text-sm text-gray-200">
-              {/* This will now find the name correctly */}
-              Your Lure: <LureIcon lure={myLureName} />
-            </p>
-            <p className="text-xs text-gray-400">
+            <div className="flex items-center justify-center gap-2 text-sm text-gray-200 mt-1">
+              Your Lure:
+              <LureIcon lure={myLureName} size="w-6 h-6" />
+              <span className="font-semibold">{myLureName}</span>
+            </div>
+            <p className="text-xs text-gray-400 mt-1">
               Phase: ATTRACTION (
               {attraction_phase_state === "FIRST_PASS"
-                ? "First Pass"
-                : "Second Pass"}
+                ? "First Pass - Must pick a matching lure"
+                : "Second Pass - Pick from remaining"}
               )
             </p>
           </>
@@ -227,15 +231,15 @@ export const AttractionPhaseActions = ({
         )}
       </div>
 
-      <div className="flex justify-center items-center pt-3 border-t border-gray-600">
+      <div className="flex justify-center items-center pt-3 border-t border-gray-600 w-full max-w-md">
         <button
           onClick={handleSubmit}
           disabled={!canConfirm || !isMyTurn}
           className={`btn ${
-            canConfirm ? "btn-primary" : "btn-disabled"
+            canConfirm ? "btn-primary animate-pulse" : "btn-disabled"
           } text-lg px-6`}
         >
-          Confirm
+          {canConfirm ? "Confirm Threat" : "Select a Threat"}
         </button>
       </div>
     </div>
@@ -297,7 +301,7 @@ export const ActionPhaseActions = ({ sendGameAction, player, gameState }) => {
     players[action_turn_player_id]?.username || "A player";
 
   return (
-    <div className="space-y-3 p-3 bg-gray-700 bg-opacity-80 rounded-lg">
+    <div className="h-full flex flex-col justify-center items-center space-y-3 p-3 bg-gray-700 bg-opacity-80 rounded-lg">
       {showScavengeModal && (
         <ScavengeChoiceModal
           onConfirm={handleScavengeConfirm}
@@ -306,7 +310,7 @@ export const ActionPhaseActions = ({ sendGameAction, player, gameState }) => {
         />
       )}
 
-      <div className="text-center p-2 bg-black bg-opacity-25 rounded-lg">
+      <div className="text-center p-2 bg-black bg-opacity-25 rounded-lg w-full max-w-md">
         {isMyTurn ? (
           <>
             <p className="text-lg text-blue-300 animate-pulse">
@@ -327,7 +331,7 @@ export const ActionPhaseActions = ({ sendGameAction, player, gameState }) => {
 
       {isMyTurn &&
         (myChoiceName === "FORTIFY" || myChoiceName === "ARMORY_RUN") && (
-          <div className="pt-3 border-t border-gray-600 text-center">
+          <div className="pt-3 border-t border-gray-600 text-center w-full max-w-md">
             <p className="text-gray-300 mb-2">
               Select a card from the market to buy, or Pass to gain 2 random
               scrap.
@@ -342,7 +346,7 @@ export const ActionPhaseActions = ({ sendGameAction, player, gameState }) => {
         )}
 
       {isMyTurn && myChoiceName === "SCAVENGE" && (
-        <div className="pt-3 border-t border-gray-600 text-center">
+        <div className="pt-3 border-t border-gray-600 text-center w-full max-w-md">
           <p className="text-gray-300 mb-2">
             Choose your scrap from the supply.
           </p>
@@ -356,7 +360,7 @@ export const ActionPhaseActions = ({ sendGameAction, player, gameState }) => {
       )}
 
       {isMyTurn && myChoiceName === "SCHEME" && (
-        <div className="pt-3 border-t border-gray-600 text-center">
+        <div className="pt-3 border-t border-gray-600 text-center w-full max-w-md">
           <p className="text-gray-300 mb-2">Confirm your Scheme action.</p>
           <button onClick={handleSchemeConfirm} className="btn btn-primary">
             Confirm Scheme
@@ -387,15 +391,15 @@ export const IntermissionPhaseActions = ({
     players[intermission_turn_player_id]?.username || "A player";
 
   return (
-    <div className="space-y-3 p-3 bg-gray-700 bg-opacity-80 rounded-lg">
-      <div className="text-center p-2 bg-black bg-opacity-25 rounded-lg">
+    <div className="h-full flex flex-col justify-center items-center space-y-3 p-3 bg-gray-700 bg-opacity-80 rounded-lg">
+      <div className="text-center p-2 bg-black bg-opacity-25 rounded-lg w-full max-w-md">
         {isMyTurn ? (
           <>
             <p className="text-lg text-blue-300 animate-pulse">
               It's your turn to buy!
             </p>
             <p className="text-sm text-gray-200">
-              You may take one FREE card from the Market.
+              You may buy one card from the Market (it's free!).
             </p>
             <p className="text-xs text-gray-400">Phase: INTERMISSION</p>
           </>
@@ -407,7 +411,7 @@ export const IntermissionPhaseActions = ({
       </div>
 
       {isMyTurn && (
-        <div className="pt-3 border-t border-gray-600 text-center">
+        <div className="pt-3 border-t border-gray-600 text-center w-full max-w-md">
           <p className="text-gray-300 mb-2">
             Select a card from the market or Pass.
           </p>

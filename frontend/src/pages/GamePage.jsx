@@ -4,7 +4,6 @@ import { useStore } from "../store";
 // Import all components from their respective files
 import { gameBackground, LURE_CARDS } from "./game/GameConstants.jsx";
 import GameHeader from "./game/GameHeader.jsx";
-// Import CollapsiblePlayerAssets instead of PlayerAssets
 import { CollapsiblePlayerAssets } from "./game/PlayerBoard.jsx";
 import { playerPortraits, PlayerInfoCard } from "./game/GameCoreComponents.jsx";
 import { GameLog } from "./game/GameUIHelpers.jsx";
@@ -13,7 +12,13 @@ import {
   UpgradesMarket,
   ThreatsPanel,
 } from "./game/GamePanels.jsx";
-import { ConfirmationModal, DefenseSubmission } from "./game/GameModals.jsx";
+// --- MODIFIED IMPORT ---
+// We now also import PreviewDisplay to use it in the top-right panel
+import {
+  ConfirmationModal,
+  DefenseSubmission,
+  PreviewDisplay,
+} from "./game/GameModals.jsx";
 import {
   PlanningPhaseActions,
   AttractionPhaseActions,
@@ -34,12 +39,22 @@ const GamePage = () => {
   const [viewingPlayerId, setViewingPlayerId] = useState(null);
   const [selectedThreatId, setSelectedThreatId] = useState(null);
 
-  // New States for collapsible panels
   const [isAssetsPanelOpen, setIsAssetsPanelOpen] = useState(false);
-  const [isQueueOpen, setIsQueueOpen] = useState(true); // Initiative Queue (Left)
-  const [isLogOpen, setIsLogOpen] = useState(false); // Game Log (Right)
+  const [isQueueOpen, setIsQueueOpen] = useState(true);
+  const [isLogOpen, setIsLogOpen] = useState(false);
 
-  // Ref for double-click logic
+  const [defenseScrap, setDefenseScrap] = useState({
+    PARTS: 0,
+    WIRING: 0,
+    PLATES: 0,
+  });
+  const [defenseArsenal, setDefenseArsenal] = useState(new Set());
+
+  // --- NEW: State for the preview, now lifted into GamePage ---
+  const [defensePreview, setDefensePreview] = useState(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const debounceTimeout = useRef(null);
+
   const clickTimeoutRef = useRef(null);
 
   const playerPortraitsMap = useMemo(() => {
@@ -64,8 +79,115 @@ const GamePage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
-  // --- REMOVED: Old useEffect logic that incorrectly reset viewingPlayerId ---
-  // The viewingPlayerId state is now solely managed by handlePlayerInfoClick and handleToggleAssets.
+  useEffect(() => {
+    const isSpectator = !self || self.status !== "ACTIVE";
+    if (gameState?.phase === "DEFENSE" && !isSpectator) {
+      setIsAssetsPanelOpen(true);
+      setViewingPlayerId(user.id);
+    }
+  }, [gameState?.phase, self, user?.id]);
+
+  useEffect(() => {
+    if (gameState?.phase !== "DEFENSE") {
+      setDefenseScrap({ PARTS: 0, WIRING: 0, PLATES: 0 });
+      setDefenseArsenal(new Set());
+      setDefensePreview(null); // Clear preview when not in defense
+    }
+  }, [gameState?.phase]);
+
+  const {
+    phase,
+    round,
+    era,
+    log,
+    initiative_queue,
+    current_threats,
+    attraction_turn_player_id,
+    action_turn_player_id,
+    intermission_turn_player_id,
+    player_plans,
+    market,
+    player_threat_assignment,
+    unassigned_player_ids,
+  } = gameState;
+
+  // --- Find the player's threat ---
+  const myAssignedThreatId = player_threat_assignment[self?.user_id];
+  const myAssignedThreat = current_threats.find(
+    (t) => t.id === myAssignedThreatId
+  );
+
+  // --- NEW: useEffect for Defense Preview, moved from GameModals ---
+  useEffect(() => {
+    // Only run this fetch if we are in DEFENSE and have a threat
+    if (phase !== "DEFENSE" || !myAssignedThreat) {
+      setDefensePreview(null);
+      setIsPreviewLoading(false);
+      return;
+    }
+
+    if (debounceTimeout.current) {
+      clearTimeout(debounceTimeout.current);
+    }
+
+    const payload = {
+      scrap_spent: defenseScrap,
+      arsenal_card_ids: Array.from(defenseArsenal),
+      special_target_stat: null,
+      special_corrode_stat: null,
+      special_amp_spend: {},
+    };
+
+    debounceTimeout.current = setTimeout(async () => {
+      if (!token) {
+        console.error("No auth token available for defense preview.");
+        setDefensePreview({
+          error: "Auth token is missing. Cannot get preview.",
+        });
+        return;
+      }
+
+      setIsPreviewLoading(true);
+      try {
+        const response = await fetch(
+          `/api/game/${gameState.game_id}/preview_defense`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(payload),
+          }
+        );
+        if (!response.ok) {
+          const err = await response.json();
+          throw new Error(err.detail || "Preview failed");
+        }
+        const previewData = await response.json();
+        setDefensePreview(previewData);
+      } catch (error) {
+        console.error("Error fetching defense preview:", error);
+        setDefensePreview({ error: `${error.message}` });
+      }
+      setIsPreviewLoading(false);
+    }, 300);
+
+    return () => {
+      if (debounceTimeout.current) {
+        clearTimeout(debounceTimeout.current);
+      }
+    };
+    // Re-run whenever the defense inputs change
+  }, [
+    defenseScrap,
+    defenseArsenal,
+    myAssignedThreat,
+    phase,
+    token,
+    gameState?.game_id,
+  ]);
+  // --- END new useEffect ---
 
   const sendGameAction = (actionName, data) => {
     const sendMessage = useStore.getState().sendMessage;
@@ -105,31 +227,48 @@ const GamePage = () => {
   };
 
   const handlePlayerInfoClick = (playerId, isSelf) => {
-    // Clear any pending single-click timeout
     if (clickTimeoutRef.current) {
       clearTimeout(clickTimeoutRef.current);
       clickTimeoutRef.current = null;
-
-      // --- Double Click Action: View Player Board AND Open Panel ---
       setViewingPlayerId(playerId);
       setIsAssetsPanelOpen(true);
     } else {
-      // --- Single Click Action: View Player Board ONLY, keep panel state ---
       clickTimeoutRef.current = setTimeout(() => {
         clickTimeoutRef.current = null;
         setViewingPlayerId(playerId);
-        // On single click, the panel state (isAssetsPanelOpen) remains unchanged.
-      }, 300); // 300ms window for double click
+      }, 300);
     }
   };
 
   const handleToggleAssets = () => {
-    // If the panel is currently open and viewing a player other than self,
-    // toggle means returning to self's view first, then closing the panel.
     if (isAssetsPanelOpen && viewingPlayerId !== user.id) {
       setViewingPlayerId(user.id);
     }
     setIsAssetsPanelOpen(!isAssetsPanelOpen);
+  };
+
+  const handleScrapSpend = (scrapType, amount) => {
+    setDefenseScrap((prevScrap) => {
+      const currentSpent = prevScrap[scrapType] || 0;
+      const playerTotal = self?.scrap[scrapType] || 0;
+      const newSpent = Math.max(
+        0,
+        Math.min(playerTotal, currentSpent + amount)
+      );
+      return { ...prevScrap, [scrapType]: newSpent };
+    });
+  };
+
+  const handleArsenalToggle = (cardId) => {
+    setDefenseArsenal((prevArsenal) => {
+      const newSet = new Set(prevArsenal);
+      if (newSet.has(cardId)) {
+        newSet.delete(cardId);
+      } else {
+        newSet.add(cardId);
+      }
+      return newSet;
+    });
   };
 
   const sendMessageForLoadingCheck = useStore((state) => state.sendMessage);
@@ -152,20 +291,20 @@ const GamePage = () => {
 
   const selectableThreats = useMemo(() => {
     if (
-      gameState?.phase !== "ATTRACTION" ||
+      phase !== "ATTRACTION" ||
       !self ||
-      self.user_id !== gameState?.attraction_turn_player_id
+      self.user_id !== attraction_turn_player_id
     ) {
       return [];
     }
 
-    // --- FIX APPLIED HERE: Added optional chaining self?.user?.id ---
-    const myPlan = gameState.player_plans[self?.user?.id];
+    const myPlan = gameState.player_plans[self?.user_id];
     if (!myPlan) return [];
 
     const available = gameState.current_threats.filter((t) =>
       gameState.available_threat_ids.includes(t.id)
     );
+
     if (gameState.attraction_phase_state === "FIRST_PASS") {
       const myLureKey = myPlan.lure_card_key;
       const myLureCard = LURE_CARDS.find((c) => c.id === myLureKey);
@@ -177,14 +316,17 @@ const GamePage = () => {
         FALLEN_FRUIT: "Fruit",
       };
       const myLureName = lureNameMap[myLureCard.id];
-      return available.filter((t) => t.lure_type.includes(myLureName));
+      const matching = available.filter((t) =>
+        t.lure_type.includes(myLureName)
+      );
+      return matching;
     } else {
       return available;
     }
   }, [
-    gameState?.phase,
+    phase,
     self,
-    gameState?.attraction_turn_player_id,
+    attraction_turn_player_id,
     gameState?.player_plans,
     gameState?.current_threats,
     gameState?.available_threat_ids,
@@ -193,23 +335,33 @@ const GamePage = () => {
 
   const threatsToShow = useMemo(() => {
     if (!gameState) return [];
-    if (gameState.phase === "PLANNING") {
-      return gameState.current_threats || [];
+    // During DEFENSE, we *always* want to show the player's assigned threat
+    if (phase === "DEFENSE") {
+      return myAssignedThreat ? [myAssignedThreat] : [];
     }
+
+    if (phase === "PLANNING" || phase === "ATTRACTION") {
+      return current_threats || [];
+    }
+
     const viewingPlayer = gameState.players[viewingPlayerId];
     if (viewingPlayer) {
-      const assignedThreatId =
-        gameState.player_threat_assignment[viewingPlayer.user_id];
-      const assignedThreat = gameState.current_threats.find(
-        (t) => t.id === assignedThreatId
-      );
-      if (assignedThreat) return [assignedThreat];
+      const assignedThreatId = player_threat_assignment[viewingPlayer.user_id];
+      if (assignedThreatId) {
+        const assignedThreat = current_threats.find(
+          (t) => t.id === assignedThreatId
+        );
+        if (assignedThreat) return [assignedThreat];
+      }
     }
-    return gameState.current_threats || [];
+    return current_threats || [];
   }, [
-    gameState?.phase,
-    gameState?.current_threats,
-    gameState?.player_threat_assignment,
+    phase,
+    current_threats,
+    player_threat_assignment,
+    gameState?.players,
+    viewingPlayerId,
+    myAssignedThreat, // Add dependency
   ]);
 
   if (!gameState || !user || !sendMessageForLoadingCheck) {
@@ -227,32 +379,14 @@ const GamePage = () => {
         <div className="text-center p-6 bg-black bg-opacity-70 rounded-lg">
           <span className="loading loading-spinner loading-lg text-blue-400"></span>
           <p className="text-xl mt-4">Loading game state...</p>
-          {!sendMessageForLoadingCheck && (
-            <p className="text-red-400 mt-2">Connecting to server...</p>
-          )}
         </div>
       </div>
     );
   }
 
-  const canConfirmThreat = selectedThreatId !== null;
-
-  const {
-    phase,
-    round,
-    era,
-    log,
-    initiative_queue,
-    current_threats,
-    attraction_turn_player_id,
-    action_turn_player_id,
-    intermission_turn_player_id,
-    player_plans,
-    market,
-    available_threat_ids,
-    unassigned_player_ids,
-    player_threat_assignment,
-  } = gameState;
+  const canConfirmThreat =
+    selectedThreatId !== null &&
+    selectableThreats.some((t) => t.id === selectedThreatId);
 
   const getPlayerTurnStatus = (playerId) => {
     const player = gameState.players[playerId];
@@ -302,7 +436,11 @@ const GamePage = () => {
 
   const handleThreatSelect = (threatId) => {
     if (phase === "ATTRACTION" && self?.user_id === attraction_turn_player_id) {
-      setSelectedThreatId((prev) => (prev === threatId ? null : threatId));
+      if (selectableThreats.some((t) => t.id === threatId)) {
+        setSelectedThreatId((prev) => (prev === threatId ? null : threatId));
+      } else {
+        setSelectedThreatId(null);
+      }
     }
   };
 
@@ -326,13 +464,7 @@ const GamePage = () => {
     ? getPlayerTurnStatus(viewingPlayerId)
     : "NONE";
 
-  const myAssignedThreatId = player_threat_assignment[self?.user_id];
-  const myAssignedThreat = current_threats.find(
-    (t) => t.id === myAssignedThreatId
-  );
-
   return (
-    // Root container: Full screen, no scroll, flex column, relative for absolute children
     <div
       className="relative flex flex-col h-screen w-screen overflow-hidden text-white bg-cover bg-center bg-fixed"
       style={{
@@ -353,10 +485,8 @@ const GamePage = () => {
         />
       )}
 
-      {/* 1. Top Bar: Markets + Game State + Menu (Fixed Top) */}
       <header className="fixed top-0 left-0 w-full flex-shrink-0 p-2 bg-black bg-opacity-60 shadow-lg z-30">
         <div className="flex justify-between items-start gap-4">
-          {/* Left Market */}
           <div className="flex-1 max-w-xs h-[16vh] min-h-[120px]">
             <UpgradesMarket
               upgrade_market={market.upgrade_faceup}
@@ -367,13 +497,9 @@ const GamePage = () => {
               playerScrap={self?.scrap}
             />
           </div>
-
-          {/* Center Info */}
           <div className="flex-shrink-0 pt-2">
             <GameHeader round={round} era={era} phase={phase} />
           </div>
-
-          {/* Right Market */}
           <div className="flex-1 max-w-xs h-[16vh] min-h-[120px]">
             <ArsenalMarket
               arsenal_market={market.arsenal_faceup}
@@ -384,8 +510,6 @@ const GamePage = () => {
               playerScrap={self?.scrap}
             />
           </div>
-
-          {/* Menu Trigger */}
           <div className="flex-shrink-0">
             <GameMenu
               onSurrender={() => setShowSurrenderModal(true)}
@@ -398,7 +522,6 @@ const GamePage = () => {
         </div>
       </header>
 
-      {/* 2. Main Board Area (Occupies full screen below header, above assets panel top bar) */}
       <main className="absolute inset-0 pt-[18vh] pb-[5rem] overflow-hidden">
         <div className="flex flex-col h-full gap-1 p-1">
           {isSpectator ? (
@@ -416,90 +539,123 @@ const GamePage = () => {
               </button>
             </div>
           ) : (
+            // --- NEW LAYOUT LOGIC ---
             <>
-              {/* Top Half: Threats (Main focus of the board) */}
-              <div className="h-1/2 overflow-hidden">
-                <ThreatsPanel
-                  threats={threatsToShow}
-                  threatAssignments={threatAssignments}
-                  onThreatSelect={handleThreatSelect}
-                  selectableThreats={selectableThreats}
-                  selectedThreatId={selectedThreatId}
-                  gameState={gameState}
-                />
-              </div>
-              {/* Bottom Half: Action Panel */}
-              <div className="h-1/2 overflow-hidden bg-gray-800 bg-opacity-50 rounded-lg">
-                {phase === "PLANNING" && (
-                  <PlanningPhaseActions
-                    sendGameAction={sendGameAction}
-                    player={self}
-                  />
-                )}
-                {phase === "ATTRACTION" && (
-                  <AttractionPhaseActions
-                    sendGameAction={sendGameAction}
-                    player={self}
-                    gameState={gameState}
-                    selectedThreatId={selectedThreatId}
-                    canConfirm={canConfirmThreat}
-                  />
-                )}
-                {phase === "DEFENSE" && (
-                  <DefenseSubmission
-                    player={self}
-                    threat={myAssignedThreat}
-                    sendGameAction={sendGameAction}
-                    gameState={gameState}
-                    token={token}
-                  />
-                )}
-                {phase === "ACTION" && (
-                  <ActionPhaseActions
-                    sendGameAction={sendGameAction}
-                    player={self}
-                    gameState={gameState}
-                  />
-                )}
-                {phase === "INTERMISSION" && (
-                  <IntermissionPhaseActions
-                    sendGameAction={sendGameAction}
-                    player={self}
-                    gameState={gameState}
-                  />
-                )}
-                {["CLEANUP", "WILDERNESS"].includes(phase) && (
-                  <div className="text-center p-4 h-full flex flex-col justify-center items-center">
-                    <h3 className="text-xl text-gray-300">Phase: {phase}</h3>
-                    <span className="loading loading-spinner loading-lg text-blue-400 mt-4"></span>
-                    <p className="text-gray-400 mt-4">
-                      Resolving game state...
-                    </p>
+              {phase === "DEFENSE" ? (
+                <>
+                  {/* Top Half: Threat vs Preview */}
+                  <div className="h-1/2 flex gap-1">
+                    <div className="w-1/2 h-full overflow-hidden">
+                      <ThreatsPanel
+                        threats={threatsToShow}
+                        threatAssignments={threatAssignments}
+                        onThreatSelect={() => {}} // No-op, not selectable here
+                        selectableThreats={[]}
+                        selectedThreatId={null}
+                        gameState={gameState}
+                      />
+                    </div>
+                    <div className="w-1/2 h-full overflow-hidden bg-gray-800 bg-opacity-70 rounded-lg p-2 flex flex-col">
+                      <h3 className="text-xl font-bold text-white mb-2 text-center">
+                        Defense Preview
+                      </h3>
+                      {/* Render the PreviewDisplay component here */}
+                      <PreviewDisplay
+                        preview={defensePreview}
+                        isLoading={isPreviewLoading}
+                      />
+                    </div>
                   </div>
-                )}
-                {phase === "GAME_OVER" && (
-                  <div className="text-center p-4 h-full flex flex-col justify-center items-center">
-                    <h3 className="text-xl text-yellow-300">GAME OVER</h3>
-                    <p className="text-gray-200 text-lg">
-                      Winner: {gameState.winner?.username || "N/A"}
-                    </p>
-                    <button
-                      onClick={handleReturnToLobby}
-                      className="btn btn-primary mt-4"
-                    >
-                      Back to Lobby
-                    </button>
+                  {/* Bottom Half: Staging Area */}
+                  <div className="h-1/2 overflow-hidden bg-gray-800 bg-opacity-50 rounded-lg">
+                    {/* Render the refactored DefenseSubmission component */}
+                    <DefenseSubmission
+                      player={self}
+                      threat={myAssignedThreat}
+                      sendGameAction={sendGameAction}
+                      defenseScrap={defenseScrap}
+                      defenseArsenal={defenseArsenal}
+                      onScrapSpend={handleScrapSpend}
+                      onArsenalToggle={handleArsenalToggle}
+                    />
                   </div>
-                )}
-              </div>
+                </>
+              ) : (
+                <>
+                  {/* The OLD layout for all other phases */}
+                  <div className="h-1/2 overflow-hidden">
+                    <ThreatsPanel
+                      threats={threatsToShow}
+                      threatAssignments={threatAssignments}
+                      onThreatSelect={handleThreatSelect}
+                      selectableThreats={selectableThreats}
+                      selectedThreatId={selectedThreatId}
+                      gameState={gameState}
+                    />
+                  </div>
+                  <div className="h-1/2 overflow-hidden bg-gray-800 bg-opacity-50 rounded-lg">
+                    {phase === "PLANNING" && (
+                      <PlanningPhaseActions
+                        sendGameAction={sendGameAction}
+                        player={self}
+                      />
+                    )}
+                    {phase === "ATTRACTION" && (
+                      <AttractionPhaseActions
+                        sendGameAction={sendGameAction}
+                        player={self}
+                        gameState={gameState}
+                        selectedThreatId={selectedThreatId}
+                        canConfirm={canConfirmThreat}
+                      />
+                    )}
+                    {phase === "ACTION" && (
+                      <ActionPhaseActions
+                        sendGameAction={sendGameAction}
+                        player={self}
+                        gameState={gameState}
+                      />
+                    )}
+                    {phase === "INTERMISSION" && (
+                      <IntermissionPhaseActions
+                        sendGameAction={sendGameAction}
+                        player={self}
+                        gameState={gameState}
+                      />
+                    )}
+                    {["CLEANUP", "WILDERNESS"].includes(phase) && (
+                      <div className="text-center p-4 h-full flex flex-col justify-center items-center">
+                        <h3 className="text-xl text-gray-300">
+                          Phase: {phase}
+                        </h3>
+                        <span className="loading loading-spinner loading-lg text-blue-400 mt-4"></span>
+                        <p className="text-gray-400 mt-4">
+                          Resolving game state...
+                        </p>
+                      </div>
+                    )}
+                    {phase === "GAME_OVER" && (
+                      <div className="text-center p-4 h-full flex flex-col justify-center items-center">
+                        <h3 className="text-xl text-yellow-300">GAME OVER</h3>
+                        <p className="text-gray-200 text-lg">
+                          Winner: {gameState.winner?.username || "N/A"}
+                        </p>
+                        <button
+                          onClick={handleReturnToLobby}
+                          className="btn btn-primary mt-4"
+                        >
+                          Back to Lobby
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
             </>
           )}
         </div>
       </main>
 
-      {/* 3. Overlapping Side Panels (Fixed) */}
-
-      {/* Initiative Queue (Left) */}
       <div
         className={`fixed top-[18vh] bottom-[5rem] w-1/5 flex-shrink-0 p-2 bg-black bg-opacity-70 shadow-lg z-40 transition-transform duration-300 ${
           isQueueOpen ? "translate-x-0" : "-translate-x-full"
@@ -544,7 +700,6 @@ const GamePage = () => {
         </div>
       </div>
 
-      {/* Game Log (Right) */}
       <div
         className={`fixed top-[18vh] bottom-[5rem] right-0 w-1/5 flex-shrink-0 p-2 bg-black bg-opacity-70 shadow-lg z-40 transition-transform duration-300 ${
           isLogOpen ? "translate-x-0" : "translate-x-full"
@@ -573,7 +728,6 @@ const GamePage = () => {
         <GameLog logs={log} className="bg-transparent" />
       </div>
 
-      {/* 4. Player Assets Panel (Bottom) */}
       {self && (
         <CollapsiblePlayerAssets
           player={gameState.players[viewingPlayerId] || self}
@@ -581,11 +735,15 @@ const GamePage = () => {
           viewingPlayerId={viewingPlayerId}
           portrait={playerPortraitsMap[viewingPlayerId || user.id]}
           isAssetsOpen={isAssetsPanelOpen}
-          toggleAssets={handleToggleAssets} // Use the custom handler
+          toggleAssets={handleToggleAssets}
           onReturn={() => setViewingPlayerId(user.id)}
           phase={phase}
           playerPlan={player_plans[viewingPlayerId || user.id]}
           turnStatus={viewingPlayerTurnStatus}
+          defenseScrap={defenseScrap}
+          defenseArsenal={defenseArsenal}
+          onScrapSpend={handleScrapSpend}
+          onArsenalToggle={handleArsenalToggle}
         />
       )}
     </div>

@@ -73,7 +73,6 @@ export const PlayerStatusPill = ({ status }) => {
   );
 };
 
-// Added className prop to allow passing styles
 export const GameLog = ({ logs, className = "" }) => {
   const logEndRef = useRef(null);
   const gameLogs = logs || [];
@@ -100,8 +99,6 @@ export const GameLog = ({ logs, className = "" }) => {
   );
 };
 
-// --- UPDATED LURE ICON ---
-// Now renders an image instead of a text pill
 export const LureIcon = ({ lure, size = "w-8 h-8" }) => {
   const primaryLure = lure ? lure.split("/")[0].toUpperCase() : "UNKNOWN";
   const iconSrc = LURE_ICON_MAP[primaryLure] || LURE_ICON_MAP.UNKNOWN;
@@ -146,6 +143,7 @@ export const PlayerTag = ({ username }) => {
   );
 };
 
+// --- ScrapIcon: Now supports onClick and cursor-pointer ---
 export const ScrapIcon = ({
   image,
   icon,
@@ -155,8 +153,11 @@ export const ScrapIcon = ({
   onClick,
 }) => (
   <div
-    className={`relative ${size} ${onClick ? "cursor-pointer" : ""}`}
+    className={`relative ${size} ${
+      onClick ? "cursor-pointer transition-transform hover:scale-110" : ""
+    }`}
     onClick={onClick}
+    title={onClick ? "Click to add 1 to defense" : ""}
   >
     {image && (
       <img

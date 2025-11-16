@@ -267,14 +267,11 @@ export const ThreatCard = ({
         src={threatImagePath}
         alt={threat.name}
         className="absolute inset-0 w-full h-full object-cover rounded-md z-0"
-        // --- TWO-STAGE FALLBACK IMPLEMENTATION ---
         onError={(e) => {
-          // 1. If original image fails, try the specified default-threat.png
           if (!e.target.dataset.fallbackTried) {
             e.target.src = "/images/threats/default-threat.png";
-            e.target.dataset.fallbackTried = "true"; // Mark that we've tried the first fallback
+            e.target.dataset.fallbackTried = "true";
           } else {
-            // 2. If default-threat.png also failed, use the ultimate placeholder
             e.target.onerror = null;
             const formattedName = threat.name.replace(/ /g, "+");
             e.target.src = `https://placehold.co/200x280/1a202c/9ca3af?text=${formattedName}`;
@@ -317,7 +314,6 @@ export const ThreatCard = ({
 };
 
 export const MarketCard = ({
-  // ... (MarketCard logic remains unchanged)
   card,
   cardType,
   onClick,
@@ -337,16 +333,19 @@ export const MarketCard = ({
   let opacityStyle = "opacity-100";
 
   if (isSelectable) {
-    baseStyle += " ring-2 ring-blue-400 hover:ring-blue-300";
+    baseStyle += " hover:ring-blue-300";
     cursorStyle = "cursor-pointer";
   } else if (isDimmed) {
     opacityStyle = "opacity-50";
     cursorStyle = "cursor-not-allowed";
   }
 
+  // Ring style for market cards
+  const ringStyle = isSelectable ? "ring-2 ring-blue-400" : "";
+
   return (
     <div
-      className={`${baseStyle} ${cursorStyle} ${opacityStyle}`}
+      className={`${baseStyle} ${cursorStyle} ${opacityStyle} ${ringStyle}`}
       onClick={onClick}
     >
       <div>
@@ -374,7 +373,14 @@ export const MarketCard = ({
   );
 };
 
-export const OwnedCard = ({ card, cardType, onClick, isSelectable }) => {
+// --- OwnedCard: Now accepts isSelected prop ---
+export const OwnedCard = ({
+  card,
+  cardType,
+  onClick,
+  isSelectable,
+  isSelected, // NEW
+}) => {
   if (!card) return null;
   const cardColor =
     cardType === "UPGRADE"
@@ -383,12 +389,20 @@ export const OwnedCard = ({ card, cardType, onClick, isSelectable }) => {
   const costItems = Object.entries(card.cost).filter(([, val]) => val > 0);
 
   const baseStyle = `bg-gray-800 rounded-md shadow-md p-2 border ${cardColor} w-40 flex-shrink-0 transition-all h-full`;
-  const selectableStyle = isSelectable
-    ? "cursor-pointer ring-2 ring-blue-400 hover:ring-blue-300"
-    : "cursor-default";
+  const cursorStyle = isSelectable ? "cursor-pointer" : "cursor-default";
+
+  // New ring style logic
+  const ringStyle = isSelected
+    ? "ring-4 ring-yellow-400" // Bright ring for selected
+    : isSelectable
+    ? "ring-2 ring-blue-400 hover:ring-blue-300" // Dimmer ring for selectable
+    : "";
 
   return (
-    <div className={`${baseStyle} ${selectableStyle}`} onClick={onClick}>
+    <div
+      className={`${baseStyle} ${cursorStyle} ${ringStyle}`}
+      onClick={onClick}
+    >
       <h4 className="text-xs font-bold text-white mb-1 truncate">
         {card.name}
         {card.charges ? (
