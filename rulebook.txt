@@ -1,0 +1,99 @@
+Wild Pigs Will Attack!
+A Game of Scrap, Strategy, and Survival (v2.1)
+1. Game Overview
+You are a survivor huddled in the darkness. Each night, mutated pigs—driven by Ferocity, Cunning, and Mass—emerge from the wilderness. Unlike previous versions where you reacted to random threats, you must now choose your battles.
+In this strategic survival game for 2–5 players, you will draft the threats you wish to fight, build a permanent engine of defenses on your dashboard, and manage your "Stance" to counter specific enemy types.
+The game lasts 15 Rounds (divided into 3 Eras). The goal is no longer just to survive, but to thrive. The winner is the player with the most Victory Points (VP) derived from Trophies, Upgrades, and Weaponry.
+2. Components
+1 Initiative Token (Rotates every round).
+Player Dashboards: 5 distinct boards containing the Stance Triangle, Tech Tracks, and the Engagement Zone.
+Stance Markers: 1 per player.
+Threat Decks: Day, Twilight, and Night decks.
+Market Deck: A deck of Arsenal (Weapons) and Item cards.
+Scrap Pool: A bag containing 150 Scrap tokens (Red Parts, Blue Wiring, Green Plates).
+The Horde Board: A holding area for unpicked pigs.
+3. The Player Dashboard & Stance System
+The core of the game is your Dashboard, which represents your character's build.
+A. The Stance Triangle
+Your defense is determined by where your Stance Marker is located on a triangular grid.
+Red Node (Aggressive): High Red Defense / 0 Blue / 0 Green.
+Blue Node (Tactical): 0 Red / High Blue Defense / 0 Green.
+Green Node (Hunkered): 0 Red / 0 Blue / High Green Defense.
+Center Node (Survivor): Balanced Defense across all three stats.
+B. The Tech Tracks
+Each Node has a corresponding "Tech Track" that determines its power level.
+Level 0 (Start): Base Defense.
+Level 1-4: Adds permanent defense to that Stance.
+Example: If your Red Track is Level 2 (Value 5), and you are in Red Stance, your Red Defense is 5. If you switch to Blue Stance, your Red Defense becomes 0.
+4. Setup
+Prepare Threat Decks: Shuffle Day, Twilight, and Night decks separately.
+Create the Pool: Place the Scrap Pool and Market Deck (reveal 4 items) in the center.
+Player Setup: Give each player a Dashboard and tokens.
+Starting Resources: Each player draws 3 Scrap randomly from the bag.
+Initial Stance: Players place their Stance Marker on the Center Node (1/1/1).
+5. Gameplay Loop (The Standard Round)
+Rounds 1-4 of each Era follow this standard loop.
+Phase 1: Wilderness (Reveal)
+Reveal N+1 Threat Cards from the current Era deck (where N is the number of players) and place them in the center of the table.
+Phase 2: Player Turns (Clockwise)
+Starting with the player holding the Initiative Token and proceeding clockwise, each player performs their entire turn:
+Step A: Stance Shift You may move your Stance Marker one step along a line (e.g., Center to Red) for free.
+Constraint: You cannot jump corner-to-corner (Red to Green) without using the Refit action.
+Step B: Perform One Action Choose and resolve exactly ONE of the following:
+SCAVENGE: Draw 2 Scrap from the pool.
+MARKET: Buy 1 Card from the Market Row.
+Pay the cost listed on the card.
+Instant Refill: Immediately draw a new card to replace the purchased one.
+TINKER (Tech Up): Upgrade one of your Tech Tracks by one level.
+Cost: Pay 4 Scrap.
+Requirement: At least 2 Scrap must match the color of the track (For Center Track, pay 4 Mixed Scrap).
+REFIT:
+Gain 1 Scrap.
+Move your Stance Marker to ANY node instantly (teleport).
+Step C: Engage Threat Select ONE Threat Card from the center pool.
+Take the card and place it on your dashboard's Engagement Zone (?).
+Note: You cannot pass. You must take a threat.
+Phase 3: The Clash (Asynchronous Resolution)
+Once all players have finished their turns, everyone resolves combat against the pig in their Engagement Zone simultaneously.
+Calculate Defense:
+Check your Current Stance and Tech Level.
+Add bonuses from Arsenal Cards (spend charges if necessary).
+Compare to Threat:
+FAIL: Defense < All Pig Stats.
+Gain 1 Injury Token (-2 VP).
+Discard Pig.
+REPEL: Defense \ge At least one Stat.
+No Damage.
+Discard Pig.
+SLAY: Defense \ge Highest Stat.
+No Damage.
+Keep Card as Trophy (+VP).
+Butcher's Bonus: Gain 1 Scrap of your choice.
+Phase 4: Cleanup
+The Leftover: The one unpicked Threat Card is moved to the Horde Board (face up).
+Income: Every player draws 1 Random Scrap.
+Initiative: Pass the Initiative Token to the left.
+6. The Climax (Round 5: The Horde)
+The 5th Round of every Era (Rounds 5, 10, 15) is a Horde Round.
+1. Standard Play Play Phases 1, 2, and 3 as normal. The unpicked pig from this round is added to the Horde Board.
+2. Preparation (The Panic) Immediately after resolving the Round 5 pig:
+Supply Drop: All players gain 3 Scrap of their choice.
+Emergency Action: In Initiative Order, each player may perform the following (optional):
+Buy 1 Market Card (paying cost).
+AND
+Perform 1 Tinker Upgrade (paying cost).
+(Market refills immediately after each buy).
+Formation: All players may change their Stance to ANY node for free.
+3. The Onslaught The Horde Board (containing 5 pigs) attacks ALL players.
+Resolve the pigs one by one in the order they were added.
+Rules of Engagement:
+Survival Focus: Killing Horde pigs grants NO Trophies and NO Butcher's Bonus.
+Triggers: "On Kill" effects from Weapons/Abilities DO trigger.
+Failure: Taking damage from a Horde pig works normally (Gain 1 Injury).
+4. Era Change Discard the Horde Stack. Proceed to the next Era.
+7. Winning the Game
+The game ends after the Round 15 Horde is resolved. Calculate Victory Points (VP):
+Trophies: Sum the VP value of all Slayed Pigs (Day=1, Twilight=3, Night=5).
+Injuries: Subtract 2 VP for every Injury token.
+Arsenal: Add VP from specific Arsenal cards or fully upgraded Tech Tracks.
+The player with the most VP wins. Tiebreaker: Most Trophies > Fewest Injuries > Most Scrap.
