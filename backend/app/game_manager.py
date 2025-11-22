@@ -9,15 +9,15 @@ if TYPE_CHECKING:
     from .room_manager import RoomManager
 
 from .server_models import User, Room, GameParticipant, PlayerStatus as ServerPlayerStatus
-from .game_core.game_instance import GameInstance
-from .game_core.game_models import GameState, PlayerState, GamePhase, PlayerStatus
+from game_core import GameSession, GamePhase, PlayerStatus
+from game_core.session import InvalidActionError
 from .routers import fake_games_db 
 
 class GameManager:
     """Manages the lifecycle of all active game instances."""
     
     def __init__(self, conn_manager: ConnectionManager):
-        self.active_games: Dict[str, GameInstance] = {}
+        self.active_games: Dict[str, GameSession] = {}
         self.conn_manager = conn_manager
         self.room_manager: Optional['RoomManager'] = None
         print("GameManager initialized.")
@@ -44,18 +44,17 @@ class GameManager:
             
         try:
             # 1. Create the instance (synchronous)
-            game = GameInstance(game_id, participants)
-            # 2. Perform async setup (draw scrap, start first round)
+            session_players = [{"id": p.user.id, "username": p.user.username} for p in participants]
+            game = GameSession(game_id, session_players)
+            # 2. Perform async setup (draw resources, start first round)
             await game.async_setup()
             
             self.active_games[game_id] = game
             print(f"GameInstance {game_id} created with {len(participants)} players.")
             
-            initial_state = game.state
-            
             # --- Broadcast initial state to all players ---
             for p in participants:
-                redacted_state = initial_state.get_redacted_state(p.user.id)
+                redacted_state = game.state.get_redacted_state(p.user.id)
                 await self.conn_manager.send_to_user(
                     p.user.id,
                     {"type": "game_state_update", "payload": redacted_state}
@@ -66,7 +65,7 @@ class GameManager:
                 # --- FIX: Use internal helper ---
                 room = self._find_room_by_game_id(game_id)
                 if room:
-                    spectator_state = initial_state.get_redacted_state("spectator")
+                    spectator_state = game.state.get_redacted_state("spectator")
                     
                     # --- FIX: Use correct broadcast_to_users method ---
                     msg = {"type": "game_state_update", "payload": spectator_state}
@@ -112,26 +111,19 @@ class GameManager:
             return
 
         try:
-            # --- Perform the action ---
-            # The game instance will mutate its own state and
-            # return True if a broadcast is needed.
-            state_changed = await game.player_action(
-                player_id, action, payload, self.conn_manager
-            )
-            
+            state_changed = await game.player_action(player_id, action, payload)
+
             if state_changed:
-                # --- Check for Game Over ---
                 if game.state.phase == GamePhase.GAME_OVER:
                     await self._handle_game_over(game_id, game.state)
-                
-                # --- Broadcast the new state to all players ---
                 else:
                     await self.broadcast_game_state(game_id)
-            
-            # If state_changed is False, it means an invalid action
-            # was attempted and GameInstance already sent a
-            # specific error to the player. No broadcast needed.
-                
+
+        except InvalidActionError as e:
+            await self.conn_manager.send_to_user(
+                player_id,
+                {"type": "error", "payload": {"message": str(e)}}
+            )
         except Exception as e:
             print(f"CRITICAL ERROR during player_action for game {game_id}: {e}")
             # This is a fallback for *unexpected* errors,
@@ -188,7 +180,7 @@ class GameManager:
             return {"error": "Game not found"}
         
         # This is a read-only operation, no broadcast needed
-        return game.public_preview_defense(player_id, payload)
+        return game.public_preview(player_id, payload)
 
 
     async def broadcast_game_state(self, game_id: str, 
@@ -248,7 +240,7 @@ class GameManager:
                 await self.conn_manager.send_to_user(user_id, msg)
 
 
-    async def _handle_game_over(self, game_id: str, final_state: GameState):
+    async def _handle_game_over(self, game_id: str, final_state: Any):
         """
         Handles the end-of-game process.
         """
@@ -256,7 +248,7 @@ class GameManager:
             print("Error: RoomManager not set in GameManager. Cannot end game.")
             return
 
-        print(f"Game {game_id} is over. Winner: {final_state.winner.username if final_state.winner else 'None'}")
+        print(f"Game {game_id} is over. Winner: {final_state.winner_id or 'None'}")
         
         # 1. Broadcast the final state to everyone
         await self.broadcast_game_state(game_id)
@@ -268,8 +260,6 @@ class GameManager:
             await self.remove_game(game_id)
             return
 
-        winner_state = final_state.winner
-        
         # 3. Find the Room
         # --- FIX: Use internal helper ---
         room: Optional[Room] = self._find_room_by_game_id(game_id)
@@ -279,13 +269,13 @@ class GameManager:
         
         # 4. Find the server-level User object for the winner
         winner_user: Optional[User] = None
-        if winner_state:
-            participant = next((p for p in record.participants if p.user.id == winner_state.user_id), None)
+        if final_state.winner_id:
+            participant = next((p for p in record.participants if p.user.id == final_state.winner_id), None)
             if participant:
                 winner_user = participant.user
                 print(f"Winner found: {winner_user.username}")
             else:
-                print(f"Warning: Winner state {winner_state.user_id} not found in record participants.")
+                print(f"Warning: Winner state {final_state.winner_id} not found in record participants.")
         else:
             print("Game ended with no winner.")
 

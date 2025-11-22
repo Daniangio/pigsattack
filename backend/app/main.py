@@ -13,7 +13,7 @@ from .security import get_current_user
 
 # --- GAME CORE IMPORTS ---
 from .game_manager import GameManager
-from .game_core.game_models import GamePhase, PlayerDefense, ScrapType
+from game_core import PlayerStatus
 from backend.app import security
 
 
@@ -124,7 +124,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 if player_state:
                     player_status = player_state.status
 
-            if game_instance and player_status == "ACTIVE":
+            if game_instance and player_status == PlayerStatus.ACTIVE:
                 # --- User is IN-GAME ---
                 if action == "game_action":
                     sub_action = payload.get("sub_action")

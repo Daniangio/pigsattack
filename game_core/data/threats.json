@@ -1,0 +1,26 @@
+{
+  "boss": {
+    "id": "boss-day",
+    "name": "Titan Boar",
+    "vp": 10,
+    "thresholds": [
+      { "label": "Light Strike", "cost": { "R": 6, "B": 4, "G": 0 }, "reward": "1 Boss Token" },
+      { "label": "Crushing Blow", "cost": { "R": 8, "B": 0, "G": 4 }, "reward": "2 Tokens + Slot" },
+      { "label": "Perfect Kill", "cost": { "R": 10, "B": 6, "G": 4 }, "reward": "3 Tokens + 4 VP" }
+    ]
+  },
+  "rows": [
+    [
+      { "id": "t1", "name": "Razorbacks", "cost": { "R": 6, "B": 0, "G": 1 }, "vp": 3, "type": "Feral", "reward": "+Attack" },
+      { "id": "t2", "name": "Scrap Ambushers", "cost": { "R": 4, "B": 2, "G": 0 }, "vp": 2, "type": "Hybrid", "reward": "+Conversion" }
+    ],
+    [
+      { "id": "t3", "name": "Spine Sprinters", "cost": { "R": 3, "B": 3, "G": 0 }, "vp": 2, "type": "Cunning", "reward": "+Wild" },
+      { "id": "t4", "name": "Wall Breakers", "cost": { "R": 2, "B": 0, "G": 4 }, "vp": 3, "type": "Massive", "reward": "+Mass" }
+    ],
+    [
+      { "id": "t5", "name": "Night Prowlers", "cost": { "R": 5, "B": 2, "G": 0 }, "vp": 4, "type": "Feral", "reward": "+Attack" },
+      { "id": "t6", "name": "Charging Herd", "cost": { "R": 2, "B": 0, "G": 5 }, "vp": 4, "type": "Massive", "reward": "+Mass" }
+    ]
+  ]
+}
