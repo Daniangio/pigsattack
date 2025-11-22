@@ -26,18 +26,24 @@ function StanceNode({ active, color, position, onClick }) {
   );
 }
 
-export default function StanceModal({ players, setPlayers, activePlayerId, onClose }) {
+export default function StanceModal({ players, setPlayers, activePlayerId, onClose, inline = false }) {
   const applyStance = (stance) => {
     setPlayers(players.map((p) => (p.id === activePlayerId ? { ...p, stance } : p)));
-    onClose();
   };
 
   const activeStance = players.find((p) => p.id === activePlayerId)?.stance;
   const activeConfig = STANCE_CONFIG[activeStance];
 
+  const wrapperClass = inline
+    ? "absolute left-0 bottom-full mb-2 flex justify-start pointer-events-none z-30"
+    : "fixed inset-0 bg-black/60 flex items-center justify-center z-50";
+
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-[360px] shadow-2xl relative">
+    <div className={wrapperClass}>
+      <div
+        className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-[360px] shadow-2xl relative pointer-events-auto"
+        style={inline ? { marginLeft: 0 } : {}}
+      >
         <div className="flex items-start justify-between">
           <div>
             <h3 className="text-slate-200 text-sm uppercase tracking-[0.35em]">Stance System</h3>

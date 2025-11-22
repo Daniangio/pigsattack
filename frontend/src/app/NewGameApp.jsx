@@ -10,8 +10,6 @@ import MarketPanel from '../components/market/MarketPanel';
 import PlayerBoardBottom from '../components/player/PlayerBoardBottom';
 import PlayerActionPanel from '../components/player/PlayerActionPanel';
 import PlayerMiniBoard from '../components/player/PlayerMiniBoard';
-import StanceModal from '../components/player/StanceModal';
-
 import HoverPreviewPortal from '../components/hover/HoverPreviewPortal';
 
 export default function App() {
@@ -83,19 +81,15 @@ export default function App() {
         {viewMode !== VIEW_MODES.GLOBAL && (
           <PlayerBoardBottom
             player={activePlayer}
-            onOpenStance={() => setStanceMenuOpen(true)}
+            players={players}
+            setPlayers={setPlayers}
+            activePlayerId={activePlayerId}
+            stanceMenuOpen={stanceMenuOpen}
+            onToggleStance={() => setStanceMenuOpen((v) => !v)}
+            onCloseStance={() => setStanceMenuOpen(false)}
           />
         )}
       </div>
-
-      {stanceMenuOpen && (
-        <StanceModal
-          activePlayerId={activePlayerId}
-          players={players}
-          setPlayers={setPlayers}
-          onClose={() => setStanceMenuOpen(false)}
-        />
-      )}
 
       <HoverPreviewPortal />
     </div>

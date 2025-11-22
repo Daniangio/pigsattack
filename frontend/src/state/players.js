@@ -8,6 +8,8 @@ export const INITIAL_PLAYERS = [
     vp: 2,
     upgrades: ['Ferocity Modulator', 'Precision Optics', 'Precision Optics'],
     weapons: ['Shockblade', 'Shockblade'],
+    upgradeSlots: 3,
+    weaponSlots: 3,
   },
   {
     id: 'p2',
@@ -18,6 +20,8 @@ export const INITIAL_PLAYERS = [
     vp: 1,
     upgrades: ['Precision Optics'],
     weapons: ['Snipe Scope'],
+    upgradeSlots: 2,
+    weaponSlots: 2,
   },
   {
     id: 'p3',
@@ -28,5 +32,7 @@ export const INITIAL_PLAYERS = [
     vp: 0,
     upgrades: ['Mass Core'],
     weapons: [],
+    upgradeSlots: 2,
+    weaponSlots: 1,
   },
 ];
