@@ -10,7 +10,7 @@ import {
   scrapsPlates,
 } from "./GameConstants.jsx";
 import { OwnedCard } from "./GameCoreComponents.jsx";
-import { ScrapIcon } from "./GameUIHelpers.jsx";
+import { ScrapIcon, InjuryIcon } from "./GameUIHelpers.jsx"; // Import InjuryIcon
 
 const LastRoundActionsDisplay = ({ player }) => {
   // This component is currently disabled as per your file logic
@@ -34,12 +34,10 @@ const CurrentPlanDisplay = ({
     let newTitle = "Current Plan";
 
     if (isSelf && playerPlan) {
-      // --- FIX: Use KEY not ID ---
       lureId = playerPlan.lure_card_key;
       actionId = playerPlan.action_card_key;
       newTitle = "Your Plan";
 
-      // --- FIX: Check player.plan (object) not player.plan_submitted (bool) ---
       if (phase === "PLANNING" && !player.plan) {
         newTitle = "Planning...";
         lureId = null;
@@ -53,7 +51,6 @@ const CurrentPlanDisplay = ({
           newTitle = "Planning...";
           break;
         case "PLANNING":
-          // --- FIX: Check player.plan (object) not player.plan_submitted (bool) ---
           if (player.plan) {
             lureId = "UNKNOWN_LURE";
             actionId = "UNKNOWN_ACTION";
@@ -65,7 +62,6 @@ const CurrentPlanDisplay = ({
         case "ATTRACTION":
         case "DEFENSE":
           if (playerPlan) {
-            // --- FIX: Use KEY not ID ---
             lureId = playerPlan.lure_card_key;
           }
           actionId = "UNKNOWN_ACTION";
@@ -73,10 +69,8 @@ const CurrentPlanDisplay = ({
           break;
         case "ACTION":
           if (playerPlan) {
-            // --- FIX: Use KEY not ID ---
             lureId = playerPlan.lure_card_key;
             if (turnStatus === "ACTIVE" || turnStatus === "WAITING") {
-              // --- FIX: Use KEY not ID ---
               actionId = playerPlan.action_card_key;
             } else {
               actionId = "UNKNOWN_ACTION";
@@ -88,7 +82,6 @@ const CurrentPlanDisplay = ({
         case "INTERMISSION":
         case "GAME_OVER":
           if (playerPlan) {
-            // --- FIX: Use KEY not ID ---
             lureId = playerPlan.lure_card_key;
             actionId = playerPlan.action_card_key;
           }
@@ -118,16 +111,15 @@ const CurrentPlanDisplay = ({
         : null
     );
     setTitle(newTitle);
-    // --- FIX: Add player.plan to dependency array ---
   }, [player.plan, playerPlan, phase, turnStatus, isSelf]);
 
   if (!lureCard && !actionCard) {
     return (
-      <div className="flex-shrink-0">
+      <div className="flex-shrink-0 h-full flex flex-col">
         <h4 className="text-sm font-bold text-gray-400 mb-2 text-center">
           {title}
         </h4>
-        <div className="flex gap-2 p-2 rounded min-h-[140px] w-48 items-center justify-center bg-black bg-opacity-20">
+        <div className="flex-grow flex gap-2 p-2 rounded w-48 items-center justify-center bg-black bg-opacity-20">
           <p className="text-gray-500 text-sm italic px-2">Choosing...</p>
         </div>
       </div>
@@ -135,11 +127,11 @@ const CurrentPlanDisplay = ({
   }
 
   return (
-    <div className="flex-shrink-0">
+    <div className="flex-shrink-0 h-full flex flex-col">
       <h4 className="text-sm font-bold text-gray-400 mb-2 text-center">
         {title}
       </h4>
-      <div className="flex gap-2 p-2 rounded min-h-[140px] items-center bg-black bg-opacity-20">
+      <div className="flex-grow flex gap-2 p-2 rounded items-center bg-black bg-opacity-20">
         {lureCard && (
           <img
             src={lureCard.image}
@@ -162,39 +154,52 @@ const CurrentPlanDisplay = ({
 };
 
 const PlayerUpgrades = ({ player }) => (
-  <div className="flex-shrink-0">
+  <div className="flex-shrink-0 h-full flex flex-col">
     <h4 className="text-sm font-bold text-gray-400 mb-2 text-center">
       Upgrades
     </h4>
-    <div className="flex gap-2 p-2 rounded min-h-[140px] items-center bg-black bg-opacity-20">
+    <div className="flex-grow flex gap-2 p-2 rounded min-w-[12rem] items-center bg-black bg-opacity-20 overflow-x-auto">
       {(player.upgrade_cards || []).length > 0 ? (
         (player.upgrade_cards || []).map((card) => (
           <OwnedCard key={card.id} card={card} cardType="UPGRADE" />
         ))
       ) : (
-        <p className="text-gray-500 text-sm italic px-2">None</p>
+        <p className="text-gray-500 text-sm italic px-2 m-auto">None</p>
       )}
     </div>
   </div>
 );
 
-const PlayerArsenal = ({ player, isSelf }) => (
-  <div className="flex-shrink-0">
+// --- PlayerArsenal: Now accepts new props for interaction ---
+const PlayerArsenal = ({
+  player,
+  isSelf,
+  phase,
+  defenseArsenal,
+  onArsenalToggle,
+}) => (
+  <div className="flex-shrink-0 h-full flex flex-col">
     <h4 className="text-sm font-bold text-gray-400 mb-2 text-center">
       Arsenal
     </h4>
-    <div className="flex gap-2 p-2 rounded min-h-[140px] items-center bg-black bg-opacity-20">
+    <div className="flex-grow flex gap-2 p-2 rounded min-w-[12rem] items-center bg-black bg-opacity-20 overflow-x-auto">
       {isSelf ? (
         (player.arsenal_cards || []).length > 0 ? (
-          (player.arsenal_cards || []).map((card, index) => (
-            <OwnedCard
-              key={card.id || `hidden-${index}`}
-              card={card}
-              cardType="ARSENAL"
-            />
-          ))
+          (player.arsenal_cards || []).map((card, index) => {
+            const isDefense = isSelf && phase === "DEFENSE";
+            return (
+              <OwnedCard
+                key={card.id || `hidden-${index}`}
+                card={card}
+                cardType="ARSENAL"
+                isSelectable={isDefense}
+                isSelected={defenseArsenal.has(card.id)}
+                onClick={isDefense ? () => onArsenalToggle(card.id) : undefined}
+              />
+            );
+          })
         ) : (
-          <p className="text-gray-500 text-sm italic px-2">Empty</p>
+          <p className="text-gray-500 text-sm italic px-2 m-auto">Empty</p>
         )
       ) : (player.arsenal_cards_count || 0) > 0 ? (
         [...Array(player.arsenal_cards_count || 0)].map((_, index) => (
@@ -209,7 +214,7 @@ const PlayerArsenal = ({ player, isSelf }) => (
           />
         ))
       ) : (
-        <p className="text-gray-500 text-sm italic px-2">Empty</p>
+        <p className="text-gray-500 text-sm italic px-2 m-auto">Empty</p>
       )}
     </div>
   </div>
@@ -217,11 +222,11 @@ const PlayerArsenal = ({ player, isSelf }) => (
 
 const PlayerTrophies = ({ player }) => {
   return (
-    <div className="flex-shrink-0">
+    <div className="flex-shrink-0 h-full flex flex-col">
       <h4 className="text-sm font-bold text-gray-400 mb-2 text-center">
         Trophies ({player.trophies.length})
       </h4>
-      <div className="flex flex-col gap-1 p-3 rounded min-h-[140px] max-w-xs items-start bg-black bg-opacity-20 overflow-y-auto">
+      <div className="flex-grow flex flex-col gap-1 p-3 rounded w-48 items-start bg-black bg-opacity-20 overflow-y-auto">
         {player.trophies.length > 0 ? (
           player.trophies.map((trophyName, index) => (
             <span
@@ -232,50 +237,37 @@ const PlayerTrophies = ({ player }) => {
             </span>
           ))
         ) : (
-          <p className="text-gray-500 text-sm italic px-2">None</p>
+          <p className="text-gray-500 text-sm italic px-2 m-auto">None</p>
         )}
       </div>
     </div>
   );
 };
 
+// --- PlayerAssets: Now accepts new props for interaction ---
 export const PlayerAssets = ({
   player,
   isSelf,
-  onReturn,
   phase,
   playerPlan,
-  portrait,
   turnStatus,
+  defenseScrap,
+  defenseArsenal,
+  onScrapSpend,
+  onArsenalToggle,
 }) => {
   if (!player) return null;
 
+  const isDefense = isSelf && phase === "DEFENSE";
+  const availableParts = (player.scrap.PARTS || 0) - (defenseScrap.PARTS || 0);
+  const availableWiring =
+    (player.scrap.WIRING || 0) - (defenseScrap.WIRING || 0);
+  const availablePlates =
+    (player.scrap.PLATES || 0) - (defenseScrap.PLATES || 0);
+
   return (
     <div className="w-full h-full flex items-center gap-6 overflow-x-auto px-4">
-      <div className="flex-shrink-0 flex flex-col items-center gap-2">
-        <h3 className="text-lg font-semibold text-gray-300 whitespace-nowrap">
-          {isSelf ? "Your Board" : `${player.username}'s Board`}
-        </h3>
-        <div className="relative w-24 h-24">
-          <img
-            src={portrait}
-            alt="Player Portrait"
-            className="absolute top-1/2 left-1/2 h-[80%] w-[80%] -translate-x-1/2 -translate-y-1/2 rounded-md object-cover"
-          />
-          <img
-            src={playerFrame}
-            alt="Player Frame"
-            className="absolute inset-0 w-full h-full z-10"
-          />
-        </div>
-        {!isSelf && (
-          <button onClick={onReturn} className="btn btn-primary btn-sm">
-            &larr; Return to My Board
-          </button>
-        )}
-      </div>
-
-      <>
+      <div className="flex-grow flex items-start gap-4 h-full py-2">
         <CurrentPlanDisplay
           player={player}
           playerPlan={playerPlan}
@@ -283,30 +275,210 @@ export const PlayerAssets = ({
           turnStatus={turnStatus}
           isSelf={isSelf}
         />
-        <div className="flex-shrink-0 flex flex-col items-center p-2 rounded-lg bg-black bg-opacity-20">
+        {/* --- Scrap: Now interactive --- */}
+        <div
+          className={`flex-shrink-0 flex flex-col items-center p-2 rounded-lg bg-black bg-opacity-20 h-full justify-center ${
+            isDefense ? "ring-2 ring-blue-400" : ""
+          }`}
+          title={isDefense ? "Click icons to add scrap to defense" : "Scrap"}
+        >
           <h4 className="text-sm font-bold text-gray-400 mb-2">Scrap</h4>
           <div className="flex items-center space-x-3">
             <ScrapIcon
               image={scrapsParts}
-              count={player.scrap.PARTS || 0}
+              count={availableParts}
               size="w-10 h-10"
+              onClick={
+                isDefense && availableParts > 0
+                  ? () => onScrapSpend("PARTS", 1)
+                  : undefined
+              }
             />
             <ScrapIcon
               image={scrapsWiring}
-              count={player.scrap.WIRING || 0}
+              count={availableWiring}
               size="w-10 h-10"
+              onClick={
+                isDefense && availableWiring > 0
+                  ? () => onScrapSpend("WIRING", 1)
+                  : undefined
+              }
             />
             <ScrapIcon
               image={scrapsPlates}
-              count={player.scrap.PLATES || 0}
+              count={availablePlates}
               size="w-10 h-10"
+              onClick={
+                isDefense && availablePlates > 0
+                  ? () => onScrapSpend("PLATES", 1)
+                  : undefined
+              }
             />
           </div>
         </div>
-        <PlayerArsenal player={player} isSelf={isSelf} />
+        {/* Pass new props to PlayerArsenal */}
+        <PlayerArsenal
+          player={player}
+          isSelf={isSelf}
+          phase={phase}
+          defenseArsenal={defenseArsenal}
+          onArsenalToggle={onArsenalToggle}
+        />
         <PlayerUpgrades player={player} />
         <PlayerTrophies player={player} />
-      </>
+      </div>
+    </div>
+  );
+};
+
+// --- CollapsiblePlayerAssets: Now accepts and passes down new props ---
+export const CollapsiblePlayerAssets = ({
+  player,
+  isAssetsOpen,
+  toggleAssets,
+  portrait,
+  defenseScrap, // NEW
+  defenseArsenal, // NEW
+  onScrapSpend, // NEW
+  onArsenalToggle, // NEW
+  ...props
+}) => {
+  if (!player) return null;
+
+  const isSelf = player.user_id === props.user.id;
+  const isViewingSelf = player.user_id === props.viewingPlayerId;
+
+  const handleToggle = () => {
+    if (!isViewingSelf) {
+      props.onReturn();
+    }
+    toggleAssets();
+  };
+
+  // Calculate remaining scrap to show in the collapsed bar
+  const availableParts = (player.scrap.PARTS || 0) - (defenseScrap.PARTS || 0);
+  const availableWiring =
+    (player.scrap.WIRING || 0) - (defenseScrap.WIRING || 0);
+  const availablePlates =
+    (player.scrap.PLATES || 0) - (defenseScrap.PLATES || 0);
+
+  return (
+    <div
+      className={`fixed bottom-0 left-0 w-full bg-black bg-opacity-80 shadow-2xl z-40 transition-transform duration-300 ${
+        isAssetsOpen ? "h-[50vh] translate-y-0" : "h-20 translate-y-0"
+      }`}
+      style={{
+        transform: isAssetsOpen
+          ? "translateY(0)"
+          : "translateY(calc(100% - 5rem))",
+      }}
+    >
+      <div
+        className="h-20 flex items-center justify-between p-3 cursor-pointer bg-gray-900 bg-opacity-80 border-t border-gray-700"
+        onClick={handleToggle}
+      >
+        <div className="flex items-center space-x-4">
+          <div className="relative w-12 h-12 flex-shrink-0">
+            <img
+              src={portrait}
+              alt="Player Portrait"
+              className={`w-full h-full rounded-full object-cover ring-2 ${
+                isViewingSelf ? "ring-blue-500" : "ring-yellow-500"
+              }`}
+            />
+          </div>
+          <span className="text-lg font-bold text-white hidden sm:block">
+            {isViewingSelf ? "Your Assets" : `${player.username}'s Assets`}
+            {isSelf && props.phase === "DEFENSE" && (
+              <span className="text-xs text-blue-300 block animate-pulse">
+                Click your Scrap/Arsenal to add to defense!
+              </span>
+            )}
+          </span>
+          <ScrapIcon
+            icon={<InjuryIcon />}
+            count={player.injuries}
+            textColor="text-red-400"
+            size="w-6 h-6"
+          />
+        </div>
+
+        <div className="flex items-center space-x-3">
+          {/* Show *remaining available* scrap in collapsed bar */}
+          <ScrapIcon
+            image={scrapsParts}
+            count={availableParts}
+            size="w-8 h-8"
+          />
+          <ScrapIcon
+            image={scrapsWiring}
+            count={availableWiring}
+            size="w-8 h-8"
+          />
+          <ScrapIcon
+            image={scrapsPlates}
+            count={availablePlates}
+            size="w-8 h-8"
+          />
+        </div>
+
+        <button className="btn btn-ghost p-1">
+          {isAssetsOpen ? (
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className={`h-6 w-6 transform transition-transform rotate-180`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 9l-7 7-7-7"
+              />
+            </svg>
+          ) : isViewingSelf ? (
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className={`h-6 w-6 transform transition-transform rotate-0`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 9l-7 7-7-7"
+              />
+            </svg>
+          ) : (
+            <span className="text-xs font-bold text-yellow-300">
+              Viewing {player.username}
+            </span>
+          )}
+        </button>
+      </div>
+
+      <div
+        className={`h-[calc(100%-5rem)] overflow-y-auto ${
+          isAssetsOpen ? "block" : "hidden"
+        }`}
+      >
+        {/* Pass all new props down to PlayerAssets */}
+        <PlayerAssets
+          player={player}
+          isSelf={isSelf}
+          phase={props.phase}
+          playerPlan={props.playerPlan}
+          turnStatus={props.turnStatus}
+          defenseScrap={defenseScrap}
+          defenseArsenal={defenseArsenal}
+          onScrapSpend={onScrapSpend}
+          onArsenalToggle={onArsenalToggle}
+        />
+      </div>
     </div>
   );
 };

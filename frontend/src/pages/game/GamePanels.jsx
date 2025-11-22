@@ -9,6 +9,7 @@ export const ThreatsPanel = ({
   onThreatSelect,
   selectedThreatId,
   gameState,
+  selectableThreats, // Expect this prop from GamePage
 }) => {
   if (!threats || threats.length === 0) {
     return (
@@ -20,25 +21,46 @@ export const ThreatsPanel = ({
     );
   }
 
+  // --- UI IMPROVEMENT ---
+  // If only one threat is being shown (e.g., "zoomed in" on a player's
+  // assigned threat during the DEFENSE phase), use a different layout.
+  const isSingleThreatView =
+    threats.length === 1 && gameState?.phase !== "ATTRACTION";
+
   return (
     <div className="w-full h-full p-2 bg-gray-800 bg-opacity-70 rounded-lg overflow-y-auto">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div
+        className={`flex flex-row flex-wrap p-4 transition-all duration-300 ${
+          isSingleThreatView
+            ? "justify-center items-center h-full gap-y-8" // Center single threat
+            : "justify-center gap-x-6 gap-y-8" // Grid for multiple
+        }`}
+      >
         {threats.map((threat) => {
-          const selectableThreats = gameState?.selectableThreats || [];
+          const actualSelectableThreats = selectableThreats || [];
           const assignedTo = threatAssignments[threat.id];
           const isAvailable = !assignedTo;
-          const isSelectable = selectableThreats?.some(
+
+          // A threat is selectable if it's in the specific list
+          // passed from GamePage, which respects game rules (lure matching, etc.)
+          const isSelectable = actualSelectableThreats.some(
             (t) => t.id === threat.id
           );
           const isSelected = threat.id === selectedThreatId;
+
           return (
-            <div key={threat.id} className="relative">
+            <div
+              key={threat.id}
+              className={`relative transition-transform duration-300 ${
+                isSingleThreatView ? "scale-150" : "" // Make single threat larger
+              }`}
+            >
               <ThreatCard
                 threat={threat}
                 isAvailable={isAvailable}
                 isSelectable={isSelectable}
                 isSelected={isSelected}
-                onClick={() => isSelectable && onThreatSelect(threat.id)}
+                onClick={() => onThreatSelect(threat.id)} // Click handler now universal
                 key={threat.id}
               />
               {assignedTo && <PlayerTag username={assignedTo} />}
@@ -62,6 +84,10 @@ const canAfford = (playerScrap, cardCost, isFree = false) => {
   return true;
 };
 
+// --- REFACTORED MARKET COMPONENTS ---
+// They now use flex-row and overflow-x-auto to scroll horizontally
+// The h-full prop from the parent sets their height.
+
 export const UpgradesMarket = ({
   upgrade_market,
   myTurn,
@@ -75,34 +101,38 @@ export const UpgradesMarket = ({
   const isMyTurnToBuyUpgrades = isActionBuy || isIntermissionBuy;
 
   return (
-    <div className="p-2 bg-gray-800 bg-opacity-70 rounded-lg shadow-lg h-full flex flex-col gap-2">
+    <div className="p-2 bg-gray-800 bg-opacity-70 rounded-lg shadow-lg h-full flex flex-col gap-1">
       <h2 className="text-base font-semibold text-green-400 text-center flex-shrink-0">
         Upgrades
       </h2>
-      <div className="flex-grow flex flex-col gap-2 overflow-y-auto px-1">
+      <div className="flex-grow flex flex-row gap-2 overflow-x-auto overflow-y-hidden p-1">
         {(upgrade_market || []).length > 0 ? (
           (upgrade_market || []).map((card) => {
             const isAffordable = canAfford(
               playerScrap,
               card.cost,
-              isIntermissionBuy
+              isIntermissionBuy // Intermission buys are free
             );
             const isSelectable = isMyTurnToBuyUpgrades && isAffordable;
             const isDimmed =
               myTurn &&
               (phase === "ACTION" || phase === "INTERMISSION") &&
-              choiceType !== "ARMORY_RUN" &&
+              choiceType !== "ARMORY_RUN" && // Don't dim if it's not your action type
               !isSelectable;
 
             return (
-              <MarketCard
-                key={card.id}
-                card={card}
-                cardType="UPGRADE"
-                isSelectable={isSelectable}
-                isDimmed={isDimmed}
-                onClick={() => isSelectable && onCardSelect("UPGRADE", card.id)}
-              />
+              // Add a fixed width to market cards so they flow horizontally
+              <div key={card.id} className="w-36 flex-shrink-0 h-full">
+                <MarketCard
+                  card={card}
+                  cardType="UPGRADE"
+                  isSelectable={isSelectable}
+                  isDimmed={isDimmed}
+                  onClick={() =>
+                    isSelectable && onCardSelect("UPGRADE", card.id)
+                  }
+                />
+              </div>
             );
           })
         ) : (
@@ -129,34 +159,38 @@ export const ArsenalMarket = ({
   const isMyTurnToBuyArsenal = isActionBuy || isIntermissionBuy;
 
   return (
-    <div className="p-2 bg-gray-800 bg-opacity-70 rounded-lg shadow-lg h-full flex flex-col gap-2">
+    <div className="p-2 bg-gray-800 bg-opacity-70 rounded-lg shadow-lg h-full flex flex-col gap-1">
       <h2 className="text-base font-semibold text-red-400 text-center flex-shrink-0">
         Arsenal
       </h2>
-      <div className="flex-grow flex flex-col gap-2 overflow-y-auto px-1">
+      <div className="flex-grow flex flex-row gap-2 overflow-x-auto overflow-y-hidden p-1">
         {(arsenal_market || []).length > 0 ? (
           (arsenal_market || []).map((card) => {
             const isAffordable = canAfford(
               playerScrap,
               card.cost,
-              isIntermissionBuy
+              isIntermissionBuy // Intermission buys are free
             );
             const isSelectable = isMyTurnToBuyArsenal && isAffordable;
             const isDimmed =
               myTurn &&
               (phase === "ACTION" || phase === "INTERMISSION") &&
-              choiceType !== "FORTIFY" &&
+              choiceType !== "FORTIFY" && // Don't dim if it's not your action type
               !isSelectable;
 
             return (
-              <MarketCard
-                key={card.id}
-                card={card}
-                cardType="ARSENAL"
-                isSelectable={isSelectable}
-                isDimmed={isDimmed}
-                onClick={() => isSelectable && onCardSelect("ARSENAL", card.id)}
-              />
+              // Add a fixed width to market cards so they flow horizontally
+              <div key={card.id} className="w-36 flex-shrink-0 h-full">
+                <MarketCard
+                  card={card}
+                  cardType="ARSENAL"
+                  isSelectable={isSelectable}
+                  isDimmed={isDimmed}
+                  onClick={() =>
+                    isSelectable && onCardSelect("ARSENAL", card.id)
+                  }
+                />
+              </div>
             );
           })
         ) : (
