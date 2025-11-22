@@ -1,0 +1,32 @@
+export const INITIAL_PLAYERS = [
+  {
+    id: 'p1',
+    name: 'Alex',
+    stance: 'Balanced',
+    resources: { R: 3, B: 3, G: 2 },
+    tokens: { attack: 1, conversion: 0, mass: 0, wild: 1 },
+    vp: 2,
+    upgrades: ['Ferocity Modulator'],
+    weapons: ['Shockblade'],
+  },
+  {
+    id: 'p2',
+    name: 'Mira',
+    stance: 'Tactical',
+    resources: { R: 2, B: 4, G: 1 },
+    tokens: { attack: 0, conversion: 1, mass: 0, wild: 0 },
+    vp: 1,
+    upgrades: ['Precision Optics'],
+    weapons: ['Snipe Scope'],
+  },
+  {
+    id: 'p3',
+    name: 'Jonah',
+    stance: 'Hunkered',
+    resources: { R: 1, B: 2, G: 4 },
+    tokens: { attack: 0, conversion: 0, mass: 1, wild: 0 },
+    vp: 0,
+    upgrades: ['Mass Core'],
+    weapons: [],
+  },
+];

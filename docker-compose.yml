@@ -3,6 +3,10 @@ services:
     build:
       context: .
       dockerfile: .devcontainer/Dockerfile
+    # Use explicit DNS servers to avoid intermittent resolution failures on VPN'd hosts.
+    dns:
+      - 195.176.49.70
+      - 8.8.8.8
     # We use 'sh -c' to run a sequence of commands.
     # 1. Install/update Python packages from requirements.txt.
     # 2. If successful (&&), then start the Uvicorn server.
@@ -22,7 +26,8 @@ services:
     tty: true
 
   frontend:
-    image: node:18-alpine
+    # React Router 7 requires Node.js >= 20, so we use the latest LTS image.
+    image: node:20-alpine
     # MODIFICATION:
     # Same principle as the backend.
     # 1. Install/update Node.js packages from package.json.

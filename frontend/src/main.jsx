@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import App from "./TestApp.jsx";
+import App from "./app/NewGameApp.jsx";
 import "./index.css";
 
 // This is the ONLY place this code should exist.
