@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import { VIEW_MODES } from '../state/uiState';
 import { INITIAL_PLAYERS } from '../state/players';
-import { ThreatData } from '../state/threats';
-import { MarketData } from '../state/market';
 
 import InitiativeRail from '../components/navigation/InitiativeRail';
 import TopNavigation from '../components/navigation/TopNavigation';
@@ -42,7 +40,7 @@ export default function App() {
           {viewMode === VIEW_MODES.GLOBAL && (
             <div className="w-full h-full flex flex-col gap-3 overflow-hidden">
               <div className="flex-1 min-h-0 grid grid-cols-2 gap-3 overflow-hidden">
-                <ThreatsPanel compact />
+                <ThreatsPanel compact playersCount={players.length} />
                 <MarketPanel compact />
               </div>
 

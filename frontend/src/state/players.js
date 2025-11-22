@@ -6,8 +6,8 @@ export const INITIAL_PLAYERS = [
     resources: { R: 3, B: 3, G: 2 },
     tokens: { attack: 1, conversion: 0, mass: 0, wild: 1 },
     vp: 2,
-    upgrades: ['Ferocity Modulator'],
-    weapons: ['Shockblade'],
+    upgrades: ['Ferocity Modulator', 'Precision Optics', 'Precision Optics'],
+    weapons: ['Shockblade', 'Shockblade'],
   },
   {
     id: 'p2',

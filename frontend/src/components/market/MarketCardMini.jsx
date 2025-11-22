@@ -1,20 +1,29 @@
 import React from "react";
 import { setHoverPreview } from "../hover/HoverPreviewPortal";
 
-export default function MarketCardMini({ card, onHover }) {
+export default function MarketCardMini({ card }) {
+  const handleHover = () =>
+    setHoverPreview({
+      type: "market",
+      data: card,
+      sourceId: card.id,
+    });
+  const handleLeave = () => setHoverPreview(null);
+  const handleClick = () =>
+    setHoverPreview({
+      type: "market",
+      data: card,
+      sourceId: card.id,
+      lock: true,
+    });
+
   return (
     <div
       className="w-full bg-slate-900 border border-slate-700 rounded-xl 
                  p-3 flex flex-col gap-2 text-xs"
-      onMouseEnter={(e) =>
-        setHoverPreview({
-          x: e.clientX,
-          y: e.clientY,
-          type: "market",
-          data: card,
-        })
-      }
-      onMouseLeave={() => setHoverPreview(null)}
+      onMouseEnter={handleHover}
+      onMouseLeave={handleLeave}
+      onClick={handleClick}
     >
       <div className="flex justify-between items-start text-[11px] text-slate-400 leading-tight">
         <span className="uppercase tracking-[0.1em]">{card.type}</span>

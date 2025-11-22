@@ -1,6 +1,8 @@
 import React from "react";
 import { Trophy, Flame, Zap, Shield, Sword } from "lucide-react";
 import ResourcePip from "../ui/ResourcePip";
+import { MarketData } from "../../state/market";
+import { setHoverPreview } from "../hover/HoverPreviewPortal";
 import { stanceColorRing } from "../../utils/stanceColorRing";
 import { STANCE_CONFIG } from "../../utils/stanceConfig";
 
@@ -8,6 +10,24 @@ export default function PlayerBoardBottom({ player, onOpenStance }) {
   if (!player) return null;
 
   const stanceInfo = STANCE_CONFIG[player.stance];
+  const cardLookup = React.useMemo(
+    () => [...MarketData.upgrades, ...MarketData.weapons].reduce((map, card) => {
+      map[card.name] = card;
+      return map;
+    }, {}),
+    []
+  );
+  const previewCard = (cardName, lock = false) => {
+    const card = cardLookup[cardName];
+    if (!card) return;
+    setHoverPreview({
+      type: "market",
+      data: card,
+      sourceId: card.id,
+      lock,
+    });
+  };
+  const clearPreview = () => setHoverPreview(null);
 
   return (
     <div className="bg-slate-950/90 border-t border-slate-800 
@@ -110,7 +130,10 @@ export default function PlayerBoardBottom({ player, onOpenStance }) {
               player.upgrades.map((u) => (
                 <span
                   key={u}
-                  className="px-2 py-1 rounded-full bg-slate-900 border border-slate-700"
+                  className="px-2 py-1 rounded-full bg-slate-900 border border-slate-700 cursor-pointer"
+                  onMouseEnter={() => previewCard(u)}
+                  onMouseLeave={clearPreview}
+                  onClick={() => previewCard(u, true)}
                 >
                   {u}
                 </span>
@@ -130,7 +153,10 @@ export default function PlayerBoardBottom({ player, onOpenStance }) {
               player.weapons.map((w) => (
                 <span
                   key={w}
-                  className="px-2 py-1 rounded-full bg-slate-900 border border-slate-700 flex items-center gap-1"
+                  className="px-2 py-1 rounded-full bg-slate-900 border border-slate-700 flex items-center gap-1 cursor-pointer"
+                  onMouseEnter={() => previewCard(w)}
+                  onMouseLeave={clearPreview}
+                  onClick={() => previewCard(w, true)}
                 >
                   <Sword size={12} className="text-sky-300" />
                   {w}

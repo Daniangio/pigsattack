@@ -19,6 +19,12 @@ export default function MarketCardDetail({ card }) {
         Cost: {card.cost}
       </div>
 
+      {card.uses && (
+        <div className="text-xs text-slate-300 mt-2">
+          Uses: {card.uses}
+        </div>
+      )}
+
       {card.effect && (
         <div className="text-xs text-emerald-300 mt-3">
           Effect: {card.effect}
