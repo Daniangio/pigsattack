@@ -1,6 +1,7 @@
 import React from "react";
+import { formatCost, formatCostParts } from "../../utils/formatters";
 
-export default function MarketCardDetail({ card }) {
+export default function MarketCardDetail({ card, actionLabel, actionDisabled, onAction }) {
   if (!card) return null;
 
   return (
@@ -16,7 +17,13 @@ export default function MarketCardDetail({ card }) {
       </div>
 
       <div className="text-sm text-slate-200 mt-2">
-        Cost: {card.cost}
+        Cost:
+        <span className="ml-2 flex gap-2">
+          {formatCostParts(card.cost).map((p) => (
+            <span key={p.key} className={p.className}>{`${p.val}${p.key}`}</span>
+          ))}
+          {!formatCostParts(card.cost).length && <span>0</span>}
+        </span>
       </div>
 
       {card.uses && (
@@ -29,6 +36,20 @@ export default function MarketCardDetail({ card }) {
         <div className="text-xs text-emerald-300 mt-3">
           Effect: {card.effect}
         </div>
+      )}
+      {actionLabel && (
+        <button
+          type="button"
+          disabled={actionDisabled}
+          onClick={onAction}
+          className={`mt-4 w-full py-2 rounded-lg text-xs uppercase tracking-[0.2em] border ${
+            actionDisabled
+              ? "border-slate-700 text-slate-500 cursor-not-allowed"
+              : "border-amber-400 text-amber-200 hover:bg-amber-400/10"
+          }`}
+        >
+          {actionLabel}
+        </button>
       )}
     </div>
   );

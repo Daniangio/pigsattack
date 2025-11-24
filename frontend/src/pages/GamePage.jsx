@@ -1,753 +1,223 @@
-import React, { useState, useMemo, useEffect, useRef } from "react";
-import { useStore } from "../store";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import GameApp from "../app/GameApp.jsx";
+import { useStore } from "../store.js";
 
-// Import all components from their respective files
-import { gameBackground, LURE_CARDS } from "./game/GameConstants.jsx";
-import GameHeader from "./game/GameHeader.jsx";
-import { CollapsiblePlayerAssets } from "./game/PlayerBoard.jsx";
-import { playerPortraits, PlayerInfoCard } from "./game/GameCoreComponents.jsx";
-import { GameLog } from "./game/GameUIHelpers.jsx";
-import {
-  ArsenalMarket,
-  UpgradesMarket,
-  ThreatsPanel,
-} from "./game/GamePanels.jsx";
-// --- MODIFIED IMPORT ---
-// We now also import PreviewDisplay to use it in the top-right panel
-import {
-  ConfirmationModal,
-  DefenseSubmission,
-  PreviewDisplay,
-} from "./game/GameModals.jsx";
-import {
-  PlanningPhaseActions,
-  AttractionPhaseActions,
-  ActionPhaseActions,
-  IntermissionPhaseActions,
-} from "./game/GameActionPanels.jsx";
-import GameMenu from "./game/GameMenu.jsx";
+const bannerText = (gameState) => {
+  if (!gameState) return "Connecting to game...";
+  const phase = gameState.phase || "SETUP";
+  const round = gameState.round || 0;
+  return `Round ${round} • Phase ${phase}`;
+};
 
-// --- MAIN GAME PAGE COMPONENT (REFACTORED FOR OVERLAPPING UI) ---
-const GamePage = () => {
-  const { user, gameState, token } = useStore((state) => ({
-    user: state.user,
+export default function GamePage() {
+  const { gameState, user } = useStore((state) => ({
     gameState: state.gameState,
-    token: state.token,
+    user: state.user,
   }));
+  const sendMessage = useStore((state) => state.sendMessage);
 
-  const [showSurrenderModal, setShowSurrenderModal] = useState(false);
-  const [viewingPlayerId, setViewingPlayerId] = useState(null);
-  const [selectedThreatId, setSelectedThreatId] = useState(null);
-
-  const [isAssetsPanelOpen, setIsAssetsPanelOpen] = useState(false);
-  const [isQueueOpen, setIsQueueOpen] = useState(true);
+  const activePlayerId = gameState?.active_player_id || gameState?.activePlayerId;
+  const isMyTurn = activePlayerId === user?.id;
+  const [toastLogs, setToastLogs] = useState([]);
   const [isLogOpen, setIsLogOpen] = useState(false);
+  const prevLogLength = useRef(0);
+  const toastTimers = useRef([]);
+  const prevActivePlayer = useRef(activePlayerId);
 
-  const [defenseScrap, setDefenseScrap] = useState({
-    PARTS: 0,
-    WIRING: 0,
-    PLATES: 0,
-  });
-  const [defenseArsenal, setDefenseArsenal] = useState(new Set());
-
-  // --- NEW: State for the preview, now lifted into GamePage ---
-  const [defensePreview, setDefensePreview] = useState(null);
-  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
-  const debounceTimeout = useRef(null);
-
-  const clickTimeoutRef = useRef(null);
-
-  const playerPortraitsMap = useMemo(() => {
-    if (!gameState?.players) return {};
-    const playerIds =
-      gameState.initiative_queue || Object.keys(gameState.players);
-    const portraits = {};
-    playerIds.forEach((pid, index) => {
-      portraits[pid] = playerPortraits[index % playerPortraits.length];
-    });
-    return portraits;
-  }, [gameState?.initiative_queue, gameState?.players]);
-
-  const self = useMemo(() => {
-    return gameState?.players ? gameState.players[user?.id] : null;
-  }, [gameState, user?.id]);
-
-  useEffect(() => {
-    if (user?.id && !viewingPlayerId) {
-      setViewingPlayerId(user.id);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
-
-  useEffect(() => {
-    const isSpectator = !self || self.status !== "ACTIVE";
-    if (gameState?.phase === "DEFENSE" && !isSpectator) {
-      setIsAssetsPanelOpen(true);
-      setViewingPlayerId(user.id);
-    }
-  }, [gameState?.phase, self, user?.id]);
-
-  useEffect(() => {
-    if (gameState?.phase !== "DEFENSE") {
-      setDefenseScrap({ PARTS: 0, WIRING: 0, PLATES: 0 });
-      setDefenseArsenal(new Set());
-      setDefensePreview(null); // Clear preview when not in defense
-    }
-  }, [gameState?.phase]);
-
-  const {
-    phase,
-    round,
-    era,
-    log,
-    initiative_queue,
-    current_threats,
-    attraction_turn_player_id,
-    action_turn_player_id,
-    intermission_turn_player_id,
-    player_plans,
-    market,
-    player_threat_assignment,
-    unassigned_player_ids,
-  } = gameState;
-
-  // --- Find the player's threat ---
-  const myAssignedThreatId = player_threat_assignment[self?.user_id];
-  const myAssignedThreat = current_threats.find(
-    (t) => t.id === myAssignedThreatId
-  );
-
-  // --- NEW: useEffect for Defense Preview, moved from GameModals ---
-  useEffect(() => {
-    // Only run this fetch if we are in DEFENSE and have a threat
-    if (phase !== "DEFENSE" || !myAssignedThreat) {
-      setDefensePreview(null);
-      setIsPreviewLoading(false);
-      return;
-    }
-
-    if (debounceTimeout.current) {
-      clearTimeout(debounceTimeout.current);
-    }
-
-    const payload = {
-      scrap_spent: defenseScrap,
-      arsenal_card_ids: Array.from(defenseArsenal),
-      special_target_stat: null,
-      special_corrode_stat: null,
-      special_amp_spend: {},
-    };
-
-    debounceTimeout.current = setTimeout(async () => {
-      if (!token) {
-        console.error("No auth token available for defense preview.");
-        setDefensePreview({
-          error: "Auth token is missing. Cannot get preview.",
-        });
-        return;
-      }
-
-      setIsPreviewLoading(true);
-      try {
-        const response = await fetch(
-          `/api/game/${gameState.game_id}/preview_defense`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify(payload),
-          }
-        );
-        if (!response.ok) {
-          const err = await response.json();
-          throw new Error(err.detail || "Preview failed");
-        }
-        const previewData = await response.json();
-        setDefensePreview(previewData);
-      } catch (error) {
-        console.error("Error fetching defense preview:", error);
-        setDefensePreview({ error: `${error.message}` });
-      }
-      setIsPreviewLoading(false);
-    }, 300);
-
-    return () => {
-      if (debounceTimeout.current) {
-        clearTimeout(debounceTimeout.current);
-      }
-    };
-    // Re-run whenever the defense inputs change
-  }, [
-    defenseScrap,
-    defenseArsenal,
-    myAssignedThreat,
-    phase,
-    token,
-    gameState?.game_id,
-  ]);
-  // --- END new useEffect ---
-
-  const sendGameAction = (actionName, data) => {
-    const sendMessage = useStore.getState().sendMessage;
-    if (!sendMessage) {
-      console.error(
-        "sendMessage is not available from the store! Connection may be down."
-      );
-      return;
-    }
-    try {
+  const handleGameAction = useCallback(
+    (action, data = {}) => {
+      if (!sendMessage || !gameState) return;
       sendMessage({
         action: "game_action",
         payload: {
-          sub_action: actionName,
-          data: data,
+          sub_action: action,
+          data,
         },
       });
-    } catch (error) {
-      console.error(`Failed to send game action '${actionName}':`, error);
-    }
-  };
+    },
+    [sendMessage, gameState]
+  );
 
-  const handleSurrender = () => {
-    sendGameAction("surrender", {});
-    setShowSurrenderModal(false);
-  };
-
-  const handleReturnToLobby = () => {
-    const sendMessage = useStore.getState().sendMessage;
-    if (sendMessage) {
-      try {
-        sendMessage({ action: "return_to_lobby" });
-      } catch (error) {
-        console.error("Failed to return to lobby:", error);
+  const handleFightRow = useCallback(
+    (rowIndex) => {
+      if (rowIndex === undefined || rowIndex === null) return;
+      const activePlayer = gameState?.players?.[activePlayerId];
+      const payload = { row: rowIndex };
+      if (activePlayer?.stance === "BALANCED") {
+        payload.discount_resource = "R";
       }
-    }
-  };
+      handleGameAction("fight", payload);
+    },
+    [gameState, activePlayerId, handleGameAction]
+  );
 
-  const handlePlayerInfoClick = (playerId, isSelf) => {
-    if (clickTimeoutRef.current) {
-      clearTimeout(clickTimeoutRef.current);
-      clickTimeoutRef.current = null;
-      setViewingPlayerId(playerId);
-      setIsAssetsPanelOpen(true);
-    } else {
-      clickTimeoutRef.current = setTimeout(() => {
-        clickTimeoutRef.current = null;
-        setViewingPlayerId(playerId);
-      }, 300);
-    }
-  };
+  const handleBuyUpgrade = useCallback(
+    (card) => handleGameAction("buy_upgrade", { card_id: card?.id }),
+    [handleGameAction]
+  );
 
-  const handleToggleAssets = () => {
-    if (isAssetsPanelOpen && viewingPlayerId !== user.id) {
-      setViewingPlayerId(user.id);
-    }
-    setIsAssetsPanelOpen(!isAssetsPanelOpen);
-  };
+  const handleBuyWeapon = useCallback(
+    (card) => handleGameAction("buy_weapon", { card_id: card?.id }),
+    [handleGameAction]
+  );
 
-  const handleScrapSpend = (scrapType, amount) => {
-    setDefenseScrap((prevScrap) => {
-      const currentSpent = prevScrap[scrapType] || 0;
-      const playerTotal = self?.scrap[scrapType] || 0;
-      const newSpent = Math.max(
-        0,
-        Math.min(playerTotal, currentSpent + amount)
-      );
-      return { ...prevScrap, [scrapType]: newSpent };
-    });
-  };
+  const handleExtendSlot = useCallback(
+    (slotType = "upgrade") => handleGameAction("extend_slot", { slot_type: slotType }),
+    [handleGameAction]
+  );
 
-  const handleArsenalToggle = (cardId) => {
-    setDefenseArsenal((prevArsenal) => {
-      const newSet = new Set(prevArsenal);
-      if (newSet.has(cardId)) {
-        newSet.delete(cardId);
-      } else {
-        newSet.add(cardId);
-      }
-      return newSet;
-    });
-  };
+  const handleRealign = useCallback(
+    (stance = "BALANCED") => handleGameAction("realign", { stance: stance.toUpperCase() }),
+    [handleGameAction]
+  );
 
-  const sendMessageForLoadingCheck = useStore((state) => state.sendMessage);
+  const handleEndTurn = useCallback(
+    () => handleGameAction("end_turn", {}),
+    [handleGameAction]
+  );
 
-  const threatAssignments = useMemo(() => {
-    const assignments = {};
-    if (!gameState?.players || !gameState?.player_threat_assignment)
-      return assignments;
+  const logMessages = useMemo(() => gameState?.log || [], [gameState?.log]);
 
-    for (const [playerId, threatId] of Object.entries(
-      gameState.player_threat_assignment
-    )) {
-      const username = gameState.players[playerId]?.username;
-      if (username) {
-        assignments[threatId] = username;
-      }
-    }
-    return assignments;
-  }, [gameState?.players, gameState?.player_threat_assignment]);
+  const pushToast = useCallback((text, color = "amber") => {
+    const id = `${Date.now()}-${Math.random()}`;
+    setToastLogs((prev) => [...prev, { id, text, color }]);
+    const timer = setTimeout(() => {
+      setToastLogs((prev) => prev.filter((t) => t.id !== id));
+    }, 4000);
+    toastTimers.current.push(timer);
+  }, []);
 
-  const selectableThreats = useMemo(() => {
-    if (
-      phase !== "ATTRACTION" ||
-      !self ||
-      self.user_id !== attraction_turn_player_id
-    ) {
-      return [];
+  useEffect(() => {
+    const newCount = logMessages.length;
+    if (newCount < prevLogLength.current) {
+      prevLogLength.current = newCount;
+      return;
     }
 
-    const myPlan = gameState.player_plans[self?.user_id];
-    if (!myPlan) return [];
-
-    const available = gameState.current_threats.filter((t) =>
-      gameState.available_threat_ids.includes(t.id)
-    );
-
-    if (gameState.attraction_phase_state === "FIRST_PASS") {
-      const myLureKey = myPlan.lure_card_key;
-      const myLureCard = LURE_CARDS.find((c) => c.id === myLureKey);
-      if (!myLureCard) return [];
-
-      const lureNameMap = {
-        BLOODY_RAGS: "Rags",
-        STRANGE_NOISES: "Noises",
-        FALLEN_FRUIT: "Fruit",
-      };
-      const myLureName = lureNameMap[myLureCard.id];
-      const matching = available.filter((t) =>
-        t.lure_type.includes(myLureName)
-      );
-      return matching;
-    } else {
-      return available;
-    }
-  }, [
-    phase,
-    self,
-    attraction_turn_player_id,
-    gameState?.player_plans,
-    gameState?.current_threats,
-    gameState?.available_threat_ids,
-    gameState?.attraction_phase_state,
-  ]);
-
-  const threatsToShow = useMemo(() => {
-    if (!gameState) return [];
-    // During DEFENSE, we *always* want to show the player's assigned threat
-    if (phase === "DEFENSE") {
-      return myAssignedThreat ? [myAssignedThreat] : [];
-    }
-
-    if (phase === "PLANNING" || phase === "ATTRACTION") {
-      return current_threats || [];
-    }
-
-    const viewingPlayer = gameState.players[viewingPlayerId];
-    if (viewingPlayer) {
-      const assignedThreatId = player_threat_assignment[viewingPlayer.user_id];
-      if (assignedThreatId) {
-        const assignedThreat = current_threats.find(
-          (t) => t.id === assignedThreatId
-        );
-        if (assignedThreat) return [assignedThreat];
-      }
-    }
-    return current_threats || [];
-  }, [
-    phase,
-    current_threats,
-    player_threat_assignment,
-    gameState?.players,
-    viewingPlayerId,
-    myAssignedThreat, // Add dependency
-  ]);
-
-  if (!gameState || !user || !sendMessageForLoadingCheck) {
-    return (
-      <div
-        className="flex justify-center items-center min-h-screen bg-gray-900 text-white bg-cover bg-center bg-fixed"
-        style={{
-          backgroundImage: `url(${gameBackground})`,
-          onError: (e) => {
-            e.target.style.backgroundImage = "none";
-            e.target.style.backgroundColor = "#1a202c";
-          },
-        }}
-      >
-        <div className="text-center p-6 bg-black bg-opacity-70 rounded-lg">
-          <span className="loading loading-spinner loading-lg text-blue-400"></span>
-          <p className="text-xl mt-4">Loading game state...</p>
-        </div>
-      </div>
-    );
-  }
-
-  const canConfirmThreat =
-    selectedThreatId !== null &&
-    selectableThreats.some((t) => t.id === selectedThreatId);
-
-  const getPlayerTurnStatus = (playerId) => {
-    const player = gameState.players[playerId];
-    if (!player) return "NONE";
-
-    if (phase === "ATTRACTION") {
-      if (playerId === attraction_turn_player_id) return "ACTIVE";
-      const hasActed = !unassigned_player_ids.includes(playerId);
-      return hasActed ? "WAITING" : "PENDING";
-    }
-    if (phase === "ACTION") {
-      if (playerId === action_turn_player_id) return "ACTIVE";
-      const myIndex = initiative_queue.indexOf(playerId);
-      const turnIndex = initiative_queue.indexOf(action_turn_player_id);
-      if (turnIndex === -1) return "PENDING";
-      return myIndex < turnIndex ? "WAITING" : "PENDING";
-    }
-    if (phase === "INTERMISSION") {
-      if (playerId === intermission_turn_player_id) return "ACTIVE";
-      const purchaseState = gameState.intermission_purchases[playerId];
-      return purchaseState !== 0 ? "WAITING" : "PENDING";
-    }
-    if (phase === "PLANNING") {
-      return player.plan || player.plan_submitted ? "WAITING" : "ACTIVE";
-    }
-    if (phase === "DEFENSE") {
-      const hasThreat = !!player_threat_assignment[playerId];
-      if (!hasThreat) return "NONE";
-      return player.defense ? "WAITING" : "ACTIVE";
-    }
-    return "NONE";
-  };
-
-  const handleMarketCardSelect = (cardType, cardId) => {
-    if (phase === "ACTION") {
-      const actionName =
-        cardType === "UPGRADE" ? "perform_fortify" : "perform_armory_run";
-      sendGameAction(actionName, {
-        card_id: cardId,
-      });
-    } else if (phase === "INTERMISSION") {
-      sendGameAction("buy_from_market", {
-        card_id: cardId,
+    const newEntries = logMessages.slice(prevLogLength.current);
+    if (newEntries.length) {
+      newEntries.forEach((entry, idx) => {
+        pushToast(entry, "amber");
       });
     }
-  };
 
-  const handleThreatSelect = (threatId) => {
-    if (phase === "ATTRACTION" && self?.user_id === attraction_turn_player_id) {
-      if (selectableThreats.some((t) => t.id === threatId)) {
-        setSelectedThreatId((prev) => (prev === threatId ? null : threatId));
-      } else {
-        setSelectedThreatId(null);
-      }
+    prevLogLength.current = newCount;
+  }, [logMessages, pushToast]);
+
+  useEffect(() => {
+    return () => {
+      toastTimers.current.forEach((t) => clearTimeout(t));
+    };
+  }, []);
+
+  // Notify when my turn starts
+  useEffect(() => {
+    if (user?.id && activePlayerId === user.id && prevActivePlayer.current !== user.id) {
+      pushToast("It's your turn!", "emerald");
     }
-  };
-
-  const isPureSpectator = !self;
-  const hasLeft =
-    self && (self.status === "SURRENDERED" || self.status === "DISCONNECTED");
-  const isSpectator = isPureSpectator || hasLeft;
-
-  const myActionKey = self?.plan ? self.plan.action_card_key : null;
-
-  const isMyTurnForMarket =
-    (phase === "ACTION" &&
-      self &&
-      self.user_id === action_turn_player_id &&
-      (myActionKey === "FORTIFY" || myActionKey === "ARMORY_RUN")) ||
-    (phase === "INTERMISSION" &&
-      self &&
-      self.user_id === intermission_turn_player_id);
-
-  const viewingPlayerTurnStatus = viewingPlayerId
-    ? getPlayerTurnStatus(viewingPlayerId)
-    : "NONE";
+    prevActivePlayer.current = activePlayerId;
+  }, [activePlayerId, user?.id, pushToast]);
 
   return (
-    <div
-      className="relative flex flex-col h-screen w-screen overflow-hidden text-white bg-cover bg-center bg-fixed"
-      style={{
-        backgroundImage: `url(${gameBackground})`,
-        onError: (e) => {
-          e.target.style.backgroundImage = "none";
-          e.target.style.backgroundColor = "#1a202c";
-        },
-      }}
-    >
-      {showSurrenderModal && (
-        <ConfirmationModal
-          title="Confirm Surrender"
-          message="Are you sure you want to surrender? This action cannot be undone."
-          onConfirm={handleSurrender}
-          onCancel={() => setShowSurrenderModal(false)}
-          confirmText="Surrender"
-        />
-      )}
+    <div className="w-full h-screen bg-slate-950 text-slate-100 flex flex-col">
+      {/* Toast stack */}
+      <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 items-center pointer-events-none">
+        {toastLogs.map((log) => (
+          <div
+            key={log.id}
+            className={`px-4 py-2 rounded-xl bg-slate-900/90 border shadow-lg min-w-[240px] max-w-[520px] text-sm pointer-events-auto ${
+              log.color === "emerald"
+                ? "border-emerald-400 text-emerald-50 shadow-emerald-500/20"
+                : "border-amber-400 text-amber-50 shadow-amber-500/20"
+            }`}
+            style={{ animation: "toastFade 4s ease-in-out forwards" }}
+          >
+            {log.text}
+          </div>
+        ))}
+      </div>
 
-      <header className="fixed top-0 left-0 w-full flex-shrink-0 p-2 bg-black bg-opacity-60 shadow-lg z-30">
-        <div className="flex justify-between items-start gap-4">
-          <div className="flex-1 max-w-xs h-[16vh] min-h-[120px]">
-            <UpgradesMarket
-              upgrade_market={market.upgrade_faceup}
-              myTurn={isMyTurnForMarket}
-              phase={phase}
-              choiceType={myActionKey}
-              onCardSelect={handleMarketCardSelect}
-              playerScrap={self?.scrap}
-            />
+      <div className="px-4 py-3 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between">
+        <div>
+          <div className="text-xs uppercase tracking-[0.3em] text-slate-500">Game</div>
+          <div className="text-sm text-slate-200">
+            {bannerText(gameState)}
+            {isMyTurn ? " • Your turn" : ""}
           </div>
-          <div className="flex-shrink-0 pt-2">
-            <GameHeader round={round} era={era} phase={phase} />
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="text-xs text-slate-400">
+            {gameState?.game_id ? `Game ID: ${gameState.game_id}` : "Waiting for game to start"}
           </div>
-          <div className="flex-1 max-w-xs h-[16vh] min-h-[120px]">
-            <ArsenalMarket
-              arsenal_market={market.arsenal_faceup}
-              myTurn={isMyTurnForMarket}
-              phase={phase}
-              choiceType={myActionKey}
-              onCardSelect={handleMarketCardSelect}
-              playerScrap={self?.scrap}
-            />
-          </div>
-          <div className="flex-shrink-0">
-            <GameMenu
-              onSurrender={() => setShowSurrenderModal(true)}
-              onReturnToLobby={handleReturnToLobby}
-              isSpectator={isPureSpectator}
-              hasLeft={hasLeft}
-              phase={phase}
+          <button
+            type="button"
+            onClick={() => setIsLogOpen(true)}
+            className="px-3 py-1 rounded-lg border border-slate-700 text-xs uppercase tracking-[0.12em] text-slate-100 hover:border-amber-400"
+          >
+            Open Log
+          </button>
+        </div>
+      </div>
+
+      {!gameState ? (
+        <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
+          Waiting for game state...
+        </div>
+      ) : (
+        <div className="flex-1 min-h-0 flex">
+          <div className="flex-1 min-w-0">
+            <GameApp
+              gameData={gameState}
+              userId={user?.id}
+              onFightRow={handleFightRow}
+              onBuyUpgrade={handleBuyUpgrade}
+              onBuyWeapon={handleBuyWeapon}
+              onExtendSlot={handleExtendSlot}
+              onRealign={handleRealign}
+              onStanceStep={(stance) => handleGameAction("stance_step", { stance })}
+              onLocalToast={pushToast}
+              onEndTurn={handleEndTurn}
             />
           </div>
         </div>
-      </header>
+      )}
 
-      <main className="absolute inset-0 pt-[18vh] pb-[5rem] overflow-hidden">
-        <div className="flex flex-col h-full gap-1 p-1">
-          {isSpectator ? (
-            <div className="text-center p-4 bg-gray-800 bg-opacity-70 rounded-lg h-full flex flex-col justify-center items-center">
-              <p className="text-lg text-yellow-300 mb-4">
-                {isPureSpectator
-                  ? "You are spectating."
-                  : `You have ${self?.status?.toLowerCase()}. You can continue watching.`}
-              </p>
+      {isLogOpen && (
+        <div className="fixed inset-0 z-40 flex justify-end">
+          <div
+            className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"
+            onClick={() => setIsLogOpen(false)}
+          />
+          <div className="relative w-80 h-full bg-slate-950 border-l border-slate-800 shadow-2xl p-4 overflow-y-auto z-50">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-xs uppercase tracking-[0.25em] text-slate-500">Log</div>
               <button
-                onClick={handleReturnToLobby}
-                className="btn btn-primary text-lg px-6 py-2"
+                type="button"
+                onClick={() => setIsLogOpen(false)}
+                className="text-xs text-slate-300 hover:text-amber-200"
               >
-                Return to Lobby
+                Close
               </button>
             </div>
-          ) : (
-            // --- NEW LAYOUT LOGIC ---
-            <>
-              {phase === "DEFENSE" ? (
-                <>
-                  {/* Top Half: Threat vs Preview */}
-                  <div className="h-1/2 flex gap-1">
-                    <div className="w-1/2 h-full overflow-hidden">
-                      <ThreatsPanel
-                        threats={threatsToShow}
-                        threatAssignments={threatAssignments}
-                        onThreatSelect={() => {}} // No-op, not selectable here
-                        selectableThreats={[]}
-                        selectedThreatId={null}
-                        gameState={gameState}
-                      />
-                    </div>
-                    <div className="w-1/2 h-full overflow-hidden bg-gray-800 bg-opacity-70 rounded-lg p-2 flex flex-col">
-                      <h3 className="text-xl font-bold text-white mb-2 text-center">
-                        Defense Preview
-                      </h3>
-                      {/* Render the PreviewDisplay component here */}
-                      <PreviewDisplay
-                        preview={defensePreview}
-                        isLoading={isPreviewLoading}
-                      />
-                    </div>
-                  </div>
-                  {/* Bottom Half: Staging Area */}
-                  <div className="h-1/2 overflow-hidden bg-gray-800 bg-opacity-50 rounded-lg">
-                    {/* Render the refactored DefenseSubmission component */}
-                    <DefenseSubmission
-                      player={self}
-                      threat={myAssignedThreat}
-                      sendGameAction={sendGameAction}
-                      defenseScrap={defenseScrap}
-                      defenseArsenal={defenseArsenal}
-                      onScrapSpend={handleScrapSpend}
-                      onArsenalToggle={handleArsenalToggle}
-                    />
-                  </div>
-                </>
-              ) : (
-                <>
-                  {/* The OLD layout for all other phases */}
-                  <div className="h-1/2 overflow-hidden">
-                    <ThreatsPanel
-                      threats={threatsToShow}
-                      threatAssignments={threatAssignments}
-                      onThreatSelect={handleThreatSelect}
-                      selectableThreats={selectableThreats}
-                      selectedThreatId={selectedThreatId}
-                      gameState={gameState}
-                    />
-                  </div>
-                  <div className="h-1/2 overflow-hidden bg-gray-800 bg-opacity-50 rounded-lg">
-                    {phase === "PLANNING" && (
-                      <PlanningPhaseActions
-                        sendGameAction={sendGameAction}
-                        player={self}
-                      />
-                    )}
-                    {phase === "ATTRACTION" && (
-                      <AttractionPhaseActions
-                        sendGameAction={sendGameAction}
-                        player={self}
-                        gameState={gameState}
-                        selectedThreatId={selectedThreatId}
-                        canConfirm={canConfirmThreat}
-                      />
-                    )}
-                    {phase === "ACTION" && (
-                      <ActionPhaseActions
-                        sendGameAction={sendGameAction}
-                        player={self}
-                        gameState={gameState}
-                      />
-                    )}
-                    {phase === "INTERMISSION" && (
-                      <IntermissionPhaseActions
-                        sendGameAction={sendGameAction}
-                        player={self}
-                        gameState={gameState}
-                      />
-                    )}
-                    {["CLEANUP", "WILDERNESS"].includes(phase) && (
-                      <div className="text-center p-4 h-full flex flex-col justify-center items-center">
-                        <h3 className="text-xl text-gray-300">
-                          Phase: {phase}
-                        </h3>
-                        <span className="loading loading-spinner loading-lg text-blue-400 mt-4"></span>
-                        <p className="text-gray-400 mt-4">
-                          Resolving game state...
-                        </p>
-                      </div>
-                    )}
-                    {phase === "GAME_OVER" && (
-                      <div className="text-center p-4 h-full flex flex-col justify-center items-center">
-                        <h3 className="text-xl text-yellow-300">GAME OVER</h3>
-                        <p className="text-gray-200 text-lg">
-                          Winner: {gameState.winner?.username || "N/A"}
-                        </p>
-                        <button
-                          onClick={handleReturnToLobby}
-                          className="btn btn-primary mt-4"
-                        >
-                          Back to Lobby
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-            </>
-          )}
+            <div className="flex flex-col gap-2 text-[11px] text-slate-300">
+              {logMessages.slice().reverse().map((entry, idx) => (
+                <div key={`${entry}-${idx}`} className="p-2 rounded-lg bg-slate-900 border border-slate-800">
+                  {entry}
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
-      </main>
-
-      <div
-        className={`fixed top-[18vh] bottom-[5rem] w-1/5 flex-shrink-0 p-2 bg-black bg-opacity-70 shadow-lg z-40 transition-transform duration-300 ${
-          isQueueOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
-      >
-        <button
-          onClick={() => setIsQueueOpen(!isQueueOpen)}
-          className="absolute top-1/2 -right-6 z-50 bg-gray-700 hover:bg-gray-600 text-white p-1 rounded-r-full -translate-y-1/2"
-          title={isQueueOpen ? "Collapse Queue" : "Expand Queue"}
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className={`h-5 w-5 transform transition-transform ${
-              isQueueOpen ? "rotate-180" : "rotate-0"
-            }`}
-            viewBox="0 0 20 20"
-            fill="currentColor"
-          >
-            <path
-              fillRule="evenodd"
-              d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z"
-              clipRule="evenodd"
-            />
-          </svg>
-        </button>
-
-        <div className="flex flex-col gap-2 h-full overflow-y-auto pr-1">
-          <h4 className="text-lg font-bold text-yellow-300 mb-2">INITIATIVE</h4>
-          {initiative_queue.map((pid, index) => (
-            <PlayerInfoCard
-              key={pid}
-              player={gameState.players[pid]}
-              isSelf={pid === user.id}
-              portrait={playerPortraitsMap[pid]}
-              turnStatus={getPlayerTurnStatus(pid)}
-              turnOrder={index + 1}
-              plan={player_plans[pid]}
-              isViewing={pid === viewingPlayerId}
-              onClick={() => handlePlayerInfoClick(pid, pid === user.id)}
-            />
-          ))}
-        </div>
-      </div>
-
-      <div
-        className={`fixed top-[18vh] bottom-[5rem] right-0 w-1/5 flex-shrink-0 p-2 bg-black bg-opacity-70 shadow-lg z-40 transition-transform duration-300 ${
-          isLogOpen ? "translate-x-0" : "translate-x-full"
-        }`}
-      >
-        <button
-          onClick={() => setIsLogOpen(!isLogOpen)}
-          className="absolute top-1/2 -left-6 z-50 bg-gray-700 hover:bg-gray-600 text-white p-1 rounded-l-full -translate-y-1/2"
-          title={isLogOpen ? "Collapse Log" : "Expand Log"}
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className={`h-5 w-5 transform transition-transform ${
-              isLogOpen ? "rotate-180" : "rotate-0"
-            }`}
-            viewBox="0 0 20 20"
-            fill="currentColor"
-          >
-            <path
-              fillRule="evenodd"
-              d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
-              clipRule="evenodd"
-            />
-          </svg>
-        </button>
-        <GameLog logs={log} className="bg-transparent" />
-      </div>
-
-      {self && (
-        <CollapsiblePlayerAssets
-          player={gameState.players[viewingPlayerId] || self}
-          user={user}
-          viewingPlayerId={viewingPlayerId}
-          portrait={playerPortraitsMap[viewingPlayerId || user.id]}
-          isAssetsOpen={isAssetsPanelOpen}
-          toggleAssets={handleToggleAssets}
-          onReturn={() => setViewingPlayerId(user.id)}
-          phase={phase}
-          playerPlan={player_plans[viewingPlayerId || user.id]}
-          turnStatus={viewingPlayerTurnStatus}
-          defenseScrap={defenseScrap}
-          defenseArsenal={defenseArsenal}
-          onScrapSpend={handleScrapSpend}
-          onArsenalToggle={handleArsenalToggle}
-        />
       )}
+
+      <style>{`
+        @keyframes toastFade {
+          0% { opacity: 0; transform: translateY(-6px); }
+          10% { opacity: 1; transform: translateY(0); }
+          80% { opacity: 1; transform: translateY(0); }
+          100% { opacity: 0; transform: translateY(-6px); }
+        }
+      `}</style>
     </div>
   );
-};
-
-export default GamePage;
+}

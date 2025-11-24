@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import ThreatCardDetail from "../threats/ThreatCardDetail";
 import MarketCardDetail from "../market/MarketCardDetail";
+import BossCardDetail from "../threats/BossCardDetail";
 
 let externalSetter = null;
 
@@ -29,11 +30,11 @@ export function setHoverPreview(payload) {
   });
 }
 
-export default function HoverPreviewPortal() {
+export default function HoverPreviewPortal({ disabled = false }) {
   const [content, setContent] = useState(null);
-  externalSetter = setContent;
+  externalSetter = disabled ? null : setContent;
 
-  if (!content) return null;
+  if (!content || disabled) return null;
 
   const close = () => setContent(null);
   const wrapperClasses = `fixed inset-0 z-50 flex items-center justify-center ${
@@ -42,7 +43,7 @@ export default function HoverPreviewPortal() {
 
   return createPortal(
     <div className={wrapperClasses}>
-      <div className="relative">
+      <div className="relative" style={{ animation: content.locked ? "popIn 160ms ease" : "none" }}>
         {content.locked && (
           <button
             type="button"
@@ -52,9 +53,30 @@ export default function HoverPreviewPortal() {
             <X size={14} />
           </button>
         )}
-        {content.type === "threat" && <ThreatCardDetail threat={content.data} />}
-        {content.type === "market" && <MarketCardDetail card={content.data} />}
+        {content.type === "threat" && (
+          <ThreatCardDetail
+            threat={content.data}
+            actionLabel={content.actionLabel}
+            actionDisabled={content.actionDisabled}
+            onAction={content.onAction}
+          />
+        )}
+        {content.type === "market" && (
+          <MarketCardDetail
+            card={content.data}
+            actionLabel={content.actionLabel}
+            actionDisabled={content.actionDisabled}
+            onAction={content.onAction}
+          />
+        )}
+        {content.type === "boss" && <BossCardDetail boss={content.data} />}
       </div>
+      <style>{`
+        @keyframes popIn {
+          0% { opacity: 0; transform: scale(0.96); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+      `}</style>
     </div>,
     document.body
   );

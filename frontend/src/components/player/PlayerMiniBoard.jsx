@@ -1,6 +1,6 @@
 import React from "react";
 
-export default function PlayerMiniBoard({ player, isActive, onSelect }) {
+export default function PlayerMiniBoard({ player, isActive, isTurn, onSelect }) {
   return (
     <button
       onClick={() => onSelect(player.id)}
@@ -16,14 +16,15 @@ export default function PlayerMiniBoard({ player, isActive, onSelect }) {
     >
       <div className="flex justify-between items-baseline">
         <span className="text-sm font-semibold text-slate-50">{player.name}</span>
-        <span className="text-[10px] text-slate-400 uppercase tracking-[0.2em]">
+        <span className="text-[10px] text-slate-400 uppercase tracking-[0.2em] flex items-center gap-1">
+          {isTurn && <span className="w-2 h-2 rounded-full bg-emerald-400" />}
           {player.stance}
         </span>
       </div>
 
       <div className="flex justify-between text-[10px] text-slate-300">
         <span>
-          R/B/G: {player.resources.R}/{player.resources.B}/{player.resources.G}
+          R/B/G: {player.resources?.R || 0}/{player.resources?.B || 0}/{player.resources?.G || 0}
         </span>
         <span>VP: {player.vp}</span>
       </div>

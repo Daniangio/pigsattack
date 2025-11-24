@@ -3,9 +3,13 @@ import { MarketData } from "../../state/market";
 import MarketCardMini from "./MarketCardMini";
 import MarketCardCompact from "./MarketCardCompact";
 
-export default function MarketPanel({ compact }) {
-  const upgrades = MarketData.upgrades;
-  const weapons  = MarketData.weapons;
+export default function MarketPanel({ compact, market, onCardBuy, selectedCardId, canBuyCard, isMyTurn, highlightBuyables, hasSlotForCard }) {
+  const upgrades = (Array.isArray(market?.upgrades) ? market.upgrades : MarketData.upgrades).filter(
+    (c) => c.id !== selectedCardId
+  );
+  const weapons  = (Array.isArray(market?.weapons) ? market.weapons : MarketData.weapons).filter(
+    (c) => c.id !== selectedCardId
+  );
   const panelGridClasses = compact
     ? "grid grid-cols-1 xl:grid-cols-2 gap-3"
     : "grid grid-cols-1 xl:grid-cols-2 gap-5";
@@ -32,9 +36,35 @@ export default function MarketPanel({ compact }) {
           <div className={cardGridClasses}>
             {upgrades.map((u) =>
               compact ? (
-                <MarketCardCompact key={u.id} card={u} />
+                <MarketCardCompact
+                  key={u.id}
+                  card={u}
+                  onBuy={onCardBuy}
+                  buttonState={
+                    canBuyCard?.(u) && hasSlotForCard?.(u)
+                      ? isMyTurn
+                        ? "ready"
+                        : "not_turn"
+                      : "cannot"
+                  }
+                  highlight={highlightBuyables && canBuyCard?.(u) && hasSlotForCard?.(u)}
+                  tooltip={!hasSlotForCard?.(u) ? "No slot available" : undefined}
+                />
               ) : (
-                <MarketCardMini key={u.id} card={u} />
+                <MarketCardMini
+                  key={u.id}
+                  card={u}
+                  onBuy={onCardBuy}
+                  buttonState={
+                    canBuyCard?.(u) && hasSlotForCard?.(u)
+                      ? isMyTurn
+                        ? "ready"
+                        : "not_turn"
+                      : "cannot"
+                  }
+                  highlight={highlightBuyables && canBuyCard?.(u) && hasSlotForCard?.(u)}
+                  tooltip={!hasSlotForCard?.(u) ? "No slot available" : undefined}
+                />
               )
             )}
           </div>
@@ -48,9 +78,35 @@ export default function MarketPanel({ compact }) {
           <div className={cardGridClasses}>
             {weapons.map((w) =>
               compact ? (
-                <MarketCardCompact key={w.id} card={w} />
+                <MarketCardCompact
+                  key={w.id}
+                  card={w}
+                  onBuy={onCardBuy}
+                  buttonState={
+                    canBuyCard?.(w) && hasSlotForCard?.(w)
+                      ? isMyTurn
+                        ? "ready"
+                        : "not_turn"
+                      : "cannot"
+                  }
+                  highlight={highlightBuyables && canBuyCard?.(w) && hasSlotForCard?.(w)}
+                  tooltip={!hasSlotForCard?.(w) ? "No slot available" : undefined}
+                />
               ) : (
-                <MarketCardMini key={w.id} card={w} />
+                <MarketCardMini
+                  key={w.id}
+                  card={w}
+                  onBuy={onCardBuy}
+                  buttonState={
+                    canBuyCard?.(w) && hasSlotForCard?.(w)
+                      ? isMyTurn
+                        ? "ready"
+                        : "not_turn"
+                      : "cannot"
+                  }
+                  highlight={highlightBuyables && canBuyCard?.(w) && hasSlotForCard?.(w)}
+                  tooltip={!hasSlotForCard?.(w) ? "No slot available" : undefined}
+                />
               )
             )}
           </div>

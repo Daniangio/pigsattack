@@ -182,6 +182,17 @@ class GameManager:
         # This is a read-only operation, no broadcast needed
         return game.public_preview(player_id, payload)
 
+    async def preview_fight(
+        self, game_id: str, player_id: str, payload: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        READ-ONLY. Computes fight affordability using core logic.
+        """
+        game = self.active_games.get(game_id)
+        if not game:
+            return {"error": "Game not found"}
+        return game.preview_fight(player_id, payload)
+
 
     async def broadcast_game_state(self, game_id: str, 
                                  specific_user_id: Optional[str] = None,

@@ -12,6 +12,7 @@ from .models import (
     TokenType,
     clamp_cost,
     STANCE_PROFILES,
+    Stance,
 )
 
 
@@ -70,6 +71,7 @@ class GameSession:
             "buy_weapon": self._handle_buy_weapon,
             "extend_slot": self._handle_extend_slot,
             "realign": self._handle_realign,
+            "stance_step": self._handle_stance_step,
             "end_turn": self._handle_end_turn,
             "surrender": self._handle_surrender,
             "disconnect": self._handle_disconnect,
@@ -107,6 +109,12 @@ class GameSession:
         if self.state.phase == GamePhase.GAME_OVER:
             return
 
+        # Rotate initiative so the last player of this round starts the next.
+        last_player_id = self.state.get_active_player_id()
+        if last_player_id and last_player_id in self.state.turn_order:
+            remaining = [pid for pid in self.state.turn_order if pid != last_player_id]
+            self.state.turn_order = [last_player_id] + remaining
+
         self.state.round += 1
         await self._start_round()
 
@@ -137,64 +145,24 @@ class GameSession:
 
     async def _handle_fight(self, player: PlayerBoard, payload: Dict[str, Any]):
         self._assert_turn(player)
-        row_index = int(payload.get("row", 0))
-        if row_index < 0 or row_index >= len(self.state.threat_rows):
-            raise InvalidActionError("Invalid row.")
-        if not self.state.threat_rows[row_index]:
-            raise InvalidActionError("No threat in that row.")
+        result = self._compute_fight_cost(player, payload)
+        if not result["can_afford"]:
+            raise InvalidActionError(result["message"])
 
-        threat = self.state.threat_rows[row_index][0]
-        cost = dict(threat.cost)
-
-        # Apply stance discount
-        stance_discount = None
-        if player.stance == Stance.BALANCED:
-            discount_key = payload.get("discount_resource")
-            if not discount_key:
-                raise InvalidActionError("Balanced stance requires a discount resource.")
-            stance_discount = _parse_resource_key(discount_key)
-        else:
-            stance_discount = self._stance_discount(player)
-
-        if stance_discount:
-            cost[stance_discount] = max(0, cost.get(stance_discount, 0) - 1)
-
-        # Mass tokens are permanent reductions on green
-        mass_tokens = player.tokens.get(TokenType.MASS, 0)
-        if mass_tokens:
-            cost[ResourceType.GREEN] = max(0, cost.get(ResourceType.GREEN, 0) - 2 * mass_tokens)
-
-        use_tokens = payload.get("use_tokens", {}) or {}
-        attack_used = int(use_tokens.get("attack", 0))
-        if attack_used > player.tokens.get(TokenType.ATTACK, 0):
-            raise InvalidActionError("Not enough attack tokens.")
-        if attack_used:
-            cost[ResourceType.RED] = max(0, cost.get(ResourceType.RED, 0) - 2 * attack_used)
-
-        wild_allocation_raw = use_tokens.get("wild_allocation", {})
-        wild_allocated = 0
-        for key, amount in wild_allocation_raw.items():
-            res_type = _parse_resource_key(key)
-            wild_allocated += int(amount)
-            cost[res_type] = max(0, cost.get(res_type, 0) - int(amount))
-
-        if wild_allocated > player.tokens.get(TokenType.WILD, 0):
-            raise InvalidActionError("Not enough wild tokens.")
-
-        cost = clamp_cost(cost)
-
-        if not player.can_pay(cost):
-            raise InvalidActionError("Not enough resources to fight.")
+        threat = result["threat"]
+        cost = result["adjusted_cost"]
+        attack_used = result["attack_used"]
+        wild_used = result["wild_used"]
 
         # Consume tokens and resources
         player.tokens[TokenType.ATTACK] -= attack_used
-        player.tokens[TokenType.WILD] -= wild_allocated
+        player.tokens[TokenType.WILD] -= wild_used
         player.pay(cost)
 
         # Resolve fight
         player.vp += threat.vp
         self._apply_reward(player, threat.reward)
-        self.state.threat_rows[row_index].pop(0)
+        self.state.threat_rows[result["row_index"]].pop(0)
         self.state.add_log(f"{player.username} defeated {threat.name} for {threat.vp} VP.")
 
         await self._check_game_over()
@@ -268,6 +236,25 @@ class GameSession:
         self.state.add_log(f"{player.username} realigned to {player.stance.value} and gained a wild token.")
         await self._handle_end_turn(player, {})
 
+    async def _handle_stance_step(self, player: PlayerBoard, payload: Dict[str, Any]):
+        self._assert_turn(player)
+        target = payload.get("stance")
+        if not target:
+            raise InvalidActionError("Target stance required.")
+        try:
+            target_stance = Stance[target.upper()]
+        except KeyError:
+            raise InvalidActionError("Unknown stance.")
+
+        if player.stance == target_stance:
+            return
+
+        if not self._is_adjacent_stance(player.stance, target_stance):
+            raise InvalidActionError("Free stance change must be to an adjacent stance.")
+
+        player.stance = target_stance
+        self.state.add_log(f"{player.username} shifted stance to {player.stance.value}.")
+
     async def _handle_end_turn(self, player: PlayerBoard, payload: Dict[str, Any]):
         self._assert_turn(player)
         # Advance to next player
@@ -295,6 +282,16 @@ class GameSession:
     def _stance_discount(self, player: PlayerBoard) -> Optional[ResourceType]:
         profile = STANCE_PROFILES[player.stance]
         return profile["discount"]
+
+    def _is_adjacent_stance(self, current: Stance, target: Stance) -> bool:
+        if current == target:
+            return True
+        # Balanced connects to all, corners only to Balanced
+        if current == Stance.BALANCED:
+            return True
+        if target == Stance.BALANCED:
+            return True
+        return False
 
     def _apply_reward(self, player: PlayerBoard, reward: str):
         reward_map = {
@@ -329,3 +326,85 @@ class GameSession:
     def _determine_winner(self) -> Optional[PlayerBoard]:
         scored_players = sorted(self.state.players.values(), key=lambda p: p.vp, reverse=True)
         return scored_players[0] if scored_players else None
+
+    def _compute_fight_cost(self, player: PlayerBoard, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Shared logic for computing fight costs. Does not mutate state.
+        """
+        row_index = int(payload.get("row", 0))
+        if row_index < 0 or row_index >= len(self.state.threat_rows):
+            raise InvalidActionError("Invalid row.")
+        if not self.state.threat_rows[row_index]:
+            raise InvalidActionError("No threat in that row.")
+
+        threat = self.state.threat_rows[row_index][0]
+        cost = dict(threat.cost)
+
+        # Apply stance discount
+        if player.stance == Stance.BALANCED:
+            discount_key = payload.get("discount_resource")
+            if not discount_key:
+                raise InvalidActionError("Balanced stance requires a discount resource.")
+            stance_discount = _parse_resource_key(discount_key)
+        else:
+            stance_discount = self._stance_discount(player)
+
+        if stance_discount:
+            cost[stance_discount] = max(0, cost.get(stance_discount, 0) - 1)
+
+        # Mass tokens are permanent reductions on green
+        mass_tokens = player.tokens.get(TokenType.MASS, 0)
+        if mass_tokens:
+            cost[ResourceType.GREEN] = max(0, cost.get(ResourceType.GREEN, 0) - 2 * mass_tokens)
+
+        use_tokens = payload.get("use_tokens", {}) or {}
+        attack_used = int(use_tokens.get("attack", 0))
+        if attack_used > player.tokens.get(TokenType.ATTACK, 0):
+            raise InvalidActionError("Not enough attack tokens.")
+        if attack_used:
+            cost[ResourceType.RED] = max(0, cost.get(ResourceType.RED, 0) - 2 * attack_used)
+
+        wild_allocation_raw = use_tokens.get("wild_allocation", {})
+        wild_allocated = 0
+        for key, amount in wild_allocation_raw.items():
+            res_type = _parse_resource_key(key)
+            wild_allocated += int(amount)
+            cost[res_type] = max(0, cost.get(res_type, 0) - int(amount))
+
+        if wild_allocated > player.tokens.get(TokenType.WILD, 0):
+            raise InvalidActionError("Not enough wild tokens.")
+
+        adjusted_cost = clamp_cost(cost)
+        can_afford = player.can_pay(adjusted_cost)
+
+        remaining = dict(player.resources)
+        if can_afford:
+            for res, val in adjusted_cost.items():
+                remaining[res] = max(0, remaining.get(res, 0) - val)
+
+        return {
+          "can_afford": can_afford,
+          "message": "ok" if can_afford else "Not enough resources to fight.",
+          "threat": threat,
+          "row_index": row_index,
+          "adjusted_cost": adjusted_cost,
+          "attack_used": attack_used,
+          "wild_used": wild_allocated,
+          "remaining_resources": remaining,
+        }
+
+    def preview_fight(self, player_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        player = self.state.players.get(player_id)
+        if not player:
+            return {"can_afford": False, "message": "Player not found."}
+        try:
+            result = self._compute_fight_cost(player, payload)
+            return {
+                "can_afford": result["can_afford"],
+                "message": result["message"],
+                "adjusted_cost": result["adjusted_cost"],
+                "remaining_resources": result["remaining_resources"],
+                "threat": result["threat"].to_public_dict(),
+            }
+        except InvalidActionError as e:
+            return {"can_afford": False, "message": str(e)}

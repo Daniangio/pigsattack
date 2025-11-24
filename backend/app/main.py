@@ -60,6 +60,20 @@ async def http_preview_defense(
     )
     return result
 
+# --- HTTP Endpoint for Fight Preview ---
+@app.post("/api/game/{game_id}/preview_fight")
+async def http_preview_fight(
+    game_id: str,
+    payload: Dict[str, Any],
+    user: User = Depends(get_current_user)
+):
+    result = await game_manager.preview_fight(
+        game_id=game_id,
+        player_id=user.id,
+        payload=payload
+    )
+    return result
+
 
 # The main WebSocket endpoint
 @app.websocket("/ws")

@@ -1,7 +1,7 @@
 import React from "react";
 import { stanceColorRing } from "../../utils/stanceColorRing";
 
-export default function InitiativeRail({ players, activePlayerId, onSelect }) {
+export default function InitiativeRail({ players, activePlayerId, currentTurnPlayerId, onSelect }) {
   return (
     <div className="w-32 bg-slate-950/90 border-r border-slate-800 
                     flex flex-col gap-4 py-8 px-3 z-20">
@@ -28,9 +28,12 @@ export default function InitiativeRail({ players, activePlayerId, onSelect }) {
               className={`w-10 h-10 rounded-full border-2 
                           ${stanceColorRing(player.stance)} 
                           bg-slate-900 flex items-center justify-center
-                          text-[10px] uppercase`}
+                          text-[10px] uppercase relative`}
             >
               {player.stance[0]}
+              {currentTurnPlayerId === player.id && (
+                <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_0_4px_rgba(16,185,129,0.25)]" />
+              )}
             </div>
 
             <span className="text-[10px]">{player.name}</span>

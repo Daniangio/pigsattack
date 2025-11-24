@@ -1,13 +1,14 @@
 // src/utils/stanceColorRing.js
 export function stanceColorRing(stance) {
-  switch (stance) {
-    case "Aggressive":
+  const normalized = (stance || "").toUpperCase();
+  switch (normalized) {
+    case "AGGRESSIVE":
       return "border-red-500 shadow-red-500/40";
-    case "Tactical":
+    case "TACTICAL":
       return "border-blue-500 shadow-blue-500/40";
-    case "Hunkered":
+    case "HUNKERED":
       return "border-green-500 shadow-green-500/40";
-    case "Balanced":
+    case "BALANCED":
     default:
       return "border-amber-400 shadow-amber-400/40";
   }

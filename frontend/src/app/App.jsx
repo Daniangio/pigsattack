@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "react";
-import { useStore } from "./store.js";
-import useGameSocket from "./hooks/useGameSocket.js";
+import { useStore } from "../store.js";
+import useGameSocket from "../hooks/useGameSocket.js";
 import {
   BrowserRouter,
   Routes,
@@ -11,12 +11,12 @@ import {
 } from "react-router-dom";
 
 // Import Pages
-import AuthPage from "./pages/AuthPage.jsx";
-import LobbyPage from "./pages/LobbyPage.jsx";
-import RoomPage from "./pages/RoomPage.jsx";
-import GamePage from "./pages/GamePage.jsx";
-import ProfilePage from "./pages/ProfilePage.jsx";
-import PostGamePage from "./pages/PostGamePage.jsx";
+import AuthPage from "../pages/AuthPage.jsx";
+import LobbyPage from "../pages/LobbyPage.jsx";
+import RoomPage from "../pages/RoomPage.jsx";
+import GamePage from "../pages/GamePage.jsx";
+import ProfilePage from "../pages/ProfilePage.jsx";
+import PostGamePage from "../pages/PostGamePage.jsx";
 
 /**
  * This component enforces the core navigation rules.

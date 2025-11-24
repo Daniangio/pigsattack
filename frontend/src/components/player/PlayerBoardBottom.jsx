@@ -6,6 +6,7 @@ import { MarketData } from "../../state/market";
 import { setHoverPreview } from "../hover/HoverPreviewPortal";
 import { stanceColorRing } from "../../utils/stanceColorRing";
 import { STANCE_CONFIG } from "../../utils/stanceConfig";
+import { normalizeStance } from "../../utils/formatters";
 
 export default function PlayerBoardBottom({
   player,
@@ -15,20 +16,36 @@ export default function PlayerBoardBottom({
   stanceMenuOpen,
   onToggleStance,
   onCloseStance,
+  onRealign,
+  onFreeStanceChange,
+  cardCatalog = [],
+  displayStance,
 }) {
   if (!player) return null;
 
   const [collapsed, setCollapsed] = useState(false);
-  const stanceInfo = STANCE_CONFIG[player.stance];
-  const cardLookup = useMemo(
-    () => [...MarketData.upgrades, ...MarketData.weapons].reduce((map, card) => {
-      map[card.name] = card;
+  const currentStance = displayStance || player.stance;
+  const stanceInfo = STANCE_CONFIG[currentStance] || STANCE_CONFIG[normalizeStance(currentStance)];
+  const cardLookup = useMemo(() => {
+    const source = (cardCatalog && cardCatalog.length ? cardCatalog : [...MarketData.upgrades, ...MarketData.weapons]);
+    // Also include the player's owned cards so preview works even if not in market catalog
+    const owned = [...(player.upgrades || []), ...(player.weapons || [])];
+    return source.reduce((map, card) => {
+      if (card.name) map[card.name] = card;
+      if (card.id) map[card.id] = card;
       return map;
-    }, {}),
-    []
-  );
+    }, owned.reduce((map, card) => {
+      if (!card) return map;
+      const entry = typeof card === "string" ? { id: card, name: card } : card;
+      if (entry.name) map[entry.name] = entry;
+      if (entry.id) map[entry.id] = entry;
+      return map;
+    }, {}));
+  }, [cardCatalog, player.upgrades, player.weapons]);
   const previewCard = (cardName, lock = false) => {
     const card = cardLookup[cardName];
+    console.log(cardLookup)
+    console.log(cardName)
     if (!card) return;
     setHoverPreview({
       type: "market",
@@ -51,21 +68,34 @@ export default function PlayerBoardBottom({
     mass: { bg: "bg-green-900/60", border: "border-green-800", text: "text-green-200" },
     wild: { bg: "bg-amber-900/60", border: "border-amber-700", text: "text-amber-200" },
   };
+  const resolveCard = (entry) => {
+    if (!entry) return null;
+    if (typeof entry === "string") return cardLookup[entry] || { id: entry, name: entry };
+    if (entry.name) return entry;
+    return { id: entry.id || "unknown", name: "Unknown Card" };
+  };
   const ownedCards = [...(player.upgrades || []), ...(player.weapons || [])]
-    .map((name) => cardLookup[name])
+    .map(resolveCard)
     .filter(Boolean);
   const stanceTextColor = {
     Aggressive: "text-red-400",
+    AGGRESSIVE: "text-red-400",
     Tactical: "text-blue-400",
+    TACTICAL: "text-blue-400",
     Hunkered: "text-green-400",
+    HUNKERED: "text-green-400",
     Balanced: "text-amber-300",
-  }[player.stance] || "text-slate-200";
+    BALANCED: "text-amber-300",
+  }[currentStance] || "text-slate-200";
 
   const maxSlots = 4;
   const upgradeSlots = Math.min(player.upgradeSlots ?? maxSlots, maxSlots);
   const weaponSlots = Math.min(player.weaponSlots ?? maxSlots, maxSlots);
-  const upgradeCards = (player.upgrades || []).map((name) => cardLookup[name]).filter(Boolean);
-  const weaponCards = (player.weapons || []).map((name) => cardLookup[name]).filter(Boolean);
+  const upgradeCards = (player.upgrades || []).map(resolveCard).filter(Boolean);
+  const weaponCards = (player.weapons || []).map(resolveCard).filter(Boolean);
+  const modalPlayers = displayStance
+    ? players.map((p) => (p.id === activePlayerId ? { ...p, stance: displayStance } : p))
+    : players;
 
   const renderSlots = (cards, availableSlots, type) => {
     const slots = [];
@@ -135,10 +165,11 @@ export default function PlayerBoardBottom({
       >
         {stanceMenuOpen && (
           <StanceModal
-            players={players}
+            players={modalPlayers}
             setPlayers={setPlayers}
             activePlayerId={activePlayerId}
             onClose={onCloseStance}
+            onChangeStance={onFreeStanceChange || onRealign}
             inline
           />
         )}
@@ -147,9 +178,9 @@ export default function PlayerBoardBottom({
           <div className="h-full flex items-center gap-4 overflow-hidden">
             <div
               onClick={onToggleStance}
-              className={`w-10 h-10 rounded-full border-2 ${stanceColorRing(player.stance)} bg-slate-900 flex items-center justify-center text-[10px] uppercase tracking-[0.2em] text-slate-200 cursor-pointer`}
+              className={`w-10 h-10 rounded-full border-2 ${stanceColorRing(currentStance)} bg-slate-900 flex items-center justify-center text-[10px] uppercase tracking-[0.2em] text-slate-200 cursor-pointer`}
             >
-              {player.stance[0]}
+              {(currentStance || "?")[0]}
             </div>
             <div className="flex items-center gap-3 min-w-0">
               <span className="text-sm font-semibold text-slate-50 truncate">{player.name}</span>
@@ -165,10 +196,10 @@ export default function PlayerBoardBottom({
             <div className="flex flex-col items-center gap-2 min-w-[72px]">
               <div
                 onClick={onToggleStance}
-                className={`w-16 h-16 rounded-full border-4 ${stanceColorRing(player.stance)}
+                className={`w-16 h-16 rounded-full border-4 ${stanceColorRing(currentStance)}
                             bg-slate-900 flex items-center justify-center text-xs uppercase tracking-[0.2em] text-slate-200 cursor-pointer`}
               >
-                {player.stance}
+                {currentStance}
               </div>
             </div>
 
@@ -193,7 +224,7 @@ export default function PlayerBoardBottom({
                 <ResourcePip
                   label="R"
                   icon={Flame}
-                  value={player.resources.R}
+                  value={player.resources?.R || 0}
                   color={{
                     border: "border-red-900",
                     bg: "bg-red-950/40",
@@ -208,7 +239,7 @@ export default function PlayerBoardBottom({
                 <ResourcePip
                   label="B"
                   icon={Zap}
-                  value={player.resources.B}
+                  value={player.resources?.B || 0}
                   color={{
                     border: "border-blue-900",
                     bg: "bg-blue-950/40",
@@ -223,7 +254,7 @@ export default function PlayerBoardBottom({
                 <ResourcePip
                   label="G"
                   icon={Shield}
-                  value={player.resources.G}
+                  value={player.resources?.G || 0}
                   color={{
                     border: "border-green-900",
                     bg: "bg-green-950/40",

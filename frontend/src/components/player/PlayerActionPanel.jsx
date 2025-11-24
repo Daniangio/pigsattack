@@ -1,10 +1,15 @@
 import React from "react";
 import { Target } from "lucide-react";
 
-export default function PlayerActionPanel() {
+export default function PlayerActionPanel({
+  onFight,
+  onBuyUpgrade,
+  onExtendSlot,
+  onRealign,
+}) {
   return (
-    <div className="w-full h-full bg-slate-950/70 border border-slate-800 
-                    rounded-3xl p-4 flex flex-col gap-3">
+    <div className="w-full bg-slate-950/70 border border-slate-800 
+                    rounded-2xl p-3 flex flex-col gap-2">
       
       <div className="flex justify-between items-center mb-1">
         <div>
@@ -18,25 +23,25 @@ export default function PlayerActionPanel() {
         <Target size={16} className="text-amber-300" />
       </div>
 
-      <button className="action-btn hover:border-emerald-400">
+      <button className="action-btn hover:border-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed" onClick={onFight} disabled={!onFight}>
         Fight a Threat
       </button>
-      <button className="action-btn hover:border-sky-400">
-        Buy Upgrade
+      <button className="action-btn hover:border-sky-400 disabled:opacity-50 disabled:cursor-not-allowed" onClick={onBuyUpgrade} disabled={!onBuyUpgrade}>
+        Buy Upgrade/Weapon
       </button>
-      <button className="action-btn hover:border-purple-400">
+      <button className="action-btn hover:border-purple-400 disabled:opacity-50 disabled:cursor-not-allowed" onClick={onExtendSlot} disabled={!onExtendSlot}>
         Extend Slot (+1 wild)
       </button>
-      <button className="action-btn hover:border-amber-400">
-        Tinker & Realign (stance + wild)
+      <button className="action-btn hover:border-amber-400 disabled:opacity-50 disabled:cursor-not-allowed" onClick={onRealign} disabled={!onRealign}>
+        Tinker & Realign
       </button>
 
       <style>{`
         .action-btn {
           width: 100%;
           text-align: left;
-          padding: 8px 12px;
-          border-radius: 12px;
+        padding: 8px 12px;
+          border-radius: 10px;
           background: rgba(15,15,20,0.8);
           border: 1px solid #334155;
           color: #e2e8f0;

@@ -26,9 +26,15 @@ function StanceNode({ active, color, position, onClick }) {
   );
 }
 
-export default function StanceModal({ players, setPlayers, activePlayerId, onClose, inline = false }) {
+export default function StanceModal({ players, setPlayers, activePlayerId, onClose, inline = false, onChangeStance }) {
   const applyStance = (stance) => {
-    setPlayers(players.map((p) => (p.id === activePlayerId ? { ...p, stance } : p)));
+    if (onChangeStance) {
+      onChangeStance(stance);
+      return;
+    }
+    if (setPlayers) {
+      setPlayers(players.map((p) => (p.id === activePlayerId ? { ...p, stance } : p)));
+    }
   };
 
   const activeStance = players.find((p) => p.id === activePlayerId)?.stance;
