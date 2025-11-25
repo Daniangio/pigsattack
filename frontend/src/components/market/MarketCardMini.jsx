@@ -85,14 +85,20 @@ export default function MarketCardMini({ card, onBuy, buttonState = "ready", hig
 }
 
 // Custom border pulse that does not change opacity of content
-// Tailwind-like utility via scoped style
-<style jsx>{`
-  @keyframes borderPulse {
-    0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
-    70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
-  }
-  .animate-border-pulse {
-    animation: borderPulse 1.4s ease-out infinite;
-  }
-`}</style>
+// Added once here; class is reusable.
+const styleEl = document.getElementById("border-pulse-style");
+if (!styleEl && typeof document !== "undefined") {
+  const el = document.createElement("style");
+  el.id = "border-pulse-style";
+  el.innerHTML = `
+    @keyframes borderPulse {
+      0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+      70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+    .animate-border-pulse {
+      animation: borderPulse 1.4s ease-out infinite;
+    }
+  `;
+  document.head.appendChild(el);
+}

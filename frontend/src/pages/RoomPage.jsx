@@ -36,6 +36,8 @@ const RoomPage = ({ onLogout }) => {
 
   const isHost = user?.id === roomState.host_id;
   const canStartGame = roomState.players.length >= 2;
+  const roomFull = roomState.players.length >= 5;
+  const bots = roomState.players.filter((p) => p.is_bot);
 
   const handleLeaveRoom = () => {
     if (sendMessage) {
@@ -60,6 +62,18 @@ const RoomPage = ({ onLogout }) => {
 
   const handleGoToLobby = () => {
     navigate('/lobby');
+  };
+
+  const handleAddBot = () => {
+    if (!sendMessage || !isHost) return;
+    sendMessage({ action: "add_bot", payload: { room_id: roomId } });
+  };
+
+  const handleRemoveBot = () => {
+    if (!sendMessage || !isHost) return;
+    const bot = roomState.players.find((p) => p.is_bot);
+    if (!bot) return;
+    sendMessage({ action: "remove_bot", payload: { room_id: roomId, bot_id: bot.id } });
   };
 
   return (
@@ -130,6 +144,26 @@ const RoomPage = ({ onLogout }) => {
               <p className="text-sm text-gray-400 text-center mb-4">
                 Waiting for host to start the game...
               </p>
+            )}
+            {isHost && (
+              <div className="mt-4 space-y-2">
+                <button
+                  onClick={handleAddBot}
+                  disabled={roomFull}
+                  className={`${btnInfo} w-full`}
+                  title={roomFull ? "Room is full" : "Add a bot to this room"}
+                >
+                  Add Bot
+                </button>
+                <button
+                  onClick={handleRemoveBot}
+                  disabled={!bots.length}
+                  className={`${btnSecondary} w-full`}
+                  title={!bots.length ? "No bots to remove" : "Remove a bot from this room"}
+                >
+                  Remove Bot
+                </button>
+              </div>
             )}
           </div>
           <button

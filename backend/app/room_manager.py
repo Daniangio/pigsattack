@@ -372,3 +372,38 @@ class RoomManager:
         if room and room.status == "in_game":
             return room.game_record_id
         return None
+
+    async def add_bot_to_room(self, host: User, room_id: str, manager: ConnectionManager):
+        """Allows the room host to add a bot player before the game starts."""
+        room = self.rooms.get(room_id)
+        if not room or room.status != "lobby":
+            return
+        if room.host_id != host.id:
+            await manager.send_to_user(host.id, {"type": "error", "payload": {"message": "Only host can add bots."}})
+            return
+        if len(room.players) >= 5:
+            await manager.send_to_user(host.id, {"type": "error", "payload": {"message": "Room is full."}})
+            return
+
+        bot_id = f"bot_{uuid.uuid4().hex[:6]}"
+        bot_user = User(id=bot_id, username=bot_id, is_bot=True)
+        room.players.append(bot_user)
+        fake_users_db[bot_id] = bot_user
+        print(f"Bot {bot_id} added to room {room_id}.")
+
+        await self.broadcast_room_state(room_id, manager)
+
+    async def remove_bot_from_room(self, host: User, room_id: str, bot_id: str, manager: ConnectionManager):
+        room = self.rooms.get(room_id)
+        if not room or room.status != "lobby":
+            return
+        if room.host_id != host.id:
+            await manager.send_to_user(host.id, {"type": "error", "payload": {"message": "Only host can remove bots."}})
+            return
+        before = len(room.players)
+        room.players = [p for p in room.players if p.id != bot_id]
+        if len(room.players) == before:
+            await manager.send_to_user(host.id, {"type": "error", "payload": {"message": "Bot not found."}})
+            return
+        print(f"Bot {bot_id} removed from room {room_id}.")
+        await self.broadcast_room_state(room_id, manager)

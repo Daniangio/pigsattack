@@ -12,6 +12,7 @@ from .server_models import User, Room, GameParticipant, PlayerStatus as ServerPl
 from game_core import GameSession, GamePhase, PlayerStatus
 from game_core.session import InvalidActionError
 from .routers import fake_games_db 
+import random
 
 class GameManager:
     """Manages the lifecycle of all active game instances."""
@@ -20,6 +21,7 @@ class GameManager:
         self.active_games: Dict[str, GameSession] = {}
         self.conn_manager = conn_manager
         self.room_manager: Optional['RoomManager'] = None
+        self.bot_lookup: Dict[str, List[str]] = {} # game_id -> bot ids
         print("GameManager initialized.")
         
     def set_room_manager(self, room_manager: 'RoomManager'):
@@ -50,6 +52,7 @@ class GameManager:
             await game.async_setup()
             
             self.active_games[game_id] = game
+            self.bot_lookup[game_id] = [p.user.id for p in participants if getattr(p.user, "is_bot", False)]
             print(f"GameInstance {game_id} created with {len(participants)} players.")
             
             # --- Broadcast initial state to all players ---
@@ -73,6 +76,8 @@ class GameManager:
                     if spectator_ids:
                         await self.conn_manager.broadcast_to_users(spectator_ids, msg)
                     # --- END FIX ---
+            # Trigger bot turns if a bot starts
+            await self._maybe_run_bots(game_id)
 
         except Exception as e:
             print(f"ERROR creating game {game_id}: {e}")
@@ -149,6 +154,8 @@ class GameManager:
             # As a fallback, broadcast the last known state
             if game: # Check if game exists before broadcasting
                 await self.broadcast_game_state(game_id)
+        else:
+            await self._maybe_run_bots(game_id)
 
     async def handle_player_leave(self, user: User, game_id: str, status: ServerPlayerStatus):
         """Handles a player leaving mid-game (surrender/disconnect)."""
@@ -300,3 +307,65 @@ class GameManager:
 
         # 6. Remove game from active instances
         await self.remove_game(game_id)
+
+    async def _maybe_run_bots(self, game_id: str):
+        game = self.active_games.get(game_id)
+        if not game:
+            return
+        bot_ids = self.bot_lookup.get(game_id, [])
+        guard = 0
+        while True:
+            guard += 1
+            if guard > 20:
+                break
+            active_id = game.state.get_active_player_id()
+            if not active_id or active_id not in bot_ids:
+                break
+            try:
+                action = self._sample_bot_action(game, active_id)
+                if not action:
+                    await self.player_action(game_id, active_id, "end_turn", {})
+                    break
+                await self.player_action(game_id, active_id, action["type"], action["payload"])
+            except Exception as e:
+                print(f"Bot error in game {game_id}: {e}")
+                break
+
+    def _sample_bot_action(self, game: GameSession, bot_id: str) -> Optional[Dict[str, Any]]:
+        state = game.state
+        player = state.players.get(bot_id)
+        if not player:
+            return None
+        actions: List[Dict[str, Any]] = []
+        # Extend slot
+        if player.upgrade_slots < 4 or player.weapon_slots < 4:
+            choice = "upgrade" if (player.upgrade_slots < player.weapon_slots) else "weapon"
+            actions.append({"type": "extend_slot", "payload": {"slot_type": choice}})
+        else:
+            actions.append({"type": "extend_slot", "payload": {"slot_type": None}})
+        # Tinker to random stance
+        from game_core.models import Stance
+        for stance in Stance:
+            if stance != player.stance:
+                actions.append({"type": "realign", "payload": {"stance": stance.value}})
+        # Buy upgrades/weapons if affordable and slots
+        def can_afford(cost):
+            for k, v in cost.items():
+                if player.resources.get(k, 0) < v:
+                    return False
+            return True
+        def has_slot(card_type: str):
+            if card_type == "Upgrade":
+                return len(player.upgrades) < player.upgrade_slots
+            if card_type == "Weapon":
+                return len(player.weapons) < player.weapon_slots
+            return True
+        for card in state.market.upgrades:
+            if can_afford(card.cost) and has_slot("Upgrade"):
+                actions.append({"type": "buy_upgrade", "payload": {"card_id": card.id}})
+        for card in state.market.weapons:
+            if can_afford(card.cost) and has_slot("Weapon"):
+                actions.append({"type": "buy_weapon", "payload": {"card_id": card.id}})
+        if not actions:
+            return None
+        return random.choice(actions)

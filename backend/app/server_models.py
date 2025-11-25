@@ -15,6 +15,7 @@ class User(BaseModel):
     username: str
     game_ids: List[str] = Field(default_factory=list)
     hashed_password: Optional[str] = None
+    is_bot: bool = False
 
 class GameParticipant(BaseModel):
     """Represents a player's state within a specific game."""

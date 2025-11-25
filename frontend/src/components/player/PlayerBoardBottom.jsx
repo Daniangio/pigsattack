@@ -20,6 +20,8 @@ export default function PlayerBoardBottom({
   onFreeStanceChange,
   cardCatalog = [],
   displayStance,
+  onInitiateExtendSlot,
+  actionFlow = null,
 }) {
   if (!player) return null;
 
@@ -103,6 +105,8 @@ export default function PlayerBoardBottom({
       const card = cards[i];
       const available = i < availableSlots;
       const isLocked = !available;
+      const isNextLocked = i === availableSlots && onInitiateExtendSlot;
+      const isSelectedForExtend = actionFlow?.type === "extend" && actionFlow.slotChoice === type && isLocked && isNextLocked;
       const baseClasses = "h-12 rounded-lg border flex flex-col justify-between p-1 text-[8px] leading-tight";
       if (card) {
         slots.push(
@@ -127,9 +131,24 @@ export default function PlayerBoardBottom({
         slots.push(
           <div
             key={`${type}-${i}`}
-            className={`${baseClasses} bg-slate-900/40 border-dashed border-slate-800 text-slate-500 flex items-center justify-center`}
+            className={`${baseClasses} bg-slate-900/40 border-dashed border-slate-800 text-slate-500 flex flex-col items-center justify-center gap-1 ${
+              isNextLocked ? "cursor-pointer hover:border-amber-400" : ""
+            } ${
+              isSelectedForExtend ? "border-amber-400 bg-amber-500/15" : ""
+            }`}
+            onClick={() => {
+              if (isNextLocked) {
+                onInitiateExtendSlot(type);
+              }
+            }}
+            title={isNextLocked ? `Extend a ${type} slot` : ""}
           >
-            Locked
+            <span>Locked</span>
+            {isNextLocked && (
+              <span className={`text-[9px] uppercase tracking-[0.18em] ${isSelectedForExtend ? "text-amber-200" : "text-amber-300"}`}>
+                Click to extend
+              </span>
+            )}
           </div>
         );
       } else {

@@ -13,6 +13,87 @@ import { normalizeStance } from '../utils/formatters';
 import { setHoverPreview } from '../components/hover/HoverPreviewPortal';
 import MarketCardDetail from '../components/market/MarketCardDetail';
 
+function ActionFlowPanel({ actionFlow, submitExtendFlow, cancelFlow, submitTinkerFlow, setActionFlow }) {
+  if (!actionFlow) return null;
+
+  if (actionFlow.type === "extend") {
+    return (
+      <div className="bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm">
+        <div className="text-xs uppercase tracking-[0.2em] text-slate-500 mb-2">Extend Slot</div>
+        <div className="flex gap-2 mb-3">
+          <button
+            type="button"
+            disabled={actionFlow.upgradeFull}
+            onClick={() => setActionFlow((prev) => ({ ...prev, slotChoice: "upgrade" }))}
+            className={`flex-1 px-3 py-2 rounded-lg border text-sm ${
+              actionFlow.slotChoice === "upgrade"
+                ? "border-amber-400 text-amber-200 bg-amber-400/10"
+                : "border-slate-700 text-slate-200"
+            } ${actionFlow.upgradeFull ? "opacity-50 cursor-not-allowed" : ""}`}
+          >
+            Upgrade Slot
+          </button>
+          <button
+            type="button"
+            disabled={actionFlow.weaponFull}
+            onClick={() => setActionFlow((prev) => ({ ...prev, slotChoice: "weapon" }))}
+            className={`flex-1 px-3 py-2 rounded-lg border text-sm ${
+              actionFlow.slotChoice === "weapon"
+                ? "border-amber-400 text-amber-200 bg-amber-400/10"
+                : "border-slate-700 text-slate-200"
+            } ${actionFlow.weaponFull ? "opacity-50 cursor-not-allowed" : ""}`}
+          >
+            Weapon Slot
+          </button>
+        </div>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={submitExtendFlow}
+            className="flex-1 px-3 py-2 rounded-lg border border-emerald-400 text-emerald-200 hover:bg-emerald-400/10 text-sm"
+          >
+            Submit
+          </button>
+          <button
+            type="button"
+            onClick={cancelFlow}
+            className="flex-1 px-3 py-2 rounded-lg border border-slate-700 text-slate-200 hover:bg-slate-800 text-sm"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (actionFlow.type === "tinker") {
+    return (
+      <div className="bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm">
+        <div className="text-xs uppercase tracking-[0.2em] text-slate-500 mb-2">Tinker & Realign</div>
+        <div className="text-sm text-slate-200 mb-3">Choose any stance, then submit or cancel.</div>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={submitTinkerFlow}
+            className="flex-1 px-3 py-2 rounded-lg border border-emerald-400 text-emerald-200 hover:bg-emerald-400/10 text-sm"
+          >
+            Submit
+          </button>
+          <button
+            type="button"
+            onClick={cancelFlow}
+            className="flex-1 px-3 py-2 rounded-lg border border-slate-700 text-slate-200 hover:bg-slate-800 text-sm"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+}
+
 function ConfirmModal({ card, onConfirm, onCancel }) {
   if (!card) return null;
   return (
@@ -106,6 +187,7 @@ export default function App({
   const [freeStanceUsed, setFreeStanceUsed] = useState(false);
   const [highlightBuyables, setHighlightBuyables] = useState(false);
   const [suppressPreview, setSuppressPreview] = useState(false);
+  const [hasTurnRedirected, setHasTurnRedirected] = useState(false);
   const currentTurnPlayerId = gameData?.active_player_id || gameData?.activePlayerId;
   const isMyTurn = userId && currentTurnPlayerId === userId;
   const isAdjacentStance = (current, target) => {
@@ -156,12 +238,21 @@ export default function App({
   }, [currentTurnPlayerId, isFollowingTurn]);
 
   useEffect(() => {
-    if (isMyTurn && activePlayerId && activePlayerId !== userId) {
+    if (
+      isMyTurn &&
+      activePlayerId &&
+      activePlayerId !== userId &&
+      !hasTurnRedirected
+    ) {
       setActivePlayerId(userId);
-      setIsFollowingTurn(true);
+      setIsFollowingTurn(false);
+      setHasTurnRedirected(true);
       onLocalToast?.("It's your turn!", "emerald");
     }
-  }, [isMyTurn, activePlayerId, userId, onLocalToast]);
+    if (!isMyTurn) {
+      setHasTurnRedirected(false);
+    }
+  }, [isMyTurn, activePlayerId, userId, onLocalToast, hasTurnRedirected]);
 
   const activePlayer = players.find(p => p.id === activePlayerId);
   const me = players.find((p) => p.id === userId);
@@ -245,6 +336,10 @@ export default function App({
       upgradeFull,
       weaponFull,
     });
+  };
+  const startExtendFlowWithChoice = (slotType) => {
+    startExtendFlow();
+    setActionFlow((prev) => (prev ? { ...prev, slotChoice: slotType } : prev));
   };
 
   const submitExtendFlow = () => {
@@ -390,6 +485,13 @@ export default function App({
                     onExtendSlot={startExtendFlow}
                     onRealign={startTinkerFlow}
                   />
+                  <ActionFlowPanel
+                    actionFlow={actionFlow}
+                    submitExtendFlow={submitExtendFlow}
+                    cancelFlow={cancelFlow}
+                    submitTinkerFlow={submitTinkerFlow}
+                    setActionFlow={setActionFlow}
+                  />
                 </div>
               </div>
               <div className="col-span-8">
@@ -414,6 +516,13 @@ export default function App({
                     onBuyUpgrade={startBuyUpgrade}
                     onExtendSlot={startExtendFlow}
                     onRealign={startTinkerFlow}
+                  />
+                  <ActionFlowPanel
+                    actionFlow={actionFlow}
+                    submitExtendFlow={submitExtendFlow}
+                    cancelFlow={cancelFlow}
+                    submitTinkerFlow={submitTinkerFlow}
+                    setActionFlow={setActionFlow}
                   />
                 </div>
               </div>
@@ -445,86 +554,15 @@ export default function App({
             onRealign={submitTinkerFlow}
             onFreeStanceChange={handleFreeStanceChange}
             displayStance={displayStance}
+            onInitiateExtendSlot={startExtendFlowWithChoice}
+            actionFlow={actionFlow}
           />
         )}
       </div>
 
       <HoverPreviewPortal disabled={suppressPreview} />
 
-      {actionFlow?.type === "extend" && (
-        <div className="fixed bottom-4 right-4 z-40 bg-slate-900 border border-slate-700 rounded-xl p-4 shadow-lg w-72">
-          <div className="text-xs uppercase tracking-[0.2em] text-slate-500 mb-2">Extend Slot</div>
-          <div className="flex gap-2 mb-3">
-            <button
-              type="button"
-              disabled={actionFlow.upgradeFull}
-              onClick={() => setActionFlow((prev) => ({ ...prev, slotChoice: "upgrade" }))}
-              className={`flex-1 px-3 py-2 rounded-lg border text-sm ${
-                actionFlow.slotChoice === "upgrade"
-                  ? "border-amber-400 text-amber-200 bg-amber-400/10"
-                  : "border-slate-700 text-slate-200"
-              } ${actionFlow.upgradeFull ? "opacity-50 cursor-not-allowed" : ""}`}
-            >
-              Upgrade Slot
-            </button>
-            <button
-              type="button"
-              disabled={actionFlow.weaponFull}
-              onClick={() => setActionFlow((prev) => ({ ...prev, slotChoice: "weapon" }))}
-              className={`flex-1 px-3 py-2 rounded-lg border text-sm ${
-                actionFlow.slotChoice === "weapon"
-                  ? "border-amber-400 text-amber-200 bg-amber-400/10"
-                  : "border-slate-700 text-slate-200"
-              } ${actionFlow.weaponFull ? "opacity-50 cursor-not-allowed" : ""}`}
-            >
-              Weapon Slot
-            </button>
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={submitExtendFlow}
-              className="flex-1 px-3 py-2 rounded-lg border border-emerald-400 text-emerald-200 hover:bg-emerald-400/10 text-sm"
-            >
-              Submit
-            </button>
-            <button
-              type="button"
-              onClick={cancelFlow}
-              className="flex-1 px-3 py-2 rounded-lg border border-slate-700 text-slate-200 hover:bg-slate-800 text-sm"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
-      {actionFlow?.type === "tinker" && (
-        <div className="fixed bottom-4 right-4 z-40 bg-slate-900 border border-slate-700 rounded-xl p-4 shadow-lg w-64">
-          <div className="text-xs uppercase tracking-[0.2em] text-slate-500 mb-2">Tinker & Realign</div>
-          <div className="text-sm text-slate-200 mb-3">
-            Choose any stance, then submit or cancel to revert.
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={submitTinkerFlow}
-              className="flex-1 px-3 py-2 rounded-lg border border-emerald-400 text-emerald-200 hover:bg-emerald-400/10 text-sm"
-            >
-              Submit
-            </button>
-            <button
-              type="button"
-              onClick={cancelFlow}
-              className="flex-1 px-3 py-2 rounded-lg border border-slate-700 text-slate-200 hover:bg-slate-800 text-sm"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
-      {selectedCard && (
+     {selectedCard && (
         <ConfirmModal
           card={selectedCard.card}
           onConfirm={submitSelectedAction}

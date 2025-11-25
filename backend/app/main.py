@@ -183,6 +183,10 @@ async def websocket_endpoint(websocket: WebSocket):
                 await room_manager.start_game(user, connection_manager)
             elif action == "return_to_lobby":
                 await room_manager.return_to_lobby(user, connection_manager)
+            elif action == "add_bot":
+                await room_manager.add_bot_to_room(user, payload.get("room_id"), connection_manager)
+            elif action == "remove_bot":
+                await room_manager.remove_bot_from_room(user, payload.get("room_id"), payload.get("bot_id"), connection_manager)
             
             # 'request_view' is gone.
                 
