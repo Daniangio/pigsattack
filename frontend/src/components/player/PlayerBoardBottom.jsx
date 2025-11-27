@@ -16,17 +16,15 @@ export default function PlayerBoardBottom({
   stanceMenuOpen,
   onToggleStance,
   onCloseStance,
-  onRealign,
-  onFreeStanceChange,
+  onAttemptStanceChange,
   cardCatalog = [],
-  displayStance,
-  onInitiateExtendSlot,
-  actionFlow = null,
+  onExtendSlot,
+  canChangeStance = true,
 }) {
   if (!player) return null;
 
   const [collapsed, setCollapsed] = useState(false);
-  const currentStance = displayStance || player.stance;
+  const currentStance = player.stance;
   const stanceInfo = STANCE_CONFIG[currentStance] || STANCE_CONFIG[normalizeStance(currentStance)];
   const cardLookup = useMemo(() => {
     const source = (cardCatalog && cardCatalog.length ? cardCatalog : [...MarketData.upgrades, ...MarketData.weapons]);
@@ -46,8 +44,6 @@ export default function PlayerBoardBottom({
   }, [cardCatalog, player.upgrades, player.weapons]);
   const previewCard = (cardName, lock = false) => {
     const card = cardLookup[cardName];
-    console.log(cardLookup)
-    console.log(cardName)
     if (!card) return;
     setHoverPreview({
       type: "market",
@@ -95,9 +91,7 @@ export default function PlayerBoardBottom({
   const weaponSlots = Math.min(player.weaponSlots ?? maxSlots, maxSlots);
   const upgradeCards = (player.upgrades || []).map(resolveCard).filter(Boolean);
   const weaponCards = (player.weapons || []).map(resolveCard).filter(Boolean);
-  const modalPlayers = displayStance
-    ? players.map((p) => (p.id === activePlayerId ? { ...p, stance: displayStance } : p))
-    : players;
+  const modalPlayers = players;
 
   const renderSlots = (cards, availableSlots, type) => {
     const slots = [];
@@ -105,8 +99,7 @@ export default function PlayerBoardBottom({
       const card = cards[i];
       const available = i < availableSlots;
       const isLocked = !available;
-      const isNextLocked = i === availableSlots && onInitiateExtendSlot;
-      const isSelectedForExtend = actionFlow?.type === "extend" && actionFlow.slotChoice === type && isLocked && isNextLocked;
+      const isNextLocked = i === availableSlots && onExtendSlot;
       const baseClasses = "h-12 rounded-lg border flex flex-col justify-between p-1 text-[8px] leading-tight";
       if (card) {
         slots.push(
@@ -133,19 +126,17 @@ export default function PlayerBoardBottom({
             key={`${type}-${i}`}
             className={`${baseClasses} bg-slate-900/40 border-dashed border-slate-800 text-slate-500 flex flex-col items-center justify-center gap-1 ${
               isNextLocked ? "cursor-pointer hover:border-amber-400" : ""
-            } ${
-              isSelectedForExtend ? "border-amber-400 bg-amber-500/15" : ""
             }`}
             onClick={() => {
               if (isNextLocked) {
-                onInitiateExtendSlot(type);
+                onExtendSlot?.(type);
               }
             }}
             title={isNextLocked ? `Extend a ${type} slot` : ""}
           >
             <span>Locked</span>
             {isNextLocked && (
-              <span className={`text-[9px] uppercase tracking-[0.18em] ${isSelectedForExtend ? "text-amber-200" : "text-amber-300"}`}>
+              <span className="text-[9px] uppercase tracking-[0.18em] text-amber-300">
                 Click to extend
               </span>
             )}
@@ -188,8 +179,9 @@ export default function PlayerBoardBottom({
             setPlayers={setPlayers}
             activePlayerId={activePlayerId}
             onClose={onCloseStance}
-            onChangeStance={onFreeStanceChange || onRealign}
+            onChangeStance={onAttemptStanceChange}
             inline
+            disabled={!canChangeStance}
           />
         )}
 
@@ -201,26 +193,31 @@ export default function PlayerBoardBottom({
             >
               {(currentStance || "?")[0]}
             </div>
-            <div className="flex items-center gap-3 min-w-0">
-              <span className="text-sm font-semibold text-slate-50 truncate">{player.name}</span>
-              <div className="flex items-center gap-1 text-sm text-slate-300 shrink-0">
-                <Trophy size={14} className="text-amber-300" />
-                <span>VP: {player.vp}</span>
-              </div>
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="text-sm font-semibold text-slate-50 truncate">{player.name}</span>
+            <div className="flex items-center gap-1 text-sm text-slate-300 shrink-0">
+              <Trophy size={14} className="text-amber-300" />
+              <span>VP: {player.vp}</span>
+            </div>
             </div>
           </div>
         ) : (
           <div className="h-full flex items-start gap-4 overflow-hidden">
             {/* Player icon */}
-            <div className="flex flex-col items-center gap-2 min-w-[72px]">
-              <div
-                onClick={onToggleStance}
-                className={`w-16 h-16 rounded-full border-4 ${stanceColorRing(currentStance)}
-                            bg-slate-900 flex items-center justify-center text-xs uppercase tracking-[0.2em] text-slate-200 cursor-pointer`}
-              >
-                {currentStance}
-              </div>
+          <div className="flex flex-col items-center gap-2 min-w-[72px]">
+            <div
+              onClick={() => {
+                if (!canChangeStance) return;
+                onToggleStance();
+              }}
+              className={`w-16 h-16 rounded-full border-4 ${stanceColorRing(currentStance)}
+                            bg-slate-900 flex items-center justify-center text-xs uppercase tracking-[0.2em] text-slate-200 ${
+                              canChangeStance ? "cursor-pointer" : "opacity-50 cursor-not-allowed"
+                            }`}
+            >
+              {currentStance}
             </div>
+          </div>
 
             {/* Name/VP/discount */}
             <div className="flex flex-col justify-center min-w-[160px]">

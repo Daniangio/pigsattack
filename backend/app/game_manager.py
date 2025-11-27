@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from .room_manager import RoomManager
 
 from .server_models import User, Room, GameParticipant, PlayerStatus as ServerPlayerStatus
-from game_core import GameSession, GamePhase, PlayerStatus
+from game_core import GameSession, GamePhase, PlayerStatus, Stance
 from game_core.session import InvalidActionError
 from .routers import fake_games_db 
 import random

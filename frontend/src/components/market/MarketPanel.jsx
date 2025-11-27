@@ -1,9 +1,10 @@
 import React from "react";
+import { Maximize2 } from "lucide-react";
 import { MarketData } from "../../state/market";
 import MarketCardMini from "./MarketCardMini";
 import MarketCardCompact from "./MarketCardCompact";
 
-export default function MarketPanel({ compact, market, onCardBuy, selectedCardId, canBuyCard, isMyTurn, highlightBuyables, hasSlotForCard }) {
+export default function MarketPanel({ compact, market, onCardBuy, selectedCardId, canBuyCard, isMyTurn, highlightBuyables, hasSlotForCard, onZoom }) {
   const upgrades = (Array.isArray(market?.upgrades) ? market.upgrades : MarketData.upgrades).filter(
     (c) => c.id !== selectedCardId
   );
@@ -24,6 +25,14 @@ export default function MarketPanel({ compact, market, onCardBuy, selectedCardId
         <h3 className="text-xs uppercase tracking-[0.35em] text-slate-400">
           Market
         </h3>
+        {onZoom && (
+          <button
+            onClick={onZoom}
+            className="p-1 rounded-full border border-slate-700 text-slate-200 hover:bg-slate-800"
+          >
+            <Maximize2 size={14} />
+          </button>
+        )}
       </div>
 
       <div className={`flex-1 overflow-y-auto ${panelGridClasses}`}>

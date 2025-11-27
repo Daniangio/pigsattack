@@ -1,98 +1,23 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { VIEW_MODES } from '../state/uiState';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { INITIAL_PLAYERS } from '../state/players';
 import InitiativeRail from '../components/navigation/InitiativeRail';
-import TopNavigation from '../components/navigation/TopNavigation';
 import ThreatsPanel from '../components/threats/ThreatsPanel';
 import MarketPanel from '../components/market/MarketPanel';
 import PlayerBoardBottom from '../components/player/PlayerBoardBottom';
-import PlayerActionPanel from '../components/player/PlayerActionPanel';
-import PlayerMiniBoard from '../components/player/PlayerMiniBoard';
 import HoverPreviewPortal from '../components/hover/HoverPreviewPortal';
 import { normalizeStance } from '../utils/formatters';
 import { setHoverPreview } from '../components/hover/HoverPreviewPortal';
 import MarketCardDetail from '../components/market/MarketCardDetail';
+import { X } from 'lucide-react';
 
-function ActionFlowPanel({ actionFlow, submitExtendFlow, cancelFlow, submitTinkerFlow, setActionFlow }) {
-  if (!actionFlow) return null;
-
-  if (actionFlow.type === "extend") {
-    return (
-      <div className="bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm">
-        <div className="text-xs uppercase tracking-[0.2em] text-slate-500 mb-2">Extend Slot</div>
-        <div className="flex gap-2 mb-3">
-          <button
-            type="button"
-            disabled={actionFlow.upgradeFull}
-            onClick={() => setActionFlow((prev) => ({ ...prev, slotChoice: "upgrade" }))}
-            className={`flex-1 px-3 py-2 rounded-lg border text-sm ${
-              actionFlow.slotChoice === "upgrade"
-                ? "border-amber-400 text-amber-200 bg-amber-400/10"
-                : "border-slate-700 text-slate-200"
-            } ${actionFlow.upgradeFull ? "opacity-50 cursor-not-allowed" : ""}`}
-          >
-            Upgrade Slot
-          </button>
-          <button
-            type="button"
-            disabled={actionFlow.weaponFull}
-            onClick={() => setActionFlow((prev) => ({ ...prev, slotChoice: "weapon" }))}
-            className={`flex-1 px-3 py-2 rounded-lg border text-sm ${
-              actionFlow.slotChoice === "weapon"
-                ? "border-amber-400 text-amber-200 bg-amber-400/10"
-                : "border-slate-700 text-slate-200"
-            } ${actionFlow.weaponFull ? "opacity-50 cursor-not-allowed" : ""}`}
-          >
-            Weapon Slot
-          </button>
-        </div>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={submitExtendFlow}
-            className="flex-1 px-3 py-2 rounded-lg border border-emerald-400 text-emerald-200 hover:bg-emerald-400/10 text-sm"
-          >
-            Submit
-          </button>
-          <button
-            type="button"
-            onClick={cancelFlow}
-            className="flex-1 px-3 py-2 rounded-lg border border-slate-700 text-slate-200 hover:bg-slate-800 text-sm"
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (actionFlow.type === "tinker") {
-    return (
-      <div className="bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm">
-        <div className="text-xs uppercase tracking-[0.2em] text-slate-500 mb-2">Tinker & Realign</div>
-        <div className="text-sm text-slate-200 mb-3">Choose any stance, then submit or cancel.</div>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={submitTinkerFlow}
-            className="flex-1 px-3 py-2 rounded-lg border border-emerald-400 text-emerald-200 hover:bg-emerald-400/10 text-sm"
-          >
-            Submit
-          </button>
-          <button
-            type="button"
-            onClick={cancelFlow}
-            className="flex-1 px-3 py-2 rounded-lg border border-slate-700 text-slate-200 hover:bg-slate-800 text-sm"
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  return null;
-}
+const stanceDistance = (a, b) => {
+  if (!a || !b) return 2;
+  if (a === b) return 0;
+  const lowerA = String(a).toLowerCase();
+  const lowerB = String(b).toLowerCase();
+  if (lowerA === "balanced" || lowerB === "balanced") return 1;
+  return 2;
+};
 
 function ConfirmModal({ card, onConfirm, onCancel }) {
   if (!card) return null;
@@ -177,28 +102,55 @@ export default function App({
 
   const remotePlayers = mappedPlayers;
   const [localPlayers, setLocalPlayers] = useState(INITIAL_PLAYERS);
-  const players = remotePlayers.length ? remotePlayers : localPlayers;
-  const [activePlayerId, setActivePlayerId] = useState(players[0]?.id || null);
-  const [viewMode, setViewMode] = useState(VIEW_MODES.GLOBAL);
+  const [stanceOverrides, setStanceOverrides] = useState({});
+  const basePlayers = remotePlayers.length ? remotePlayers : localPlayers;
+  const [activePlayerId, setActivePlayerId] = useState(basePlayers[0]?.id || null);
+  const players = useMemo(
+    () =>
+      basePlayers.map((p) =>
+        stanceOverrides[p.id] ? { ...p, stance: stanceOverrides[p.id] } : p
+      ),
+    [basePlayers, stanceOverrides]
+  );
+  const backendActivePlayer = useMemo(
+    () => basePlayers.find((p) => p.id === activePlayerId),
+    [basePlayers, activePlayerId]
+  );
+  const [zoomedPanel, setZoomedPanel] = useState(null); // 'threats' | 'market' | null
+  const [prompt, setPrompt] = useState(null);
   const [stanceMenuOpen, setStanceMenuOpen] = useState(false);
   const [isFollowingTurn, setIsFollowingTurn] = useState(true);
-  const [actionFlow, setActionFlow] = useState(null); // {type:'tinker'|'extend', selectedStance?, originalStance?, slotChoice?}
   const [selectedCard, setSelectedCard] = useState(null); // selected card for confirmation
-  const [freeStanceUsed, setFreeStanceUsed] = useState(false);
   const [highlightBuyables, setHighlightBuyables] = useState(false);
   const [suppressPreview, setSuppressPreview] = useState(false);
   const [hasTurnRedirected, setHasTurnRedirected] = useState(false);
+  const stanceBaselineRef = useRef(null);
+  const lastLegalStanceRef = useRef(null);
   const currentTurnPlayerId = gameData?.active_player_id || gameData?.activePlayerId;
+  const backendTurnInitialStances = gameData?.turn_initial_stance || {};
   const isMyTurn = userId && currentTurnPlayerId === userId;
-  const isAdjacentStance = (current, target) => {
-    if (!current || !target) return false;
-    const cur = current.toUpperCase();
-    const tgt = target.toUpperCase();
-    if (cur === tgt) return true;
-    if (cur === "BALANCED" || tgt === "BALANCED") return true;
-    return false;
-  };
+  const backendBaseline = useMemo(
+    () => backendTurnInitialStances?.[activePlayerId] || backendActivePlayer?.stance,
+    [backendTurnInitialStances, activePlayerId, backendActivePlayer?.stance]
+  );
 
+  const activePlayer = players.find(p => p.id === activePlayerId);
+  const me = players.find((p) => p.id === userId);
+  const threatRows = gameData?.threat_rows || gameData?.threatRows;
+  const boss = gameData?.boss;
+  const market = gameData?.market;
+  const firstFrontRow = useMemo(() => {
+    if (!threatRows || !threatRows.length) return 0;
+    const idx = threatRows.findIndex((row) => row && row.length);
+    return idx >= 0 ? idx : 0;
+  }, [threatRows]);
+  const cardCatalog = useMemo(
+    () => [
+      ...(market?.upgrades || []),
+      ...(market?.weapons || []),
+    ],
+    [market]
+  );
   useEffect(() => {
     if (!activePlayerId && players.length) {
       setActivePlayerId(players[0].id);
@@ -212,8 +164,6 @@ export default function App({
   }, [players, activePlayerId]);
 
   useEffect(() => {
-    // Reset staged flows when switching viewed player
-    setActionFlow(null);
     setStanceMenuOpen(false);
     setSelectedCard(null);
   }, [activePlayerId]);
@@ -226,10 +176,6 @@ export default function App({
       setSuppressPreview(false);
     }
   }, [selectedCard]);
-
-  useEffect(() => {
-    setFreeStanceUsed(false);
-  }, [currentTurnPlayerId]);
 
   useEffect(() => {
     if (isFollowingTurn && currentTurnPlayerId) {
@@ -254,28 +200,56 @@ export default function App({
     }
   }, [isMyTurn, activePlayerId, userId, onLocalToast, hasTurnRedirected]);
 
-  const activePlayer = players.find(p => p.id === activePlayerId);
-  const me = players.find((p) => p.id === userId);
-  const threatRows = gameData?.threat_rows || gameData?.threatRows;
-  const boss = gameData?.boss;
-  const market = gameData?.market;
-  const firstFrontRow = useMemo(() => {
-    if (!threatRows || !threatRows.length) return 0;
-    const idx = threatRows.findIndex((row) => row && row.length);
-    return idx >= 0 ? idx : 0;
-  }, [threatRows]);
-  const cardCatalog = useMemo(
-    () => [
-      ...(market?.upgrades || []),
-      ...(market?.weapons || []),
-    ],
-    [market]
-  );
+  useEffect(() => {
+    if (stanceMenuOpen && backendBaseline) {
+      stanceBaselineRef.current = backendBaseline;
+      lastLegalStanceRef.current = backendBaseline;
+      setStanceOverrides((prev) => {
+        if (prev[activePlayerId] === backendBaseline) return prev;
+        return { ...prev, [activePlayerId]: backendBaseline };
+      });
+    }
+    if (!stanceMenuOpen) {
+      stanceBaselineRef.current = null;
+      lastLegalStanceRef.current = null;
+    }
+  }, [stanceMenuOpen, backendBaseline, activePlayerId]);
+
+  const updatePlayerStance = (stance) => {
+    setStanceOverrides((prev) => ({ ...prev, [activePlayerId]: stance }));
+    if (!remotePlayers.length) {
+      setLocalPlayers((prev) =>
+        prev.map((p) => (p.id === activePlayerId ? { ...p, stance } : p))
+      );
+    }
+  };
+
+  const revertToLastLegal = () => {
+    const fallback = lastLegalStanceRef.current || backendActivePlayer?.stance;
+    setStanceOverrides((prev) => {
+      const next = { ...prev };
+      if (fallback) {
+        next[activePlayerId] = fallback;
+      } else {
+        delete next[activePlayerId];
+      }
+      return next;
+    });
+    if (fallback) {
+      onStanceStep?.(fallback.toUpperCase());
+    }
+  };
+
+  const setPromptSafe = (payload) => {
+    if (prompt?.type === "stance" && payload?.type !== "stance") {
+      revertToLastLegal();
+    }
+    setPrompt(payload);
+  };
 
   const clearBuySelection = () => {
     if (selectedCard) {
       setSelectedCard(null);
-      setViewMode(VIEW_MODES.MARKET);
       setHoverPreview(null);
     }
   };
@@ -286,97 +260,82 @@ export default function App({
   };
 
   const handleFreeStanceChange = (stance) => {
-    if (actionFlow?.type === "tinker") {
-      setActionFlow((prev) => ({ ...prev, selectedStance: stance }));
-      return;
-    }
-    if (freeStanceUsed) {
-      onLocalToast?.("You already shifted stance this turn.", "amber");
-      return;
-    }
-    const current = me?.stance;
-    if (!current || !isAdjacentStance(current, stance)) {
-      onLocalToast?.("Illegal stance change. Use Tinker for large shifts.", "amber");
-      return;
-    }
-    if (onStanceStep) {
-      onStanceStep(stance.toUpperCase());
-      setStanceMenuOpen(false);
-      setFreeStanceUsed(true);
-    }
-  };
-
-  const startTinkerFlow = () => {
-    clearBuySelection();
+    if (!isMyTurn) return;
     if (!activePlayer) return;
-    setActionFlow({
-      type: "tinker",
-      originalStance: activePlayer.stance,
-      selectedStance: activePlayer.stance,
-    });
-    setStanceMenuOpen(true);
-  };
 
-  const submitTinkerFlow = () => {
-    if (actionFlow?.type !== "tinker" || !actionFlow.selectedStance) return;
-    onRealign?.(actionFlow.selectedStance);
-    setActionFlow(null);
-    setStanceMenuOpen(false);
-  };
+    const baseline = backendTurnInitialStances?.[activePlayerId] || backendActivePlayer?.stance || activePlayer.stance;
+    const distance = stanceDistance(baseline, stance);
+    const revertTo = lastLegalStanceRef.current || baseline;
 
-  const startExtendFlow = () => {
-    clearBuySelection();
-    if (!activePlayer) return;
-    const upgradeFull = (activePlayer.upgradeSlots ?? 1) >= 4;
-    const weaponFull = (activePlayer.weaponSlots ?? 1) >= 4;
-    const defaultChoice = !upgradeFull ? "upgrade" : !weaponFull ? "weapon" : null;
-    setActionFlow({
-      type: "extend",
-      slotChoice: defaultChoice,
-      upgradeFull,
-      weaponFull,
+    const applyStance = (shouldSubmit = false) => {
+      updatePlayerStance(stance);
+      lastLegalStanceRef.current = stance;
+      setPrompt(null);
+      if (shouldSubmit) {
+        onRealign?.(stance);
+      } else {
+        onStanceStep?.(stance.toUpperCase());
+      }
+    };
+
+    if (distance <= 1) {
+      applyStance(false);
+      return;
+    }
+
+    // Move to the chosen stance visually, but require confirm if it's a long jump
+    updatePlayerStance(stance);
+
+    setPromptSafe({
+      type: "stance",
+      message: `Change stance to ${stance}?`,
+      onConfirm: () => applyStance(true),
+      onCancel: () => {
+        if (revertTo && revertTo !== activePlayer.stance) {
+          updatePlayerStance(revertTo);
+          lastLegalStanceRef.current = revertTo;
+          onStanceStep?.(revertTo.toUpperCase());
+        }
+        setPrompt(null);
+      },
     });
   };
+
   const startExtendFlowWithChoice = (slotType) => {
-    startExtendFlow();
-    setActionFlow((prev) => (prev ? { ...prev, slotChoice: slotType } : prev));
-  };
-
-  const submitExtendFlow = () => {
-    if (actionFlow?.type !== "extend") return;
-    if (actionFlow.slotChoice) {
-      onExtendSlot?.(actionFlow.slotChoice);
-    } else {
-      onExtendSlot?.(null);
+    clearBuySelection();
+    if (!activePlayer) return;
+    const key = slotType === "weapon" ? "weaponSlots" : "upgradeSlots";
+    const current = activePlayer[key] ?? 1;
+    if (current >= 4) {
+      onLocalToast?.("All slots are already extended.", "amber");
+      return;
     }
-    setActionFlow(null);
-  };
-
-  const cancelFlow = () => {
-    if (actionFlow?.type === "tinker") {
-      setActionFlow(null);
-      setStanceMenuOpen(false);
-    } else if (actionFlow?.type === "extend") {
-      setActionFlow(null);
-    }
-  };
-
-  const displayStance = actionFlow?.type === "tinker" ? actionFlow.selectedStance : undefined;
-
-  const startBuyUpgrade = () => {
-    setViewMode(VIEW_MODES.MARKET);
-    setSelectedCard(null);
-    setHighlightBuyables(true);
-    setTimeout(() => setHighlightBuyables(false), 1200);
+    setPromptSafe({
+      type: "extend",
+      message: `Extend ${slotType} slot for ${activePlayer.name}?`,
+      onConfirm: () => {
+        if (onExtendSlot) {
+          onExtendSlot(slotType);
+        } else {
+          setLocalPlayers((prev) =>
+            prev.map((p) => {
+              if (p.id !== activePlayerId) return p;
+              const key = slotType === "weapon" ? "weaponSlots" : "upgradeSlots";
+              const current = p[key] ?? 1;
+              return { ...p, [key]: Math.min(4, current + 1) };
+            })
+          );
+        }
+      },
+    });
   };
 
   const handleCardBuyClick = (card) => {
     if (!card) return;
+    setPromptSafe(null);
     const actionType = card.type === "Weapon" ? "buy_weapon" : "buy_upgrade";
-    setActionFlow(null);
     setStanceMenuOpen(false);
     setSelectedCard({ type: actionType, card });
-    setViewMode(VIEW_MODES.MARKET);
   };
 
   const canAfford = (card) => {
@@ -434,135 +393,114 @@ export default function App({
 
       <div className="flex-1 flex flex-col min-w-0">
 
-        <TopNavigation viewMode={viewMode} onChange={setViewMode} />
-
         {/* Main content area */}
         <div className="flex-1 min-h-0 px-6 py-4 overflow-hidden">
-         {viewMode === VIEW_MODES.GLOBAL && (
-           <div className="w-full h-full flex flex-col gap-3 overflow-hidden">
-             <div className="flex-1 min-h-0 grid grid-cols-2 gap-3 overflow-hidden">
-               <ThreatsPanel compact playersCount={players.length} rows={threatRows} boss={boss} onFightRow={onFightRow} />
-                <MarketPanel
-                  compact
-                  market={market}
-                  onCardBuy={handleCardBuyClick}
-                  selectedCardId={selectedCard?.card?.id}
-                  canBuyCard={canBuyCard}
-                  hasSlotForCard={hasSlotForCard}
-                  isMyTurn={isMyTurn}
-                  highlightBuyables={highlightBuyables}
-                />
-              </div>
+          <div className="relative w-full h-full overflow-hidden rounded-3xl">
+            <div className={`h-full grid grid-cols-2 gap-3 transition-all duration-500 ${zoomedPanel ? "scale-95 opacity-0 pointer-events-none" : "opacity-100"}`}>
+              <ThreatsPanel
+                compact
+                playersCount={players.length}
+                rows={threatRows}
+                boss={boss}
+                onFightRow={onFightRow}
+                onZoom={() => setZoomedPanel('threats')}
+              />
+              <MarketPanel
+                compact
+                market={market}
+                onCardBuy={handleCardBuyClick}
+                selectedCardId={selectedCard?.card?.id}
+                canBuyCard={canBuyCard}
+                hasSlotForCard={hasSlotForCard}
+                isMyTurn={isMyTurn}
+                highlightBuyables={highlightBuyables}
+                onZoom={() => setZoomedPanel('market')}
+              />
+            </div>
 
-              <div className="h-28 bg-slate-950/70 border border-slate-800 rounded-2xl p-2 flex gap-2 overflow-x-auto">
-                {players.map(p => (
-                  <PlayerMiniBoard
-                    key={p.id}
-                    player={p}
-                    isActive={p.id === activePlayerId}
-                    isTurn={p.id === currentTurnPlayerId}
-                    onSelect={handleSelectPlayer}
-                  />
+            {zoomedPanel && (
+              <div className="absolute inset-0 flex transition-transform duration-500" style={{ transform: zoomedPanel === 'market' ? 'translateX(-100%)' : 'translateX(0%)' }}>
+                {['threats', 'market'].map((panel) => (
+                  <div key={panel} className="w-full flex-shrink-0 px-1">
+                    <div className="h-full bg-slate-950/70 border border-slate-800 rounded-3xl p-3 relative">
+                      <div className="absolute top-3 right-3 flex gap-2">
+                        <button
+                          onClick={() => setZoomedPanel(panel === 'threats' ? 'market' : 'threats')}
+                          className="px-2 py-1 text-[11px] rounded-full border border-slate-700 text-slate-200 hover:bg-slate-800"
+                        >
+                          Switch
+                        </button>
+                        <button
+                          onClick={() => setZoomedPanel(null)}
+                          className="p-1 rounded-full border border-slate-700 text-slate-200 hover:bg-slate-800"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                      {panel === 'threats' ? (
+                        <ThreatsPanel rows={threatRows} boss={boss} onFightRow={onFightRow} />
+                      ) : (
+                        <MarketPanel
+                          market={market}
+                          onCardBuy={handleCardBuyClick}
+                          selectedCardId={selectedCard?.card?.id}
+                          canBuyCard={canBuyCard}
+                          hasSlotForCard={hasSlotForCard}
+                          isMyTurn={isMyTurn}
+                          highlightBuyables={highlightBuyables}
+                        />
+                      )}
+                    </div>
+                  </div>
                 ))}
               </div>
-            </div>
-          )}
-
-          {viewMode === VIEW_MODES.THREATS && (
-            <div className="w-full h-full grid grid-cols-12 gap-4">
-              <div className="col-span-4">
-                <div className="flex flex-col gap-3">
-                  <PlayerActionPanel
-                    onFight={
-                      onFightRow
-                        ? () => {
-                            clearBuySelection();
-                            onFightRow(firstFrontRow);
-                          }
-                        : undefined
-                    }
-                    onBuyUpgrade={startBuyUpgrade}
-                    onExtendSlot={startExtendFlow}
-                    onRealign={startTinkerFlow}
-                  />
-                  <ActionFlowPanel
-                    actionFlow={actionFlow}
-                    submitExtendFlow={submitExtendFlow}
-                    cancelFlow={cancelFlow}
-                    submitTinkerFlow={submitTinkerFlow}
-                    setActionFlow={setActionFlow}
-                  />
-                </div>
-              </div>
-              <div className="col-span-8">
-                <ThreatsPanel rows={threatRows} boss={boss} onFightRow={onFightRow} />
-              </div>
-            </div>
-          )}
-
-          {viewMode === VIEW_MODES.MARKET && (
-            <div className="w-full h-full grid grid-cols-12 gap-4">
-              <div className="col-span-4">
-                <div className="flex flex-col gap-3">
-                  <PlayerActionPanel
-                    onFight={
-                      onFightRow
-                        ? () => {
-                            clearBuySelection();
-                            onFightRow(firstFrontRow);
-                          }
-                        : undefined
-                    }
-                    onBuyUpgrade={startBuyUpgrade}
-                    onExtendSlot={startExtendFlow}
-                    onRealign={startTinkerFlow}
-                  />
-                  <ActionFlowPanel
-                    actionFlow={actionFlow}
-                    submitExtendFlow={submitExtendFlow}
-                    cancelFlow={cancelFlow}
-                    submitTinkerFlow={submitTinkerFlow}
-                    setActionFlow={setActionFlow}
-                  />
-                </div>
-              </div>
-              <div className="col-span-8">
-                <MarketPanel
-                  market={market}
-                  onCardBuy={handleCardBuyClick}
-                  selectedCardId={selectedCard?.card?.id}
-                  canBuyCard={canBuyCard}
-                  hasSlotForCard={hasSlotForCard}
-                  isMyTurn={isMyTurn}
-                  highlightBuyables={highlightBuyables}
-                />
-              </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
-        {viewMode !== VIEW_MODES.GLOBAL && (
-          <PlayerBoardBottom
-            player={activePlayer}
-            players={players}
-            setPlayers={remotePlayers.length ? undefined : setLocalPlayers}
-            cardCatalog={cardCatalog}
-            activePlayerId={activePlayerId}
-            stanceMenuOpen={stanceMenuOpen}
-            onToggleStance={() => setStanceMenuOpen((v) => !v)}
-            onCloseStance={() => setStanceMenuOpen(false)}
-            onRealign={submitTinkerFlow}
-            onFreeStanceChange={handleFreeStanceChange}
-            displayStance={displayStance}
-            onInitiateExtendSlot={startExtendFlowWithChoice}
-            actionFlow={actionFlow}
-          />
-        )}
+        <PlayerBoardBottom
+          player={activePlayer}
+          players={players}
+          setPlayers={remotePlayers.length ? undefined : setLocalPlayers}
+          cardCatalog={cardCatalog}
+          activePlayerId={activePlayerId}
+          stanceMenuOpen={stanceMenuOpen}
+          onToggleStance={() => setStanceMenuOpen((v) => !v)}
+          onCloseStance={() => setStanceMenuOpen(false)}
+          onAttemptStanceChange={handleFreeStanceChange}
+          onExtendSlot={startExtendFlowWithChoice}
+          canChangeStance={isMyTurn}
+        />
       </div>
+
+      {prompt && (
+        <div className="fixed bottom-4 right-6 z-40">
+          <div className="bg-slate-900 border border-slate-700 rounded-xl p-3 shadow-xl min-w-[260px]">
+            <div className="text-sm text-slate-100 mb-3">{prompt.message}</div>
+            <div className="flex justify-end gap-2 text-[11px]">
+              <button
+                onClick={() => {
+                  prompt.onCancel?.();
+                  setPrompt(null);
+                }}
+                className="px-3 py-1 rounded-full border border-slate-700 text-slate-300 hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { prompt.onConfirm?.(); setPrompt(null); }}
+                className="px-3 py-1 rounded-full border border-emerald-500 text-emerald-200 hover:bg-emerald-500/10"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <HoverPreviewPortal disabled={suppressPreview} />
 
-     {selectedCard && (
+      {selectedCard && (
         <ConfirmModal
           card={selectedCard.card}
           onConfirm={submitSelectedAction}

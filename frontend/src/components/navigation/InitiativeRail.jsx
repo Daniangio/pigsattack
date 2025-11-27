@@ -40,6 +40,24 @@ export default function InitiativeRail({ players, activePlayerId, currentTurnPla
             <span className="text-[9px] text-slate-400">
               VP {player.vp}
             </span>
+            <div className="text-[9px] text-center leading-tight">
+              <div className="flex justify-center gap-1">
+                <span className="text-red-300">R{player.resources?.R ?? 0}</span>
+                <span className="text-blue-300">B{player.resources?.B ?? 0}</span>
+                <span className="text-green-300">G{player.resources?.G ?? 0}</span>
+              </div>
+              {player.tokens && Object.values(player.tokens).some((v) => v > 0) && (
+                <div className="flex justify-center gap-1 text-[8px] text-amber-200">
+                  {Object.entries(player.tokens)
+                    .filter(([, v]) => v > 0)
+                    .map(([k, v]) => (
+                      <span key={k} className="px-1 rounded bg-slate-900/60 border border-slate-700">
+                        {k[0].toUpperCase()}{v}
+                      </span>
+                    ))}
+                </div>
+              )}
+            </div>
           </button>
         ))}
       </div>

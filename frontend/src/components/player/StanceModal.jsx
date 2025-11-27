@@ -9,16 +9,17 @@ const STANCE_POINTS = [
   { key: "Balanced", label: "BAL", color: "border-amber-300 text-amber-200", position: "top-[55%] left-1/2 -translate-x-1/2 -translate-y-1/2" },
 ];
 
-function StanceNode({ active, color, position, onClick }) {
+function StanceNode({ active, color, position, onClick, disabled }) {
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={disabled ? undefined : onClick}
       className={`
         absolute w-9 h-9 rounded-full border-2 flex items-center justify-center
         transition-all duration-200 z-10
         ${active ? "scale-110 shadow-[0_0_15px_rgba(255,255,255,0.5)] bg-white" : "bg-slate-900 hover:scale-105"}
         ${color} ${position}
+        ${disabled ? "opacity-50 cursor-not-allowed pointer-events-none" : ""}
       `}
     >
       <div className={`w-3.5 h-3.5 rounded-full ${active ? "bg-slate-900" : "bg-current"}`} />
@@ -26,8 +27,9 @@ function StanceNode({ active, color, position, onClick }) {
   );
 }
 
-export default function StanceModal({ players, setPlayers, activePlayerId, onClose, inline = false, onChangeStance }) {
+export default function StanceModal({ players = [], setPlayers, activePlayerId, onClose, inline = false, onChangeStance, disabled = false }) {
   const applyStance = (stance) => {
+    if (disabled) return;
     if (onChangeStance) {
       onChangeStance(stance);
       return;
@@ -77,6 +79,7 @@ export default function StanceModal({ players, setPlayers, activePlayerId, onClo
                 color={stance.color}
                 position={stance.position}
                 onClick={() => applyStance(stance.key)}
+                disabled={disabled}
               />
               <div
                 className={`

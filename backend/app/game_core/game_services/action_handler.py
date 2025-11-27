@@ -5,7 +5,7 @@ from ...game_core.game_models import (
     GameState, LureCard, PlayerState, PlayerPlans, PlayerDefense, ScrapType, SurvivorActionCard,
     UpgradeCard, ArsenalCard, PlayerStatus, GamePhase,
     PlanPayload, AssignThreatPayload, DefensePayload,
-    ScavengePayload, FortifyPayload, ArmoryRunPayload, BuyPayload
+    ScavengePayload, FortifyPayload, ArmoryRunPayload, BuyPayload, Stance
 )
 from ...game_core.card_effects import ArsenalEffect
 from .validation import GameValidator
@@ -23,6 +23,27 @@ class GameActionHandler:
         self.state = state
         self.validator = validator
         self.phase_manager = phase_manager
+
+    def _stance_distance(self, current: Stance, target: Stance) -> int:
+        if current == target:
+            return 0
+        if current == Stance.BALANCED or target == Stance.BALANCED:
+            return 1
+        return 2
+
+    async def stance_step(self, player: PlayerState, stance_value: str, allow_far: bool = False):
+        try:
+            target_stance = Stance(stance_value)
+        except ValueError:
+            raise ValueError(f"Unknown stance '{stance_value}'.")
+
+        baseline = self.state.turn_initial_stance.get(player.user_id, player.stance)
+        distance = self._stance_distance(baseline, target_stance)
+        if distance > 1 and not allow_far:
+            raise ValueError("Illegal stance change: too far from turn start.")
+
+        player.stance = target_stance
+        self.state.add_log(f"{player.username} changes stance to {target_stance.value}.")
 
     async def submit_plan(self, player: PlayerState, payload: PlanPayload):
         # The payload contains the simple keys (e.g., "BLOODY_RAGS")
@@ -219,6 +240,12 @@ class ActionDispatcher:
         # Phase-specific actions
         # --- FIX: Compare against Enum object, not string ---
         phase = self.state.phase
+
+        # Stance changes are allowed at any phase but validated
+        if action in ["stance_step", "realign"]:
+            allow_far = action == "realign" or payload.get("force")
+            await self.handler.stance_step(player, payload.get("stance"), allow_far=allow_far)
+            return
         
         if phase == GamePhase.PLANNING and action == "submit_plan":
             self.validator.validate_player_can_act(player, phase)

@@ -1,4 +1,5 @@
 import React from "react";
+import { Maximize2 } from "lucide-react";
 import { ThreatData } from "../../state/threats";
 import ThreatCardMini from "./ThreatCardMini";
 import ThreatCardCompact from "./ThreatCardCompact";
@@ -13,7 +14,7 @@ const chunkBy = (items, size) => {
   return chunks;
 };
 
-export default function ThreatsPanel({ compact, playersCount = 0, rows, boss, onFightRow }) {
+export default function ThreatsPanel({ compact, playersCount = 0, rows, boss, onFightRow, onZoom }) {
   const bossCard = boss || ThreatData.boss;
   const threatRows = rows && rows.length ? rows : ThreatData.rows;
   const allThreats = threatRows.flat();
@@ -23,9 +24,19 @@ export default function ThreatsPanel({ compact, playersCount = 0, rows, boss, on
     <div className="w-full h-full bg-slate-950/60 border border-slate-800 
                     rounded-3xl p-4 flex flex-col overflow-hidden">
       
-      <h3 className="text-xs uppercase tracking-[0.35em] text-slate-400 mb-3">
-        Threats
-      </h3>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-xs uppercase tracking-[0.35em] text-slate-400">
+          Threats
+        </h3>
+        {onZoom && (
+          <button
+            onClick={onZoom}
+            className="p-1 rounded-full border border-slate-700 text-slate-200 hover:bg-slate-800"
+          >
+            <Maximize2 size={14} />
+          </button>
+        )}
+      </div>
 
       {compact ? (
         <>

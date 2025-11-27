@@ -19,6 +19,12 @@ from .card_effects import OnFailEffect, UpgradeEffect, ArsenalEffect
 
 # --- Enums ---
 
+class Stance(str, Enum):
+    AGGRESSIVE = "Aggressive"
+    BALANCED = "Balanced"
+    TACTICAL = "Tactical"
+    HUNKERED = "Hunkered"
+
 class GamePhase(str, Enum):
     WILDERNESS = "WILDERNESS"
     PLANNING = "PLANNING"
@@ -105,6 +111,7 @@ class PlayerState(BaseModel):
     injuries: int = 0
     trophies: List[str] = Field(default_factory=list)
     action_prevented: bool = False
+    stance: Stance = Stance.BALANCED
     
     lure_cards: List[LureCard] = Field(default_factory=list)
     action_cards: List[SurvivorActionCard] = Field(default_factory=list)
@@ -172,6 +179,7 @@ class GameState(BaseModel):
     player_threat_assignment: Dict[str, str] = Field(default_factory=dict)
     spoils_to_gain: Dict[str, ThreatCard] = Field(default_factory=dict)
     cards_to_return_to_hand: Dict[str, str] = Field(default_factory=dict) 
+    turn_initial_stance: Dict[str, Stance] = Field(default_factory=dict)
     
     winner: Optional[PlayerState] = None
     
@@ -185,6 +193,7 @@ class GameState(BaseModel):
     action_turn_player_id: Optional[str] = None
     
     # --- INTERMISSION ---
+    # Legacy fields kept for compatibility; not sent to frontend
     intermission_turn_player_id: Optional[str] = None
     intermission_purchases: Dict[str, int] = Field(default_factory=dict)
     
@@ -236,18 +245,11 @@ class GameState(BaseModel):
                     "username": player.username,
                     "status": player.status,
                     "initiative": player.initiative,
+                    "stance": player.stance,
                     "scrap": player.scrap,
                     "injuries": player.injuries,
                     "trophies": player.trophies,
                     "action_prevented": player.action_prevented,
-                    # Hide hands
-                    "lure_cards_count": len(player.lure_cards),
-                    "action_cards_count": len(player.action_cards),
-                    "upgrade_cards_count": len(player.upgrade_cards),
-                    "arsenal_cards_count": len(player.arsenal_cards),
-                    # Show submitted plans/defenses
-                    "plan_submitted": bool(player.plan),
-                    "defense_submitted": bool(player.defense),
                 }
 
         # --- Redact plans ---
@@ -301,9 +303,8 @@ class GameState(BaseModel):
             "available_threat_ids": self.available_threat_ids,
             "unassigned_player_ids": self.unassigned_player_ids,
             "action_turn_player_id": self.action_turn_player_id,
-            "intermission_turn_player_id": self.intermission_turn_player_id,
-            "intermission_purchases": self.intermission_purchases,
             "player_threat_assignment": self.player_threat_assignment,
+            "turn_initial_stance": {pid: stance.value if isinstance(stance, Enum) else stance for pid, stance in self.turn_initial_stance.items()},
         }
         
         return public_state

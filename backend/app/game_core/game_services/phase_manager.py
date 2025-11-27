@@ -171,6 +171,8 @@ class GamePhaseManager:
         self.state.action_turn_player_id = self._get_next_active_player()
         if self.state.action_turn_player_id:
             self.state.add_log(f"Action Phase begins. Turn: {self.state.players[self.state.action_turn_player_id].username}")
+            # Record initial stance for this action turn
+            self.state.turn_initial_stance[self.state.action_turn_player_id] = self.state.players[self.state.action_turn_player_id].stance
         else:
             self.state.add_log("No players eligible for Action Phase.")
             await self.advance_to_cleanup()
@@ -183,6 +185,7 @@ class GamePhaseManager:
         if next_player:
             self.state.action_turn_player_id = next_player
             self.state.add_log(f"Action Turn: {self.state.players[next_player].username}")
+            self.state.turn_initial_stance[self.state.action_turn_player_id] = self.state.players[self.state.action_turn_player_id].stance
         else:
             self.state.add_log("All player actions complete.")
             await self.advance_to_cleanup()
@@ -482,6 +485,7 @@ class GamePhaseManager:
         self.state.player_threat_assignment = {}
         self.state.spoils_to_gain = {}
         self.state.cards_to_return_to_hand = {}
+        self.state.turn_initial_stance = {}
         for player in self.state.players.values():
             player.plan = None
             player.defense = None
