@@ -161,6 +161,7 @@ class PlayerBoard:
     user_id: str
     username: str
     stance: Stance = Stance.BALANCED
+    turn_initial_stance: Stance = Stance.BALANCED
     resources: Dict[ResourceType, int] = field(default_factory=empty_resources)
     tokens: Dict[TokenType, int] = field(default_factory=lambda: {t: 0 for t in TokenType})
     upgrade_slots: int = 1
@@ -187,6 +188,7 @@ class PlayerBoard:
             "user_id": self.user_id,
             "username": self.username,
             "stance": self.stance.value,
+            "turn_initial_stance": self.turn_initial_stance.value,
             "resources": resource_to_wire(self.resources),
             "tokens": {t.value: self.tokens.get(t, 0) for t in TokenType},
             "upgrade_slots": self.upgrade_slots,

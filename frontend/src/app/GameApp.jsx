@@ -89,6 +89,7 @@ export default function App({
       id: p.user_id || p.id,
       name: p.username || p.name || p.user_id || p.id,
       stance: normalizeStance(p.stance),
+      turnInitialStance: normalizeStance(p.turn_initial_stance || p.stance),
       resources: p.resources || { R: 0, B: 0, G: 0 },
       tokens: p.tokens || {},
       vp: p.vp ?? 0,
@@ -127,11 +128,10 @@ export default function App({
   const stanceBaselineRef = useRef(null);
   const lastLegalStanceRef = useRef(null);
   const currentTurnPlayerId = gameData?.active_player_id || gameData?.activePlayerId;
-  const backendTurnInitialStances = gameData?.turn_initial_stance || {};
   const isMyTurn = userId && currentTurnPlayerId === userId;
   const backendBaseline = useMemo(
-    () => backendTurnInitialStances?.[activePlayerId] || backendActivePlayer?.stance,
-    [backendTurnInitialStances, activePlayerId, backendActivePlayer?.stance]
+    () => backendActivePlayer?.turnInitialStance || backendActivePlayer?.stance,
+    [backendActivePlayer?.turnInitialStance, backendActivePlayer?.stance]
   );
 
   const activePlayer = players.find(p => p.id === activePlayerId);
@@ -225,7 +225,7 @@ export default function App({
   };
 
   const revertToLastLegal = () => {
-    const fallback = lastLegalStanceRef.current || backendActivePlayer?.stance;
+    const fallback = lastLegalStanceRef.current || backendBaseline || backendActivePlayer?.stance;
     setStanceOverrides((prev) => {
       const next = { ...prev };
       if (fallback) {
@@ -263,7 +263,7 @@ export default function App({
     if (!isMyTurn) return;
     if (!activePlayer) return;
 
-    const baseline = backendTurnInitialStances?.[activePlayerId] || backendActivePlayer?.stance || activePlayer.stance;
+    const baseline = backendBaseline || activePlayer.turnInitialStance || activePlayer.stance;
     const distance = stanceDistance(baseline, stance);
     const revertTo = lastLegalStanceRef.current || baseline;
 

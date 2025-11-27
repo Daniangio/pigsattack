@@ -95,11 +95,15 @@ class GameSession:
         for p in self.state.players.values():
             if p.status == PlayerStatus.ACTIVE:
                 p.produce()
+                p.turn_initial_stance = p.stance
         self.state.add_log(f"Round {self.state.round} start. Resources produced.")
 
         self.state.phase = GamePhase.PLAYER_TURN
         self.state.active_player_index = 0
         await self._skip_inactive_players()
+        active_id = self.state.get_active_player_id()
+        if active_id:
+          self.state.players[active_id].turn_initial_stance = self.state.players[active_id].stance
 
     async def _end_round(self):
         self.state.phase = GamePhase.ROUND_END
@@ -246,11 +250,12 @@ class GameSession:
         except KeyError:
             raise InvalidActionError("Unknown stance.")
 
+        baseline = player.turn_initial_stance or player.stance
         if player.stance == target_stance:
             return
 
-        if not self._is_adjacent_stance(player.stance, target_stance):
-            raise InvalidActionError("Free stance change must be to an adjacent stance.")
+        if not self._is_adjacent_stance(baseline, target_stance):
+            raise InvalidActionError("Free stance change must be to an adjacent stance from turn start.")
 
         player.stance = target_stance
         self.state.add_log(f"{player.username} shifted stance to {player.stance.value}.")
@@ -266,6 +271,9 @@ class GameSession:
         else:
             self.state.active_player_index = next_index
             await self._skip_inactive_players()
+            active_id = self.state.get_active_player_id()
+            if active_id:
+                self.state.players[active_id].turn_initial_stance = self.state.players[active_id].stance
 
     async def _handle_surrender(self, player: PlayerBoard, payload: Dict[str, Any]):
         player.status = PlayerStatus.SURRENDERED
