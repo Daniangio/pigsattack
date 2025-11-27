@@ -4,6 +4,8 @@ import { formatCost, formatCostParts } from '../../utils/formatters';
 export default function ThreatCardDetail({ threat, actionLabel, actionDisabled, onAction }) {
   if (!threat) return null;
 
+  const spoils = threat.spoils || [];
+
   return (
     <div className="w-72 bg-slate-900 border-2 border-amber-500 rounded-2xl p-4 shadow-2xl">
       <div className="flex justify-between text-xs">
@@ -25,8 +27,21 @@ export default function ThreatCardDetail({ threat, actionLabel, actionDisabled, 
         </span>
       </div>
 
-      <div className="text-xs text-emerald-300 mt-3">
-        Reward: {threat.reward}
+      <div className="text-xs text-emerald-300 mt-3 space-y-1">
+        <div>Reward: {threat.reward}</div>
+        {spoils.length > 0 && (
+          <div className="bg-slate-900/60 border border-slate-700 rounded-lg p-2 text-[11px] text-slate-200">
+            <div className="uppercase tracking-[0.14em] text-slate-400 mb-1">Spoils</div>
+            <ul className="space-y-1">
+              {spoils.map((r, idx) => (
+                <li key={`${r.label}-${idx}`} className="flex justify-between">
+                  <span>{r.label}</span>
+                  <span className="text-slate-400">{r.token || r.slot_type || r.kind}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
 
       {actionLabel && (

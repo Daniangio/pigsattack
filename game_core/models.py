@@ -21,6 +21,7 @@ class TokenType(str, Enum):
     CONVERSION = "conversion"
     MASS = "mass"
     WILD = "wild"
+    BOSS = "boss"
 
 
 class CardType(str, Enum):
@@ -77,6 +78,43 @@ def clamp_cost(cost: Dict[ResourceType, int]) -> Dict[ResourceType, int]:
 
 
 @dataclass
+class Reward:
+    kind: str  # "token", "vp", "slot"
+    amount: int = 0
+    token: Optional[TokenType] = None
+    slot_type: Optional[str] = None  # "upgrade" or "weapon"
+
+    def apply(self, player: "PlayerBoard"):
+        if self.kind == "vp":
+            player.vp += self.amount
+        elif self.kind == "token" and self.token:
+            player.tokens[self.token] = player.tokens.get(self.token, 0) + self.amount
+        elif self.kind == "slot" and self.slot_type:
+            if self.slot_type == "upgrade":
+                player.upgrade_slots = min(4, player.upgrade_slots + self.amount)
+            elif self.slot_type == "weapon":
+                player.weapon_slots = min(4, player.weapon_slots + self.amount)
+
+    def to_public_dict(self) -> Dict[str, Any]:
+        return {
+          "kind": self.kind,
+          "amount": self.amount,
+          "token": self.token.value if self.token else None,
+          "slot_type": self.slot_type,
+          "label": self.label,
+        }
+
+    @property
+    def label(self) -> str:
+        if self.kind == "vp":
+            return f"{self.amount} VP"
+        if self.kind == "slot" and self.slot_type:
+            return f"{self.slot_type.capitalize()} Slot"
+        if self.kind == "token" and self.token:
+            return f"{self.token.value.capitalize()} Token x{self.amount}"
+        return "Reward"
+
+@dataclass
 class ThreatCard:
     id: str
     name: str
@@ -84,6 +122,7 @@ class ThreatCard:
     vp: int
     type: str
     reward: str
+    spoils: List[Reward] = field(default_factory=list)
 
     def to_public_dict(self) -> Dict[str, Any]:
         return {
@@ -93,6 +132,7 @@ class ThreatCard:
             "vp": self.vp,
             "type": self.type,
             "reward": self.reward,
+            "spoils": [r.to_public_dict() for r in self.spoils],
         }
 
 
@@ -101,9 +141,15 @@ class BossThreshold:
     label: str
     cost: Dict[ResourceType, int]
     reward: str
+    spoils: List[Reward] = field(default_factory=list)
 
     def to_public_dict(self) -> Dict[str, Any]:
-        return {"label": self.label, "cost": resource_to_wire(self.cost), "reward": self.reward}
+        return {
+            "label": self.label,
+            "cost": resource_to_wire(self.cost),
+            "reward": self.reward,
+            "spoils": [r.to_public_dict() for r in self.spoils],
+        }
 
 
 @dataclass

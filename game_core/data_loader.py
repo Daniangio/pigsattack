@@ -11,7 +11,56 @@ from .models import (
     ResourceType,
     ThreatCard,
     resource_from_json,
+    Reward,
+    TokenType,
 )
+
+
+def parse_reward_text(raw: str) -> List[Reward]:
+    if not raw:
+        return []
+    parts = [p.strip() for p in raw.split("+")]
+    rewards: List[Reward] = []
+    for part in parts:
+        if not part:
+            continue
+        # VP reward
+        if "vp" in part.lower():
+            try:
+                val = int("".join([c for c in part if c.isdigit()]) or "0")
+                rewards.append(Reward(kind="vp", amount=val))
+                continue
+            except ValueError:
+                pass
+        # Slot reward
+        if "slot" in part.lower():
+            if "upgrade" in part.lower():
+                rewards.append(Reward(kind="slot", slot_type="upgrade", amount=1))
+                continue
+            if "weapon" in part.lower():
+                rewards.append(Reward(kind="slot", slot_type="weapon", amount=1))
+                continue
+        # Token reward
+        if "token" in part.lower():
+            token_map = {
+                "attack": TokenType.ATTACK,
+                "conversion": TokenType.CONVERSION,
+                "mass": TokenType.MASS,
+                "wild": TokenType.WILD,
+                "boss": TokenType.BOSS,
+            }
+            amount = 1
+            digits = "".join([c for c in part if c.isdigit()])
+            if digits:
+                try:
+                    amount = int(digits)
+                except ValueError:
+                    amount = 1
+            for key, token in token_map.items():
+                if key in part.lower():
+                    rewards.append(Reward(kind="token", token=token, amount=amount))
+                    break
+    return rewards
 
 
 class GameDataLoader:
@@ -35,6 +84,7 @@ class GameDataLoader:
                     label=t["label"],
                     cost=resource_from_json(t.get("cost", {})),
                     reward=t.get("reward", ""),
+                    spoils=parse_reward_text(t.get("reward", "")),
                 )
                 for t in boss_data.get("thresholds", [])
             ]
@@ -57,6 +107,7 @@ class GameDataLoader:
                         vp=raw.get("vp", 0),
                         type=raw.get("type", "Unknown"),
                         reward=raw.get("reward", ""),
+                        spoils=parse_reward_text(raw.get("reward", "")),
                     )
                 )
             rows.append(threats)

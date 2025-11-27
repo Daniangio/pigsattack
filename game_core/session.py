@@ -103,7 +103,7 @@ class GameSession:
         await self._skip_inactive_players()
         active_id = self.state.get_active_player_id()
         if active_id:
-          self.state.players[active_id].turn_initial_stance = self.state.players[active_id].stance
+            self.state.players[active_id].turn_initial_stance = self.state.players[active_id].stance
 
     async def _end_round(self):
         self.state.phase = GamePhase.ROUND_END
@@ -165,7 +165,12 @@ class GameSession:
 
         # Resolve fight
         player.vp += threat.vp
-        self._apply_reward(player, threat.reward)
+        if getattr(threat, "spoils", None):
+            for reward in threat.spoils:
+                reward.apply(player)
+                self.state.add_log(f"{player.username} gains {reward.label}.")
+        else:
+            self._apply_reward(player, threat.reward)
         self.state.threat_rows[result["row_index"]].pop(0)
         self.state.add_log(f"{player.username} defeated {threat.name} for {threat.vp} VP.")
 
@@ -307,6 +312,7 @@ class GameSession:
             "+Conversion": TokenType.CONVERSION,
             "+Wild": TokenType.WILD,
             "+Mass": TokenType.MASS,
+            "Boss Token": TokenType.BOSS,
         }
         token_type = reward_map.get(reward)
         if token_type:
