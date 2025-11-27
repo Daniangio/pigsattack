@@ -74,6 +74,25 @@ async def http_preview_fight(
     )
     return result
 
+# --- HTTP Endpoint for Conversion ---
+@app.post("/api/game/{game_id}/convert")
+async def http_convert(
+    game_id: str,
+    payload: Dict[str, Any],
+    user: User = Depends(get_current_user),
+):
+    await game_manager.player_action(
+        game_id=game_id,
+        player_id=user.id,
+        action="convert",
+        payload=payload,
+    )
+    # return updated public state for the player
+    game = game_manager.active_games.get(game_id)
+    if not game:
+        return {"error": "Game not found"}
+    return game.state.get_redacted_state(user.id)
+
 
 # The main WebSocket endpoint
 @app.websocket("/ws")

@@ -75,6 +75,7 @@ class GameSession:
             "end_turn": self._handle_end_turn,
             "surrender": self._handle_surrender,
             "disconnect": self._handle_disconnect,
+            "convert": self._handle_convert,
         }
 
         if action not in handlers:
@@ -244,6 +245,27 @@ class GameSession:
         player.tokens[TokenType.WILD] = min(3, player.tokens.get(TokenType.WILD, 0) + 1)
         self.state.add_log(f"{player.username} realigned to {player.stance.value} and gained a wild token.")
         await self._handle_end_turn(player, {})
+
+    async def _handle_convert(self, player: PlayerBoard, payload: Dict[str, Any]):
+        # Conversion token can be used outside of action flow; no turn assertion
+        from_key = payload.get("from") or payload.get("from_res")
+        to_key = payload.get("to") or payload.get("to_res")
+        if not from_key or not to_key:
+            raise InvalidActionError("from and to are required for conversion.")
+        from_res = _parse_resource_key(from_key)
+        to_res = _parse_resource_key(to_key)
+        if from_res == to_res:
+            raise InvalidActionError("Cannot convert to the same resource.")
+        if player.tokens.get(TokenType.CONVERSION, 0) <= 0:
+            raise InvalidActionError("No conversion tokens available.")
+        amount = min(2, player.resources.get(from_res, 0))
+        if amount <= 0:
+            raise InvalidActionError("Not enough resources to convert.")
+
+        player.resources[from_res] = player.resources.get(from_res, 0) - amount
+        player.resources[to_res] = player.resources.get(to_res, 0) + amount
+        player.tokens[TokenType.CONVERSION] = max(0, player.tokens.get(TokenType.CONVERSION, 0) - 1)
+        self.state.add_log(f"{player.username} converted {amount} {from_res.value} → {to_res.value}.")
 
     async def _handle_stance_step(self, player: PlayerBoard, payload: Dict[str, Any]):
         self._assert_turn(player)

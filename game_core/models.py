@@ -209,7 +209,7 @@ class PlayerBoard:
     stance: Stance = Stance.BALANCED
     turn_initial_stance: Stance = Stance.BALANCED
     resources: Dict[ResourceType, int] = field(default_factory=empty_resources)
-    tokens: Dict[TokenType, int] = field(default_factory=lambda: {t: 0 for t in TokenType})
+    tokens: Dict[TokenType, int] = field(default_factory=lambda: {t: 3 for t in TokenType})
     upgrade_slots: int = 1
     weapon_slots: int = 1
     upgrades: List[MarketCard] = field(default_factory=list)

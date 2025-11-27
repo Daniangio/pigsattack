@@ -8,6 +8,7 @@ import HoverPreviewPortal from '../components/hover/HoverPreviewPortal';
 import { normalizeStance } from '../utils/formatters';
 import { setHoverPreview } from '../components/hover/HoverPreviewPortal';
 import MarketCardDetail from '../components/market/MarketCardDetail';
+import FightPanel from '../components/fight/FightPanel';
 import { X } from 'lucide-react';
 
 const stanceDistance = (a, b) => {
@@ -60,6 +61,7 @@ export default function App({
   gameData,
   userId,
   onFightRow,
+  onConvert,
   onBuyUpgrade,
   onBuyWeapon,
   onExtendSlot,
@@ -120,6 +122,14 @@ export default function App({
   const [zoomedPanel, setZoomedPanel] = useState(null); // 'threats' | 'market' | null
   const [prompt, setPrompt] = useState(null);
   const [stanceMenuOpen, setStanceMenuOpen] = useState(false);
+  const [activeFight, setActiveFight] = useState(null);
+  const [fightAttackUsed, setFightAttackUsed] = useState(0);
+  const [fightWildAllocation, setFightWildAllocation] = useState({ R: 0, B: 0, G: 0 });
+  const [fightPlayedUpgrades, setFightPlayedUpgrades] = useState(new Set());
+  const [fightPlayedWeapons, setFightPlayedWeapons] = useState(new Set());
+  const [fightDiscountResource, setFightDiscountResource] = useState("R");
+  const [fightResourceSpend, setFightResourceSpend] = useState({ R: 0, B: 0, G: 0 });
+  const [fightMissingCost, setFightMissingCost] = useState({ R: 0, B: 0, G: 0 });
   const [isFollowingTurn, setIsFollowingTurn] = useState(true);
   const [selectedCard, setSelectedCard] = useState(null); // selected card for confirmation
   const [highlightBuyables, setHighlightBuyables] = useState(false);
@@ -139,11 +149,21 @@ export default function App({
   const threatRows = gameData?.threat_rows || gameData?.threatRows;
   const boss = gameData?.boss;
   const market = gameData?.market;
+  const gameId = gameData?.game_id || gameData?.gameId;
   const firstFrontRow = useMemo(() => {
     if (!threatRows || !threatRows.length) return 0;
     const idx = threatRows.findIndex((row) => row && row.length);
     return idx >= 0 ? idx : 0;
   }, [threatRows]);
+
+  const bestDiscountResource = (cost = {}) => {
+    const vals = {
+      R: cost.R ?? cost.r ?? 0,
+      B: cost.B ?? cost.b ?? 0,
+      G: cost.G ?? cost.g ?? 0,
+    };
+    return Object.keys(vals).sort((a, b) => (vals[b] || 0) - (vals[a] || 0))[0] || "R";
+  };
   const cardCatalog = useMemo(
     () => [
       ...(market?.upgrades || []),
@@ -151,6 +171,14 @@ export default function App({
     ],
     [market]
   );
+  const resourceAfterFight = useMemo(() => {
+    if (!activeFight || !activePlayer) return null;
+    return {
+      R: Math.max(0, (activePlayer.resources?.R || 0) - (fightResourceSpend.R || 0)),
+      B: Math.max(0, (activePlayer.resources?.B || 0) - (fightResourceSpend.B || 0)),
+      G: Math.max(0, (activePlayer.resources?.G || 0) - (fightResourceSpend.G || 0)),
+    };
+  }, [activeFight, fightResourceSpend.B, fightResourceSpend.G, fightResourceSpend.R, activePlayer]);
   useEffect(() => {
     if (!activePlayerId && players.length) {
       setActivePlayerId(players[0].id);
@@ -183,17 +211,22 @@ export default function App({
     }
   }, [currentTurnPlayerId, isFollowingTurn]);
 
+  const firstTurnRedirectDone = useRef(false);
   useEffect(() => {
     if (
       isMyTurn &&
       activePlayerId &&
       activePlayerId !== userId &&
-      !hasTurnRedirected
+      !hasTurnRedirected &&
+      firstTurnRedirectDone.current
     ) {
       setActivePlayerId(userId);
       setIsFollowingTurn(false);
       setHasTurnRedirected(true);
       onLocalToast?.("It's your turn!", "emerald");
+    }
+    if (isMyTurn && !firstTurnRedirectDone.current) {
+      firstTurnRedirectDone.current = true;
     }
     if (!isMyTurn) {
       setHasTurnRedirected(false);
@@ -214,6 +247,19 @@ export default function App({
       lastLegalStanceRef.current = null;
     }
   }, [stanceMenuOpen, backendBaseline, activePlayerId]);
+
+  useEffect(() => {
+    if (!activeFight) return;
+    if (!isMyTurn || activePlayerId !== userId) {
+      setActiveFight(null);
+      return;
+    }
+    const row = threatRows?.[activeFight.rowIndex] || [];
+    const front = row[0];
+    if (!front || front.id !== activeFight.threat?.id) {
+      setActiveFight(null);
+    }
+  }, [activeFight, activePlayerId, isMyTurn, threatRows, userId]);
 
   const updatePlayerStance = (stance) => {
     setStanceOverrides((prev) => ({ ...prev, [activePlayerId]: stance }));
@@ -251,6 +297,125 @@ export default function App({
     if (selectedCard) {
       setSelectedCard(null);
       setHoverPreview(null);
+    }
+  };
+
+  const resetFightState = () => {
+    setFightAttackUsed(0);
+    setFightWildAllocation({ R: 0, B: 0, G: 0 });
+    setFightPlayedUpgrades(new Set());
+    setFightPlayedWeapons(new Set());
+    setFightDiscountResource("R");
+    setFightResourceSpend({ R: 0, B: 0, G: 0 });
+  };
+
+  const clearFightPanel = () => {
+    setActiveFight(null);
+    resetFightState();
+  };
+
+  const handleStartFight = (rowIndex, threat) => {
+    if (!threat) return;
+    if (!threatRows?.[rowIndex]?.length) return;
+    if (!isMyTurn || activePlayerId !== userId) {
+      onLocalToast?.("You can only fight during your turn with your board selected.", "amber");
+      return;
+    }
+    if (rowIndex !== firstFrontRow) {
+      onLocalToast?.("Only the front row can be fought right now.", "amber");
+      return;
+    }
+    clearBuySelection();
+    setPromptSafe(null);
+    setStanceMenuOpen(false);
+    setZoomedPanel(null);
+    setHoverPreview(null);
+    // Close any locked threat preview
+    setHoverPreview(null);
+    resetFightState();
+    setHoverPreview(null);
+    const stanceUpper = String(activePlayer?.stance || "").toUpperCase();
+    const stanceDiscountMap = { AGGRESSIVE: "R", TACTICAL: "B", HUNKERED: "G" };
+    const fallbackDiscount =
+      stanceUpper === "BALANCED"
+        ? bestDiscountResource(threat.cost || {})
+        : stanceDiscountMap[stanceUpper] || "R";
+    setFightDiscountResource(fallbackDiscount);
+    setActiveFight({
+      threat,
+      rowIndex,
+      discountResource: fallbackDiscount,
+    });
+  };
+
+  const handleSubmitFight = (payload) => {
+    if (!payload || !onFightRow) return;
+    onFightRow(payload);
+    setActiveFight(null);
+    resetFightState();
+  };
+
+  const handleFightResourcePreview = (spent) => {
+    if (!spent) {
+      setFightResourceSpend({ R: 0, B: 0, G: 0 });
+      return;
+    }
+    setFightResourceSpend({
+      R: spent.R || 0,
+      B: spent.B || 0,
+      G: spent.G || 0,
+    });
+  };
+
+  const handleFightMissingPreview = (missing) => {
+    if (!missing) return;
+    setFightMissingCost({
+      R: missing.R || 0,
+      B: missing.B || 0,
+      G: missing.G || 0,
+    });
+  };
+
+  const handleCardToggleForFight = (card) => {
+    if (!card) return;
+    const id = card.id || card.name;
+    if (!id) return;
+    if (card.type === "Upgrade") {
+      setFightPlayedUpgrades((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+    } else if (card.type === "Weapon") {
+      setFightPlayedWeapons((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+    }
+  };
+
+  const handleTokenClickForFight = (type) => {
+    const normalized = String(type || "").toLowerCase();
+    if (normalized === "attack") {
+      setFightAttackUsed((prev) => {
+        const available = activePlayer?.tokens?.attack ?? activePlayer?.tokens?.ATTACK ?? 0;
+        if (!available) return 0;
+        if (prev >= available) return 0;
+        return prev + 1;
+      });
+    } else if (normalized === "wild") {
+      const target = ["R", "B", "G"]
+        .sort((a, b) => (fightMissingCost[b] || 0) - (fightMissingCost[a] || 0))[0] || "R";
+      setFightWildAllocation((prev) => {
+        const available = activePlayer?.tokens?.wild ?? activePlayer?.tokens?.WILD ?? 0;
+        const total = (prev.R || 0) + (prev.B || 0) + (prev.G || 0);
+        if (!available) return prev;
+        if (total >= available) return prev;
+        return { ...prev, [target]: (prev[target] || 0) + 1 };
+      });
     }
   };
 
@@ -396,64 +561,98 @@ export default function App({
         {/* Main content area */}
         <div className="flex-1 min-h-0 px-6 py-4 overflow-hidden">
           <div className="relative w-full h-full overflow-hidden rounded-3xl">
-            <div className={`h-full grid grid-cols-2 gap-3 transition-all duration-500 ${zoomedPanel ? "scale-95 opacity-0 pointer-events-none" : "opacity-100"}`}>
-              <ThreatsPanel
-                compact
-                playersCount={players.length}
-                rows={threatRows}
-                boss={boss}
-                onFightRow={onFightRow}
-                onZoom={() => setZoomedPanel('threats')}
-              />
-              <MarketPanel
-                compact
-                market={market}
-                onCardBuy={handleCardBuyClick}
-                selectedCardId={selectedCard?.card?.id}
-                canBuyCard={canBuyCard}
-                hasSlotForCard={hasSlotForCard}
-                isMyTurn={isMyTurn}
-                highlightBuyables={highlightBuyables}
-                onZoom={() => setZoomedPanel('market')}
-              />
-            </div>
-
-            {zoomedPanel && (
-              <div className="absolute inset-0 flex transition-transform duration-500" style={{ transform: zoomedPanel === 'market' ? 'translateX(-100%)' : 'translateX(0%)' }}>
-                {['threats', 'market'].map((panel) => (
-                  <div key={panel} className="w-full flex-shrink-0 px-1">
-                    <div className="h-full bg-slate-950/70 border border-slate-800 rounded-3xl p-3 relative">
-                      <div className="absolute top-3 right-3 flex gap-2">
-                        <button
-                          onClick={() => setZoomedPanel(panel === 'threats' ? 'market' : 'threats')}
-                          className="px-2 py-1 text-[11px] rounded-full border border-slate-700 text-slate-200 hover:bg-slate-800"
-                        >
-                          Switch
-                        </button>
-                        <button
-                          onClick={() => setZoomedPanel(null)}
-                          className="p-1 rounded-full border border-slate-700 text-slate-200 hover:bg-slate-800"
-                        >
-                          <X size={14} />
-                        </button>
-                      </div>
-                      {panel === 'threats' ? (
-                        <ThreatsPanel rows={threatRows} boss={boss} onFightRow={onFightRow} />
-                      ) : (
-                        <MarketPanel
-                          market={market}
-                          onCardBuy={handleCardBuyClick}
-                          selectedCardId={selectedCard?.card?.id}
-                          canBuyCard={canBuyCard}
-                          hasSlotForCard={hasSlotForCard}
-                          isMyTurn={isMyTurn}
-                          highlightBuyables={highlightBuyables}
-                        />
-                      )}
-                    </div>
-                  </div>
-                ))}
+            {activeFight ? (
+              <div className="h-full">
+                <FightPanel
+                  threat={activeFight.threat}
+                  rowIndex={activeFight.rowIndex}
+                  player={me}
+                  gameId={gameId}
+                  defaultDiscount={activeFight.discountResource}
+                  onClose={clearFightPanel}
+                  onSubmit={handleSubmitFight}
+                  attackUsed={fightAttackUsed}
+                  setAttackUsed={setFightAttackUsed}
+                  wildAllocation={fightWildAllocation}
+                  setWildAllocation={setFightWildAllocation}
+                  playedUpgrades={fightPlayedUpgrades}
+                  setPlayedUpgrades={setFightPlayedUpgrades}
+                  playedWeapons={fightPlayedWeapons}
+                  setPlayedWeapons={setFightPlayedWeapons}
+                  discountResource={fightDiscountResource}
+                  setDiscountResource={setFightDiscountResource}
+                  onResourcePreview={handleFightResourcePreview}
+                  onMissingPreview={handleFightMissingPreview}
+                />
               </div>
+            ) : (
+              <>
+                <div className={`h-full grid grid-cols-2 gap-3 transition-all duration-500 ${zoomedPanel ? "scale-95 opacity-0 pointer-events-none" : "opacity-100"}`}>
+                  <ThreatsPanel
+                    compact
+                    playersCount={players.length}
+                    rows={threatRows}
+                    boss={boss}
+                    onFightRow={handleStartFight}
+                    fightableRowIndex={firstFrontRow}
+                    onZoom={() => setZoomedPanel('threats')}
+                  />
+                  <MarketPanel
+                    compact
+                    market={market}
+                    onCardBuy={handleCardBuyClick}
+                    selectedCardId={selectedCard?.card?.id}
+                    canBuyCard={canBuyCard}
+                    hasSlotForCard={hasSlotForCard}
+                    isMyTurn={isMyTurn}
+                    highlightBuyables={highlightBuyables}
+                    onZoom={() => setZoomedPanel('market')}
+                  />
+                </div>
+
+                {zoomedPanel && (
+                  <div className="absolute inset-0 flex transition-transform duration-500" style={{ transform: zoomedPanel === 'market' ? 'translateX(-100%)' : 'translateX(0%)' }}>
+                    {['threats', 'market'].map((panel) => (
+                      <div key={panel} className="w-full flex-shrink-0 px-1">
+                        <div className="h-full bg-slate-950/70 border border-slate-800 rounded-3xl p-3 relative">
+                          <div className="absolute top-3 right-3 flex gap-2">
+                            <button
+                              onClick={() => setZoomedPanel(panel === 'threats' ? 'market' : 'threats')}
+                              className="px-2 py-1 text-[11px] rounded-full border border-slate-700 text-slate-200 hover:bg-slate-800"
+                            >
+                              Switch
+                            </button>
+                            <button
+                              onClick={() => setZoomedPanel(null)}
+                              className="p-1 rounded-full border border-slate-700 text-slate-200 hover:bg-slate-800"
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                          {panel === 'threats' ? (
+                            <ThreatsPanel
+                              rows={threatRows}
+                              boss={boss}
+                              onFightRow={handleStartFight}
+                              fightableRowIndex={firstFrontRow}
+                            />
+                          ) : (
+                            <MarketPanel
+                              market={market}
+                              onCardBuy={handleCardBuyClick}
+                              selectedCardId={selectedCard?.card?.id}
+                              canBuyCard={canBuyCard}
+                              hasSlotForCard={hasSlotForCard}
+                              isMyTurn={isMyTurn}
+                              highlightBuyables={highlightBuyables}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -470,6 +669,27 @@ export default function App({
           onAttemptStanceChange={handleFreeStanceChange}
           onExtendSlot={startExtendFlowWithChoice}
           canChangeStance={isMyTurn}
+          resourceOverride={activeFight ? resourceAfterFight : null}
+          onCardToggleForFight={activeFight ? handleCardToggleForFight : undefined}
+          onTokenToggleForFight={activeFight ? handleTokenClickForFight : undefined}
+          onConvertToken={onConvert}
+          stagedFightCards={
+            activeFight
+              ? { upgrades: fightPlayedUpgrades, weapons: fightPlayedWeapons }
+              : undefined
+          }
+          stagedFightTokens={
+            activeFight
+              ? {
+                  attack: fightAttackUsed,
+                  wild: fightWildAllocation,
+                  massUsed:
+                    (activePlayer?.tokens?.mass ??
+                      activePlayer?.tokens?.MASS ??
+                      0),
+                }
+              : undefined
+          }
         />
       </div>
 

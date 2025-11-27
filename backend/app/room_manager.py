@@ -298,7 +298,7 @@ class RoomManager:
             if user_obj:
                 record = fake_games_db.get(room.game_record_id)
                 if record:
-                    participant = next((p for p in record.participants if p.id == user_id), None)
+                    participant = next((p for p in record.participants if p.user.id == user_id), None)
                     if participant and participant.status == PlayerStatus.ACTIVE:
                         participant.status = PlayerStatus.DISCONNECTED
                 await self.game_manager.handle_player_leave(user_obj, room.game_record_id, PlayerStatus.DISCONNECTED)

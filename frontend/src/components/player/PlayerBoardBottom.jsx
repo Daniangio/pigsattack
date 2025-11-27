@@ -20,10 +20,17 @@ export default function PlayerBoardBottom({
   cardCatalog = [],
   onExtendSlot,
   canChangeStance = true,
+  resourceOverride = null,
+  onCardToggleForFight,
+  onTokenToggleForFight,
+  onConvertToken,
+  stagedFightCards,
+  stagedFightTokens,
 }) {
   if (!player) return null;
 
   const [collapsed, setCollapsed] = useState(false);
+  const [conversionOpen, setConversionOpen] = useState(false);
   const currentStance = player.stance;
   const stanceInfo = STANCE_CONFIG[currentStance] || STANCE_CONFIG[normalizeStance(currentStance)];
   const cardLookup = useMemo(() => {
@@ -59,7 +66,6 @@ export default function PlayerBoardBottom({
     mass: "Mass",
     wild: "Wild",
   };
-  const tokens = Object.entries(player.tokens || {}).filter(([, count]) => count > 0);
   const tokenStyles = {
     attack: { bg: "bg-red-900/60", border: "border-red-800", text: "text-red-200" },
     conversion: { bg: "bg-blue-900/60", border: "border-blue-800", text: "text-blue-200" },
@@ -92,6 +98,31 @@ export default function PlayerBoardBottom({
   const upgradeCards = (player.upgrades || []).map(resolveCard).filter(Boolean);
   const weaponCards = (player.weapons || []).map(resolveCard).filter(Boolean);
   const modalPlayers = players;
+  const stagedUpgrades = stagedFightCards?.upgrades || new Set();
+  const stagedWeapons = stagedFightCards?.weapons || new Set();
+  const stagedAttackTokens = stagedFightTokens?.attack || 0;
+  const stagedWildAllocation = stagedFightTokens?.wild || { R: 0, B: 0, G: 0 };
+  const stagedWildTotal = Object.values(stagedWildAllocation || {}).reduce((a, b) => a + (b || 0), 0);
+  const stagedMass = stagedFightTokens?.massUsed || 0;
+  const effectiveResources = resourceOverride || player.resources || {};
+  const conversionOptions = useMemo(() => {
+    const keys = [
+      { key: "R", icon: <Flame size={14} className="text-red-400" /> },
+      { key: "B", icon: <Zap size={14} className="text-blue-400" /> },
+      { key: "G", icon: <Shield size={14} className="text-green-400" /> },
+    ];
+    const res = effectiveResources;
+    const opts = [];
+    keys.forEach((from) => {
+      keys.forEach((to) => {
+        if (from.key === to.key) return;
+        const amount = Math.min(2, res[from.key] || 0);
+        if (amount <= 0) return;
+        opts.push({ from: from.key, to: to.key, amount, fromIcon: from.icon, toIcon: to.icon });
+      });
+    });
+    return opts;
+  }, [effectiveResources]);
 
   const renderSlots = (cards, availableSlots, type) => {
     const slots = [];
@@ -102,13 +133,24 @@ export default function PlayerBoardBottom({
       const isNextLocked = i === availableSlots && onExtendSlot;
       const baseClasses = "h-12 rounded-lg border flex flex-col justify-between p-1 text-[8px] leading-tight";
       if (card) {
+        const isStaged =
+          type === "upgrade"
+            ? stagedUpgrades.has(card.id) || stagedUpgrades.has(card.name)
+            : stagedWeapons.has(card.id) || stagedWeapons.has(card.name);
+        const handleCardClick = () => {
+          if (onCardToggleForFight) {
+            onCardToggleForFight({ ...card, type: type === "upgrade" ? "Upgrade" : "Weapon" });
+          } else {
+            previewCard(card.name, true);
+          }
+        };
         slots.push(
           <div
             key={`${type}-${i}`}
-            className={`${baseClasses} bg-slate-900 border-slate-700 cursor-pointer`}
+            className={`${baseClasses} bg-slate-900 border-slate-700 cursor-pointer ${isStaged ? "border-emerald-400" : ""}`}
             onMouseEnter={() => previewCard(card.name)}
             onMouseLeave={clearPreview}
-            onClick={() => previewCard(card.name, true)}
+            onClick={handleCardClick}
           >
             <div className="flex justify-between items-center text-[10px] text-slate-400 gap-1">
               <span className="uppercase tracking-[0.08em] truncate max-w-[70%]">{card.name}</span>
@@ -156,23 +198,23 @@ export default function PlayerBoardBottom({
     return slots;
   };
 
+  const tokenChipClass = "px-2 py-1 text-[11px] rounded-md border cursor-pointer";
+
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex justify-end px-6 text-[11px] text-slate-400">
-        <button
-          type="button"
-          onClick={() => setCollapsed((v) => !v)}
-          className="px-3 py-1 rounded-full border border-slate-700 text-slate-200 hover:bg-slate-800"
-        >
-          {collapsed ? "Expand Board" : "Collapse Board"}
-        </button>
-      </div>
-
       <div
         className={`relative bg-slate-950/90 border-t border-slate-800 backdrop-blur-xl ${
           collapsed ? "h-12 px-4 py-2" : "h-44 px-6 py-4"
         }`}
       >
+        <button
+          type="button"
+          onClick={() => setCollapsed((v) => !v)}
+          className="absolute top-2 right-2 p-1 rounded-full border border-slate-700 text-slate-200 hover:bg-slate-800"
+          title={collapsed ? "Expand board" : "Collapse board"}
+        >
+          {collapsed ? "▼" : "▲"}
+        </button>
         {stanceMenuOpen && (
           <StanceModal
             players={modalPlayers}
@@ -186,7 +228,7 @@ export default function PlayerBoardBottom({
         )}
 
         {collapsed ? (
-          <div className="h-full flex items-center gap-4 overflow-hidden">
+          <div className="h-full flex items-center gap-4 overflow-visible">
             <div
               onClick={onToggleStance}
               className={`w-10 h-10 rounded-full border-2 ${stanceColorRing(currentStance)} bg-slate-900 flex items-center justify-center text-[10px] uppercase tracking-[0.2em] text-slate-200 cursor-pointer`}
@@ -202,7 +244,7 @@ export default function PlayerBoardBottom({
             </div>
           </div>
         ) : (
-          <div className="h-full flex items-start gap-4 overflow-hidden">
+          <div className="h-full flex items-start gap-4 overflow-visible">
             {/* Player icon */}
           <div className="flex flex-col items-center gap-2 min-w-[72px]">
             <div
@@ -235,12 +277,11 @@ export default function PlayerBoardBottom({
             </div>
 
             {/* Resources + gains */}
-            <div className="flex flex-col justify-center gap-2 min-w-[160px]">
+            <div className="flex flex-col justify-center gap-1 min-w-[100px]">
               <div className="flex items-center gap-2">
                 <ResourcePip
-                  label="R"
                   icon={Flame}
-                  value={player.resources?.R || 0}
+                  value={effectiveResources?.R || 0}
                   color={{
                     border: "border-red-900",
                     bg: "bg-red-950/40",
@@ -248,14 +289,13 @@ export default function PlayerBoardBottom({
                   }}
                 />
                 {stanceInfo && (
-                  <span className="text-xs text-slate-300 min-w-[70px]">+{stanceInfo.production.R} / rd</span>
+                  <span className="text-xs text-slate-300 min-w-[50px]">+{stanceInfo.production.R} / rd</span>
                 )}
               </div>
               <div className="flex items-center gap-2">
                 <ResourcePip
-                  label="B"
                   icon={Zap}
-                  value={player.resources?.B || 0}
+                  value={effectiveResources?.B || 0}
                   color={{
                     border: "border-blue-900",
                     bg: "bg-blue-950/40",
@@ -263,14 +303,13 @@ export default function PlayerBoardBottom({
                   }}
                 />
                 {stanceInfo && (
-                  <span className="text-xs text-slate-300 min-w-[70px]">+{stanceInfo.production.B} / rd</span>
+                  <span className="text-xs text-slate-300 min-w-[50px]">+{stanceInfo.production.B} / rd</span>
                 )}
               </div>
               <div className="flex items-center gap-2">
                 <ResourcePip
-                  label="G"
                   icon={Shield}
-                  value={player.resources?.G || 0}
+                  value={effectiveResources?.G || 0}
                   color={{
                     border: "border-green-900",
                     bg: "bg-green-950/40",
@@ -278,30 +317,116 @@ export default function PlayerBoardBottom({
                   }}
                 />
                 {stanceInfo && (
-                  <span className="text-xs text-slate-300 min-w-[70px]">+{stanceInfo.production.G} / rd</span>
+                  <span className="text-xs text-slate-300 min-w-[50px]">+{stanceInfo.production.G} / rd</span>
                 )}
               </div>
             </div>
 
             {/* Tokens */}
-            <div className="flex flex-col justify-center gap-2 min-w-[150px]">
-              {tokens.length ? (
-                tokens.map(([key, count]) => {
-                  const style = tokenStyles[key] || {};
-                  return (
-                    <div
-                      key={key}
-                      className={`px-2 py-1 rounded-lg border flex items-center gap-2 ${style.bg || "bg-slate-900"} ${
-                        style.border || "border-slate-700"
-                      }`}
-                    >
-                      <span className={`uppercase tracking-[0.12em] ${style.text || "text-slate-200"}`}>
-                        {tokenLabels[key] || key}
-                      </span>
-                      <span className={`font-semibold ${style.text || "text-slate-50"}`}>{count}</span>
-                    </div>
-                  );
-                })
+            <div className="relative flex flex-col justify-center gap-2 min-w-[200px]">
+              {["attack", "wild", "mass", "conversion"].some((k) => (player.tokens?.[k] ?? player.tokens?.[k?.toUpperCase?.()] ?? 0) > 0) ? (
+                <div className="grid grid-cols-2 gap-2">
+                  {["attack", "wild", "mass", "conversion"].map((key) => {
+                    const total =
+                      player.tokens?.[key] ??
+                      player.tokens?.[key?.toUpperCase?.()] ??
+                      0;
+                    if (total <= 0) return null;
+                    const style = tokenStyles[key] || {};
+                    const remaining =
+                      key === "attack"
+                        ? Math.max(0, total - stagedAttackTokens)
+                        : key === "wild"
+                          ? Math.max(0, total - stagedWildTotal)
+                          : total;
+                    
+                    // Display token even if remaining is 0, just disable
+                    const displayTotal = total;
+                    const isDisabled = remaining <= 0 && key !== "conversion";
+
+                    const isConversion = key === "conversion";
+                    const isConversionActive = isConversion && displayTotal > 0;
+                    
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        className={`${tokenChipClass} ${style.bg || "bg-slate-900"} ${style.border || "border-slate-700"} ${style.text || "text-slate-200"}
+                                   ${isDisabled ? "opacity-50 cursor-not-allowed" : "hover:border-amber-400"}
+                                   ${isConversionActive ? "relative" : ""}
+                                  `}
+                        onClick={() => {
+                          if (isConversionActive) {
+                            setConversionOpen(true);
+                          } else if (!isDisabled) {
+                            onTokenToggleForFight?.(key);
+                          }
+                        }}
+                        disabled={isDisabled && !isConversionActive}
+                        draggable={Boolean(onTokenToggleForFight) && !isConversion}
+                        onDragStart={(e) => {
+                          if (onTokenToggleForFight && !isConversion) {
+                            e.dataTransfer.setData("token_type", key);
+                          }
+                        }}
+                        title={
+                          isConversionActive ? "Click to convert resources" : (isDisabled ? "No tokens remaining" : `${remaining} available`)
+                        }
+                      >
+                        {tokenLabels[key] || key} × {displayTotal}
+                        {/* Correctly position the overlay anchor on the Conversion Token button */}
+                        {isConversionActive && conversionOpen && (
+                          <div className="absolute z-50 bottom-full right-0 mb-2">
+                            <div className="relative bg-slate-900 border border-slate-700 rounded-xl p-3 shadow-xl w-64">
+                              <div className="absolute -bottom-2 right-4 w-4 h-4 bg-slate-900 border-b border-l border-slate-700 transform rotate-45 z-0"></div>
+                              <div className="relative z-10">
+                                <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.16em] text-slate-400 mb-2">
+                                  <span>Use Conversion Token</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setConversionOpen(false)}
+                                    className="text-slate-300 hover:text-amber-200 text-xs"
+                                    aria-label="Close conversion panel"
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                                <div className="flex flex-col gap-2">
+                                  {conversionOptions.length === 0 && (
+                                    <div className="text-[11px] text-slate-500">Not enough resources to convert (Min 2).</div>
+                                  )}
+                                  {conversionOptions.map((opt, idx) => (
+                                    <button
+                                      key={`${opt.from}-${opt.to}-${idx}`}
+                                      type="button"
+                                      onClick={() => {
+                                        onConvertToken?.(opt.from, opt.to);
+                                        setConversionOpen(false);
+                                      }}
+                                      className="w-full px-2 py-2 rounded-lg border border-slate-700 bg-slate-800/60 text-slate-100 text-sm hover:border-amber-400 flex items-center justify-between transition-colors"
+                                    >
+                                      <span className="flex items-center gap-2">
+                                        {opt.fromIcon}
+                                        <span className="text-slate-200">{opt.amount}</span>
+                                      </span>
+                                      <span className="text-[11px] uppercase tracking-[0.16em] text-slate-400">→</span>
+                                      <span className="flex items-center gap-2">
+                                        {opt.toIcon}
+                                        <span className="text-slate-200">{opt.amount}</span>
+                                      </span>
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                            {/* Backdrop to close when clicking outside */}
+                            <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setConversionOpen(false); }} />
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               ) : (
                 <div className="text-[11px] text-slate-500">No tokens</div>
               )}

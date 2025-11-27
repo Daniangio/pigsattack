@@ -14,7 +14,15 @@ const chunkBy = (items, size) => {
   return chunks;
 };
 
-export default function ThreatsPanel({ compact, playersCount = 0, rows, boss, onFightRow, onZoom }) {
+export default function ThreatsPanel({
+  compact,
+  playersCount = 0,
+  rows,
+  boss,
+  onFightRow,
+  onZoom,
+  fightableRowIndex = 0,
+}) {
   const bossCard = boss || ThreatData.boss;
   const threatRows = rows && rows.length ? rows : ThreatData.rows;
   const allThreats = threatRows.flat();
@@ -46,21 +54,25 @@ export default function ThreatsPanel({ compact, playersCount = 0, rows, boss, on
           <div className="flex-1 flex flex-col gap-2 overflow-y-auto">
             {compactRows.map((row, i) => (
               <div key={i} className="flex gap-2">
-                {row.map((threat) => (
-                  <ThreatCardCompact
-                    key={threat.id}
-                    threat={threat}
-                    onFight={onFightRow}
-                    rowIndex={
-                      threatRows.findIndex((r) => r.some((t) => t.id === threat.id)) >= 0
-                        ? threatRows.findIndex((r) => r.some((t) => t.id === threat.id))
-                        : i
-                    }
-                    isFront={
-                      threatRows.find((r) => r.some((t) => t.id === threat.id))?.[0]?.id === threat.id
-                    }
-                  />
-                ))}
+                {row.map((threat) => {
+                  const foundRowIndex = threatRows.findIndex((r) => r.some((t) => t.id === threat.id));
+                  const resolvedRowIndex = foundRowIndex >= 0 ? foundRowIndex : i;
+                  const isFront =
+                    foundRowIndex >= 0
+                      ? threatRows[foundRowIndex]?.[0]?.id === threat.id
+                      : threatRows.find((r) => r.some((t) => t.id === threat.id))?.[0]?.id === threat.id;
+                  const canFight = isFront && resolvedRowIndex === fightableRowIndex;
+                  return (
+                    <ThreatCardCompact
+                      key={threat.id}
+                      threat={threat}
+                      onFight={onFightRow}
+                      rowIndex={resolvedRowIndex}
+                      isFront={isFront}
+                      canFight={canFight}
+                    />
+                  );
+                })}
               </div>
             ))}
           </div>
@@ -73,12 +85,14 @@ export default function ThreatsPanel({ compact, playersCount = 0, rows, boss, on
                 <div key={`row-${rowIdx}`} className="flex gap-3">
                   {row.map((threat) => {
                     const isFront = row[0]?.id === threat.id;
+                    const canFight = isFront && rowIdx === fightableRowIndex;
                     return (
                       <ThreatCardMini
                         key={threat.id}
                         threat={threat}
                         rowIndex={rowIdx}
                         isFront={isFront}
+                        canFight={canFight}
                         onFight={onFightRow}
                       />
                     );

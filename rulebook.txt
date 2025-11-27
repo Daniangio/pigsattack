@@ -1,99 +1,283 @@
-Wild Pigs Will Attack!
-A Game of Scrap, Strategy, and Survival (v2.1)
-1. Game Overview
-You are a survivor huddled in the darkness. Each night, mutated pigs—driven by Ferocity, Cunning, and Mass—emerge from the wilderness. Unlike previous versions where you reacted to random threats, you must now choose your battles.
-In this strategic survival game for 2–5 players, you will draft the threats you wish to fight, build a permanent engine of defenses on your dashboard, and manage your "Stance" to counter specific enemy types.
-The game lasts 15 Rounds (divided into 3 Eras). The goal is no longer just to survive, but to thrive. The winner is the player with the most Victory Points (VP) derived from Trophies, Upgrades, and Weaponry.
-2. Components
-1 Initiative Token (Rotates every round).
-Player Dashboards: 5 distinct boards containing the Stance Triangle, Tech Tracks, and the Engagement Zone.
-Stance Markers: 1 per player.
-Threat Decks: Day, Twilight, and Night decks.
-Market Deck: A deck of Arsenal (Weapons) and Item cards.
-Scrap Pool: A bag containing 150 Scrap tokens (Red Parts, Blue Wiring, Green Plates).
-The Horde Board: A holding area for unpicked pigs.
-3. The Player Dashboard & Stance System
-The core of the game is your Dashboard, which represents your character's build.
-A. The Stance Triangle
-Your defense is determined by where your Stance Marker is located on a triangular grid.
-Red Node (Aggressive): High Red Defense / 0 Blue / 0 Green.
-Blue Node (Tactical): 0 Red / High Blue Defense / 0 Green.
-Green Node (Hunkered): 0 Red / 0 Blue / High Green Defense.
-Center Node (Survivor): Balanced Defense across all three stats.
-B. The Tech Tracks
-Each Node has a corresponding "Tech Track" that determines its power level.
-Level 0 (Start): Base Defense.
-Level 1-4: Adds permanent defense to that Stance.
-Example: If your Red Track is Level 2 (Value 5), and you are in Red Stance, your Red Defense is 5. If you switch to Blue Stance, your Red Defense becomes 0.
-4. Setup
-Prepare Threat Decks: Shuffle Day, Twilight, and Night decks separately.
-Create the Pool: Place the Scrap Pool and Market Deck (reveal 4 items) in the center.
-Player Setup: Give each player a Dashboard and tokens.
-Starting Resources: Each player draws 3 Scrap randomly from the bag.
-Initial Stance: Players place their Stance Marker on the Center Node (1/1/1).
-5. Gameplay Loop (The Standard Round)
-Rounds 1-4 of each Era follow this standard loop.
-Phase 1: Wilderness (Reveal)
-Reveal N+1 Threat Cards from the current Era deck (where N is the number of players) and place them in the center of the table.
-Phase 2: Player Turns (Clockwise)
-Starting with the player holding the Initiative Token and proceeding clockwise, each player performs their entire turn:
-Step A: Stance Shift You may move your Stance Marker one step along a line (e.g., Center to Red) for free.
-Constraint: You cannot jump corner-to-corner (Red to Green) without using the Refit action.
-Step B: Perform One Action Choose and resolve exactly ONE of the following:
-SCAVENGE: Draw 2 Scrap from the pool.
-MARKET: Buy 1 Card from the Market Row.
-Pay the cost listed on the card.
-Instant Refill: Immediately draw a new card to replace the purchased one.
-TINKER (Tech Up): Upgrade one of your Tech Tracks by one level.
-Cost: Pay 4 Scrap.
-Requirement: At least 2 Scrap must match the color of the track (For Center Track, pay 4 Mixed Scrap).
-REFIT:
-Gain 1 Scrap.
-Move your Stance Marker to ANY node instantly (teleport).
-Step C: Engage Threat Select ONE Threat Card from the center pool.
-Take the card and place it on your dashboard's Engagement Zone (?).
-Note: You cannot pass. You must take a threat.
-Phase 3: The Clash (Asynchronous Resolution)
-Once all players have finished their turns, everyone resolves combat against the pig in their Engagement Zone simultaneously.
-Calculate Defense:
-Check your Current Stance and Tech Level.
-Add bonuses from Arsenal Cards (spend charges if necessary).
-Compare to Threat:
-FAIL: Defense < All Pig Stats.
-Gain 1 Injury Token (-2 VP).
-Discard Pig.
-REPEL: Defense \ge At least one Stat.
-No Damage.
-Discard Pig.
-SLAY: Defense \ge Highest Stat.
-No Damage.
-Keep Card as Trophy (+VP).
-Butcher's Bonus: Gain 1 Scrap of your choice.
-Phase 4: Cleanup
-The Leftover: The one unpicked Threat Card is moved to the Horde Board (face up).
-Income: Every player draws 1 Random Scrap.
-Initiative: Pass the Initiative Token to the left.
-6. The Climax (Round 5: The Horde)
-The 5th Round of every Era (Rounds 5, 10, 15) is a Horde Round.
-1. Standard Play Play Phases 1, 2, and 3 as normal. The unpicked pig from this round is added to the Horde Board.
-2. Preparation (The Panic) Immediately after resolving the Round 5 pig:
-Supply Drop: All players gain 3 Scrap of their choice.
-Emergency Action: In Initiative Order, each player may perform the following (optional):
-Buy 1 Market Card (paying cost).
-AND
-Perform 1 Tinker Upgrade (paying cost).
-(Market refills immediately after each buy).
-Formation: All players may change their Stance to ANY node for free.
-3. The Onslaught The Horde Board (containing 5 pigs) attacks ALL players.
-Resolve the pigs one by one in the order they were added.
-Rules of Engagement:
-Survival Focus: Killing Horde pigs grants NO Trophies and NO Butcher's Bonus.
-Triggers: "On Kill" effects from Weapons/Abilities DO trigger.
-Failure: Taking damage from a Horde pig works normally (Gain 1 Injury).
-4. Era Change Discard the Horde Stack. Proceed to the next Era.
-7. Winning the Game
-The game ends after the Round 15 Horde is resolved. Calculate Victory Points (VP):
-Trophies: Sum the VP value of all Slayed Pigs (Day=1, Twilight=3, Night=5).
-Injuries: Subtract 2 VP for every Injury token.
-Arsenal: Add VP from specific Arsenal cards or fully upgraded Tech Tracks.
-The player with the most VP wins. Tiebreaker: Most Trophies > Fewest Injuries > Most Scrap.
+🐗 WILD PIGS WILL ATTACK! — RULEBOOK v3.0
+A tactical, resource-driven survival game for 1–5 players.
+This version uses the stance economy, resource-based combat, three token types, upgrades/weapons with VP, and three-row threat armies with Era Bosses.
+
+1. GAME OVERVIEW
+The world has fallen to mutated boars whose Ferocity (R), Cunning (B), and Mass (G) threaten the last survivors.
+ Each player builds a personal engine using stances, upgrades, weapons, and tokens, then fights through two armies—Day and Night—each culminating in a Boss with layered damage thresholds.
+Players generate resources each round depending on their stance, use them to defeat threats, upgrade their character, extend slots, or reposition strategically.
+The winner is the survivor with the most Victory Points (VP) from threats, upgrades, boss tokens, and bonuses.
+
+2. COMPONENTS
+Player Components
+1 Player Dashboard (Stance wheel, resource tracks, upgrade/weapon slot display)
+Stance Marker
+Slot markers (Upgrade slots, Weapon slots)
+
+Cards
+Threat Deck (Day threats + Night threats)
+Boss Deck (One Boss per Era)
+Upgrades Deck
+Weapons Deck
+
+Tokens
+Attack Tokens (+2 Red Ferocity, one use)
+Conversion Tokens (convert up to 2 resources)
+Mass Tokens (permanent −2 Mass)
+Wild Tokens (+1 of any resource once)
+Boss Tokens (VP from boss thresholds)
+
+Misc
+Round Marker
+VP markers
+Resource cubes/tokens (Red, Blue, Green)
+Maximum tokens per type per player: 3.
+
+3. STANCES & RESOURCE ENGINE
+Stances determine:
+Resources generated at the start of your turn
+A discount applied to the next fight
+Players may change stance using actions (see Actions section).
+
+Stances Table
+Stance     Start-of-round  Production Fight Discount
+Aggressive 4R / 0B / 1G    Reduce R cost by 1
+Tactical   1R / 3B / 1G    Reduce B cost by 1
+Hunkered   0R / 1B / 4G    Reduce G cost by 1
+Balanced   2R / 2B / 1G    Reduce any ONE stat by 1
+
+Stance Movement Rule
+You may always move one step between adjacent stances (Agg ↔ Bal ↔ Tac ↔ Bal ↔ Hunk ↔ Bal).
+To switch between corner stances (Agg ↔ Tac, Tac ↔ Hunk, Hunk ↔ Agg) you must pass through Balanced unless you use the Realign action.
+
+4. TOKENS (Core Temporary Mechanics)
+Attack Token
+One use
+Gives +2 Red resources for a single fight
+Great for Feral threats or boss spikes
+
+Conversion Token
+Convert up to 2 resources of a single color into another color
+Use anytime
+Blue-build speciality
+
+Mass Token
+Permanent effect
+Reduces all Mass (G) costs by −2
+Extremely rare and powerful
+From Massive threats or Green upgrades
+
+Wild Token
+One use
+Provides +1 resource of ANY color
+Smooths awkward cost requirements
+
+Token Limits:
+Players may hold no more than 3 of a given token type.
+
+5. GAME SETUP
+Give each player:
+A dashboard
+A stance marker (start in Balanced)
+1 upgrade slot, 1 weapon slot (both can be extended up to 4)
+
+Shuffle:
+Day Threat Deck
+Night Threat Deck
+Upgrades Deck
+Weapons Deck
+Boss Deck (2 bosses: Day Boss, Night Boss)
+
+Build the Day Army:
+Three rows of 4 threats each (for a standard game)
+Reveal the Day Boss beside them
+Place Night Army & Night Boss aside for later.
+Decide first player using any method.
+
+6. ROUND STRUCTURE
+Each round, players take turns clockwise.
+a. Start-of-Round Phase
+Each player:
+Produces resources from their stance
+Gains any per-round upgrade income
+Tokens and unspent resources DO NOT expire unless a card says so.
+
+b. Player Turn (Choose ONE Action)
+ACTION A — Fight a Threat
+You may fight a threat only if you can fully pay its cost using:
+Resources from production
+Tokens
+Weapon effects
+Mass token reductions
+Stance discount (−1)
+
+You may only attack:
+The front threat in any of the three rows
+Second-row threats only if a weapon/ability allows (e.g., Snipe Scope)
+
+If defeated:
+Gain VP equal to threat’s VP value
+Gain its spoil reward (token or consumable)
+Move it from the row to your spoils zone. If a threat has a "CONSUME:" ability,
+you can consume it any time to activate its effect (discard from spoils zone after resolving effect).
+Slide the column downward to align first threat of that column
+to first threats of other columns
+
+ACTION B — Buy an Upgrade
+Pay the upgrade cost in resources.
+Place it in an available Upgrade Slot.
+Upgrades grant VP when purchased and permanent effects.
+If no slots are available, this action cannot be performed.
+
+ACTION C — Extend a Slot
+Choose either:
++1 Upgrade Slot OR
++1 Weapon Slot
+
+Then gain 1 Wild Token.
+Max slots: 4 each.
+If you have maxed all slots, this action cannot be performed.
+
+ACTION D — Realign
+Move your stance to ANY stance, bypassing movement rules.
+Gain 1 Wild Token.
+This action is your tempo reset and strategic repositioning tool.
+If you are in a stance from which you can move to any other stance in one step
+(i.e., following the rules), you cannot perform this action.
+
+ACTION E - Scavenge
+Gain 1 Wild Token
+
+c. End turn
+Turn passes to next player clockwise.
+When all players played a turn in a round, initiative token moves counter-clockwise.
+This means that the last player in first round becomes the first player in next round
+(effectively playing two turns in a row).
+
+7. THREATS & SPOILS
+Every threat has:
+A cost vector (e.g., 6R + 2B or 5G + 1R)
+A type (Feral, Cunning, Massive, or Hybrid)
+A VP reward
+A spoil reward (token or consumable ability)
+
+Examples of Spoils
+Attack Token
+Conversion Token
+Mass Token (rare)
+Weapon Discount (Consume this card: reduce weapon cost by 2”)
+Snipe Consumable (“Consume: attack a second-row threat”)
+Next Turn Bonus (“Next Round: Discount 1B in fights”)
+
+Day threats: cost 6–12
+Night threats: cost 10–18
+
+8. UPGRADES
+Upgrades provide:
+Permanent resource bonuses
+Token generation
+Combat discounts
+Stance-dependent boosts
+VP on purchase
+
+See the CSV for full reference.
+Examples:
+Ferocity Modulator: +1R per turn
+Precision Optics: Reduce highest stat by 1 in fights
+Mass Core: +2G per turn
+Catalyst Array: Convert Wild → Conversion
+Versatility Module: +2 Wild tokens per round
+Upgrades must be placed in slots; slot extensions allow more upgrades.
+
+9. WEAPONS
+Weapons offer:
+Limited-use or permanent stat reductions
+Snipe effects
+Conversion effects
+Combat manipulation
+
+Placed in weapon slots.
+Examples:
+Shockblade: 3 uses, −3R cost per attack
+Thermal Lance: 1 use, −3 cost to all stats
+Snipe Scope: -2B cost and attack second-row
+Phase Gauntlet: Convert 1 resource freely each round
+
+10. BOSSES & ERA END
+Each Era ends with a Boss Fight Phase.
+Every Boss card shows multiple thresholds.
+Each threshold has:
+A resource cost
+Matching rewards (Boss tokens, one-use attack cards, slot extensions, VP bonus)
+Players independently attempt any one threshold per Era.
+Boss is not shared—each player fights their own attempt.
+Rewards stack across Eras.
+
+11. VICTORY CONDITIONS
+At the end of the Night Boss Phase, totally:
+VP from Threats
+VP from Upgrades
+VP from Boss Tokens
+Bonus VP from items or special awards
+
+Highest total wins.
+Ties:
+Most Night Threats defeated
+Most Mass tokens
+Most remaining resources
+
+12. EXAMPLES
+Example Fight
+You are in Tactical Stance.
+ Production: 1R, 3B, 1G.
+ Discount: −1B.
+You attack a threat costing 2R + 5B + 1G.
+Modified cost:
+2R
+(5B − 1B = 4B)
+1G
+
+
+You spend:
+1R (production) + 1R from pool
+3B production + 1B from Wild token
+1G from production
+
+Threat defeated → gain its spoil.
+
+Example Realign Turn
+You need Green next turn.
+You use Realign:
+Switch to Hunkered
+Gain 1 Wild token
+ No threat fought this turn.
+
+Next round you produce 0R,1B,4G and get −1G discount.
+
+Example Mixed Build
+You have:
+Precision Optics (−1 to highest stat)
+Catalyst Array (Wild → Conversion)
+Impact Maul (−1G)
+2 Mass Tokens (−4G total)
+
+Now a Night threat of 10G + 2R effectively costs:
+10G − 4G (Mass tokens) − 1G (Maul) = 5G
+2R
+
+Very manageable with two Wild tokens and stance production.
+
+13. FULL TURN SUMMARY (CHEAT SHEET)
+Start of Round
+ → Produce resources
+ → Gain per-round tokens/effects
+Player Turn (one action):
+Fight
+Buy Upgrade
+Extend Slot (+1 Wild)
+Realign (change stance + Wild)
+Scavenge (+1 Wild)
+
+End of Round
+ → Next player leads next round
+ → Threat rows persist until defeated

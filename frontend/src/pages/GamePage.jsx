@@ -39,16 +39,19 @@ export default function GamePage() {
   );
 
   const handleFightRow = useCallback(
-    (rowIndex) => {
-      if (rowIndex === undefined || rowIndex === null) return;
-      const activePlayer = gameState?.players?.[activePlayerId];
-      const payload = { row: rowIndex };
-      if (activePlayer?.stance === "BALANCED") {
-        payload.discount_resource = "R";
-      }
+    (payload) => {
+      if (!payload || payload.row === undefined || payload.row === null) return;
       handleGameAction("fight", payload);
     },
-    [gameState, activePlayerId, handleGameAction]
+    [handleGameAction]
+  );
+
+  const handleConvert = useCallback(
+    (fromRes, toRes) => {
+      if (!fromRes || !toRes) return;
+      handleGameAction("convert", { from: fromRes, to: toRes });
+    },
+    [handleGameAction]
   );
 
   const handleBuyUpgrade = useCallback(
@@ -170,6 +173,7 @@ export default function GamePage() {
               gameData={gameState}
               userId={user?.id}
               onFightRow={handleFightRow}
+              onConvert={handleConvert}
               onBuyUpgrade={handleBuyUpgrade}
               onBuyWeapon={handleBuyWeapon}
               onExtendSlot={handleExtendSlot}

@@ -1,8 +1,9 @@
 import React from "react";
 import { setHoverPreview } from "../hover/HoverPreviewPortal";
-import { formatCost, formatCostParts } from "../../utils/formatters";
+import { formatCostParts } from "../../utils/formatters";
 
-export default function ThreatCardCompact({ threat, onFight, rowIndex, isFront }) {
+export default function ThreatCardCompact({ threat, onFight, rowIndex, isFront, canFight }) {
+  const fightAllowed = typeof canFight === "boolean" ? canFight : isFront;
   const handleHover = () =>
     setHoverPreview({
       type: "threat",
@@ -17,8 +18,8 @@ export default function ThreatCardCompact({ threat, onFight, rowIndex, isFront }
       sourceId: threat.id,
       lock: true,
       actionLabel: "Fight",
-      actionDisabled: !isFront || !onFight,
-      onAction: onFight ? () => onFight(rowIndex) : undefined,
+      actionDisabled: !fightAllowed || !onFight,
+      onAction: onFight ? () => onFight(rowIndex, threat) : undefined,
     });
 
   return (
@@ -50,10 +51,14 @@ export default function ThreatCardCompact({ threat, onFight, rowIndex, isFront }
       {onFight && (
         <button
           type="button"
-          onClick={() => onFight(rowIndex)}
-          disabled={!isFront}
+          onClick={(e) => {
+            e.stopPropagation();
+            setHoverPreview(null);
+            onFight(rowIndex, threat);
+          }}
+          disabled={!fightAllowed}
           className={`text-[10px] uppercase tracking-[0.12em] rounded-md px-2 py-1 border ${
-            isFront
+            fightAllowed
               ? "border-amber-400 text-amber-200 hover:bg-amber-400/10"
               : "border-slate-800 text-slate-600 cursor-not-allowed"
           }`}
