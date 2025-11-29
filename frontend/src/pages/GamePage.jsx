@@ -75,7 +75,7 @@ export default function GamePage() {
   );
 
   const handleEndTurn = useCallback(
-    () => handleGameAction("end_turn", {}),
+    (payload = {}) => handleGameAction("end_turn", payload),
     [handleGameAction]
   );
 
@@ -178,7 +178,6 @@ export default function GamePage() {
               onBuyWeapon={handleBuyWeapon}
               onExtendSlot={handleExtendSlot}
               onRealign={handleRealign}
-              onStanceStep={(stance) => handleGameAction("stance_step", { stance })}
               onLocalToast={pushToast}
               onEndTurn={handleEndTurn}
             />

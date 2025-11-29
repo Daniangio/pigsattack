@@ -213,7 +213,7 @@ class GameManager:
             return
 
         if not self.room_manager:
-            print(f"Error: RoomManager not set in GameManager. Cannot broadcast.")
+            print("Error: RoomManager not set in GameManager. Cannot broadcast.")
             return
 
         if specific_user_id:
@@ -322,50 +322,83 @@ class GameManager:
             if not active_id or active_id not in bot_ids:
                 break
             try:
-                action = self._sample_bot_action(game, active_id)
-                if not action:
-                    await self.player_action(game_id, active_id, "end_turn", {})
-                    break
-                await self.player_action(game_id, active_id, action["type"], action["payload"])
+                # 1) Optional buy if available
+                buy_action = self._sample_bot_buy(game, active_id)
+                if buy_action:
+                    await self.player_action(game_id, active_id, buy_action["type"], buy_action["payload"])
+                    continue
+
+                # 2) Main action (stance change or extend slot)
+                main_action = self._sample_bot_main_action(game, active_id)
+                if main_action:
+                    await self.player_action(game_id, active_id, main_action["type"], main_action["payload"])
+                    continue
+
+                # 3) Nothing else to do, end turn
+                await self.player_action(game_id, active_id, "end_turn", {})
+                break
             except Exception as e:
                 print(f"Bot error in game {game_id}: {e}")
                 break
 
-    def _sample_bot_action(self, game: GameSession, bot_id: str) -> Optional[Dict[str, Any]]:
+    def _sample_bot_buy(self, game: GameSession, bot_id: str) -> Optional[Dict[str, Any]]:
         state = game.state
         player = state.players.get(bot_id)
-        if not player:
+        if not player or getattr(player, "buy_used", False):
             return None
-        actions: List[Dict[str, Any]] = []
-        # Extend slot
-        if player.upgrade_slots < 4 or player.weapon_slots < 4:
-            choice = "upgrade" if (player.upgrade_slots < player.weapon_slots) else "weapon"
-            actions.append({"type": "extend_slot", "payload": {"slot_type": choice}})
-        else:
-            actions.append({"type": "extend_slot", "payload": {"slot_type": None}})
-        # Tinker to random stance
-        from game_core.models import Stance
-        for stance in Stance:
-            if stance != player.stance:
-                actions.append({"type": "realign", "payload": {"stance": stance.value}})
-        # Buy upgrades/weapons if affordable and slots
+
         def can_afford(cost):
             for k, v in cost.items():
                 if player.resources.get(k, 0) < v:
                     return False
             return True
+
         def has_slot(card_type: str):
             if card_type == "Upgrade":
                 return len(player.upgrades) < player.upgrade_slots
             if card_type == "Weapon":
                 return len(player.weapons) < player.weapon_slots
             return True
+
+        purchasable: List[Dict[str, Any]] = []
         for card in state.market.upgrades:
             if can_afford(card.cost) and has_slot("Upgrade"):
-                actions.append({"type": "buy_upgrade", "payload": {"card_id": card.id}})
+                purchasable.append({"type": "buy_upgrade", "payload": {"card_id": card.id}})
         for card in state.market.weapons:
             if can_afford(card.cost) and has_slot("Weapon"):
-                actions.append({"type": "buy_weapon", "payload": {"card_id": card.id}})
+                purchasable.append({"type": "buy_weapon", "payload": {"card_id": card.id}})
+
+        if not purchasable:
+            return None
+        return random.choice(purchasable)
+
+    def _sample_bot_main_action(self, game: GameSession, bot_id: str) -> Optional[Dict[str, Any]]:
+        state = game.state
+        player = state.players.get(bot_id)
+        if not player or getattr(player, "action_used", False):
+            return None
+
+        actions: List[Dict[str, Any]] = []
+        # Extend slot if there is room
+        if player.upgrade_slots < 4:
+            actions.append({"type": "extend_slot", "payload": {"slot_type": "upgrade"}})
+        if player.weapon_slots < 4:
+            actions.append({"type": "extend_slot", "payload": {"slot_type": "weapon"}})
+
+        # Random stance change
+        stance_choices = [s for s in Stance if s != player.stance]
+        if stance_choices:
+            target = random.choice(stance_choices)
+            actions.append({"type": "realign", "payload": {"stance": target.value}})
+
+        def can_afford(cost):
+            for k, v in cost.items():
+                if player.resources.get(k, 0) < v:
+                    return False
+            return True
+
+        if not actions:
+            return None
         if not actions:
             return None
         return random.choice(actions)

@@ -1,26 +1,42 @@
 {
-  "boss": {
-    "id": "boss-day",
-    "name": "Titan Boar",
-    "vp": 10,
-    "thresholds": [
-      { "label": "Light Strike", "cost": { "R": 6, "B": 4, "G": 0 }, "reward": "Boss Token x1" },
-      { "label": "Crushing Blow", "cost": { "R": 8, "B": 0, "G": 4 }, "reward": "Boss Token x2 + Upgrade Slot" },
-      { "label": "Perfect Kill", "cost": { "R": 10, "B": 6, "G": 4 }, "reward": "Boss Token x3 + 4 VP" }
-    ]
-  },
-  "rows": [
-    [
-      { "id": "t1", "name": "Razorbacks", "cost": { "R": 6, "B": 0, "G": 1 }, "vp": 3, "type": "Feral", "reward": "Attack Token x1" },
-      { "id": "t2", "name": "Scrap Ambushers", "cost": { "R": 4, "B": 2, "G": 0 }, "vp": 2, "type": "Hybrid", "reward": "Conversion Token x1" }
-    ],
-    [
-      { "id": "t3", "name": "Spine Sprinters", "cost": { "R": 3, "B": 3, "G": 0 }, "vp": 2, "type": "Cunning", "reward": "Wild Token x1" },
-      { "id": "t4", "name": "Wall Breakers", "cost": { "R": 2, "B": 0, "G": 4 }, "vp": 3, "type": "Massive", "reward": "Mass Token x1" }
-    ],
-    [
-      { "id": "t5", "name": "Night Prowlers", "cost": { "R": 5, "B": 2, "G": 0 }, "vp": 4, "type": "Feral", "reward": "Attack Token x1" },
-      { "id": "t6", "name": "Charging Herd", "cost": { "R": 2, "B": 0, "G": 5 }, "vp": 4, "type": "Massive", "reward": "Mass Token x1" }
-    ]
+  "bosses": [
+    {
+      "id": "boss-day",
+      "name": "The Sowvereign",
+      "vp": 6,
+      "era": "day",
+      "thresholds": [
+        { "label": "6R Tribute", "cost": { "R": 6, "B": 0, "G": 0 }, "reward": "3 VP" },
+        { "label": "8B Tribute", "cost": { "R": 0, "B": 8, "G": 0 }, "reward": "Draw 2 weapons for free" },
+        { "label": "10G Tribute", "cost": { "R": 0, "B": 0, "G": 10 }, "reward": "Weapon Slot +3 VP + Wild token x1" }
+      ]
+    },
+    {
+      "id": "boss-night",
+      "name": "Boarliament of Doom",
+      "vp": 8,
+      "era": "night",
+      "thresholds": [
+        { "label": "10R", "cost": { "R": 10, "B": 0, "G": 0 }, "reward": "4 VP" },
+        { "label": "10B", "cost": { "R": 0, "B": 10, "G": 0 }, "reward": "Ignore 2 wounds" },
+        { "label": "12G", "cost": { "R": 0, "B": 0, "G": 12 }, "reward": "4 VP + Mass token x1" }
+      ]
+    }
+  ],
+  "day_threats": [
+    { "id": "day-feral-1", "name": "Snout Charger", "type": "Feral", "cost": { "R": 8, "B": 0, "G": 1 }, "vp": 2, "reward": "Attack token x1", "copies": 2 },
+    { "id": "day-cunning-1", "name": "Loot Squealer", "type": "Cunning", "cost": { "R": 3, "B": 7, "G": 0 }, "vp": 3, "reward": "Conversion token x1", "copies": 4 },
+    { "id": "day-massive-1", "name": "Stoneback Crusher", "type": "Massive", "cost": { "R": 0, "B": 2, "G": 8 }, "vp": 3, "reward": "Mass token x1", "copies": 4 },
+    { "id": "day-hybrid-1", "name": "Mutant Trio", "type": "Hybrid", "cost": { "R": 4, "B": 4, "G": 3 }, "vp": 4, "reward": "Wild token x2", "copies": 4 },
+    { "id": "day-feral-2", "name": "Firefang Berserker", "type": "Feral", "cost": { "R": 10, "B": 1, "G": 0 }, "vp": 4, "reward": "Attack token x1", "copies": 2 },
+    { "id": "day-feral-3", "name": "Territorial Sow", "type": "Feral", "cost": { "R": 8, "B": 1, "G": 0 }, "vp": 2, "reward": "Attack token x1", "copies": 2 },
+    { "id": "day-feral-4", "name": "Scrabbling Piglet", "type": "Feral", "cost": { "R": 6, "B": 0, "G": 0 }, "vp": 1, "reward": "Wild token x1", "copies": 2 }
+  ],
+  "night_threats": [
+    { "id": "night-cunning-1", "name": "Shadow Thief Hog", "type": "Cunning", "cost": { "R": 3, "B": 11, "G": 0 }, "vp": 5, "reward": "Conversion token x2", "copies": 4 },
+    { "id": "night-massive-1", "name": "Warboar Colossus", "type": "Massive", "cost": { "R": 0, "B": 4, "G": 12 }, "vp": 6, "reward": "Mass token x2", "copies": 4 },
+    { "id": "night-feral-1", "name": "Bloodrage Alpha", "type": "Feral", "cost": { "R": 14, "B": 0, "G": 2 }, "vp": 7, "reward": "Wild token x3", "copies": 4 },
+    { "id": "night-hybrid-1", "name": "Night Howl Pack", "type": "Hybrid", "cost": { "R": 9, "B": 9, "G": 5 }, "vp": 6, "reward": "Wild token x2", "copies": 4 },
+    { "id": "night-massive-2", "name": "Siege Behemoth", "type": "Massive", "cost": { "R": 3, "B": 2, "G": 13 }, "vp": 6, "reward": "Weapon Slot", "copies": 4 }
   ]
 }

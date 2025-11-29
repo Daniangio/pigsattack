@@ -72,6 +72,7 @@ export default function FightPanel({
   const availableMass = tokenCount("mass");
   const attackValue = attackUsed || 0;
   const wildAlloc = wildAllocation || { R: 0, B: 0, G: 0 };
+  const threatWeight = Number(threat?.weight || 0);
 
   useEffect(() => {
     if (!setAttackUsed || !setWildAllocation) return;
@@ -102,7 +103,13 @@ export default function FightPanel({
     }
   }, [defaultDiscount, discountResource, setDiscountResource]);
 
-  const baseCost = useMemo(() => normalizeResourceMap(threat?.cost), [threat?.cost]);
+  const baseCost = useMemo(() => {
+    const base = normalizeResourceMap(threat?.cost);
+    if (threatWeight > 0) {
+      base.G = (base.G || 0) + threatWeight;
+    }
+    return base;
+  }, [threat?.cost, threatWeight]);
   const playerResources = useMemo(
     () => normalizeResourceMap(player?.resources),
     [player?.resources]
@@ -582,6 +589,11 @@ export default function FightPanel({
 
       <div className="mt-4 grid grid-cols-[1fr_1.5fr_0.8fr] gap-4 h-[calc(100%-70px)]">
         <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-3 flex flex-col gap-2 overflow-auto">
+            {threatWeight > 0 && (
+              <div className="text-[11px] text-amber-200">
+                Weight +{threatWeight}: added to Green cost.
+              </div>
+            )}
             {renderCostLine("Original cost", baseCost, "text-slate-400")}
             {discountSummary.length > 0 && (
               <div className="flex flex-wrap gap-2 text-[11px] text-slate-200">

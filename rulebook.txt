@@ -1,283 +1,438 @@
-🐗 WILD PIGS WILL ATTACK! — RULEBOOK v3.0
-A tactical, resource-driven survival game for 1–5 players.
-This version uses the stance economy, resource-based combat, three token types, upgrades/weapons with VP, and three-row threat armies with Era Bosses.
+🐗 Wild Pigs Will Attack!
+Rulebook v4.5 — Tactical Survival in a World of Mutant Boars
+A resource-engine board game for 2–5 survivors.
 
-1. GAME OVERVIEW
-The world has fallen to mutated boars whose Ferocity (R), Cunning (B), and Mass (G) threaten the last survivors.
- Each player builds a personal engine using stances, upgrades, weapons, and tokens, then fights through two armies—Day and Night—each culminating in a Boss with layered damage thresholds.
-Players generate resources each round depending on their stance, use them to defeat threats, upgrade their character, extend slots, or reposition strategically.
-The winner is the survivor with the most Victory Points (VP) from threats, upgrades, boss tokens, and bonuses.
+1️⃣ THE INVASION
+Boars have mutated into unstoppable monsters.
+ Ferocity. Cunning. Mass.
+ They grow stronger every night.
+Build your defenses. Fight for survival.
+ Score the most Victory Points (VP) by:
+Defeating threats
 
-2. COMPONENTS
-Player Components
-1 Player Dashboard (Stance wheel, resource tracks, upgrade/weapon slot display)
-Stance Marker
-Slot markers (Upgrade slots, Weapon slots)
+
+Upgrading your character
+
+
+Exploiting Boss weak spots
+
+
+Surviving with minimal wounds
+
+
+Highest VP wins.
+
+2️⃣ COMPONENTS
+Player Boards
+Stance wheel
+
+
+3 resource tracks (R/B/G)
+
+
+Upgrade & Weapon slots (1 each initially; max 4 each)
+
 
 Cards
-Threat Deck (Day threats + Night threats)
-Boss Deck (One Boss per Era)
+Threat Deck: Day, Night
+
+
+Boss Deck: Day Boss, Night Boss
+
+
 Upgrades Deck
+
+
 Weapons Deck
 
-Tokens
-Attack Tokens (+2 Red Ferocity, one use)
-Conversion Tokens (convert up to 2 resources)
-Mass Tokens (permanent −2 Mass)
-Wild Tokens (+1 of any resource once)
-Boss Tokens (VP from boss thresholds)
 
-Misc
-Round Marker
-VP markers
-Resource cubes/tokens (Red, Blue, Green)
-Maximum tokens per type per player: 3.
+Tokens & Cubes
+Token
+Purpose
+🟥/🟦/🟩 cubes
+Resource markers
+Wild Token 🐾 
++1 any resource (once)
+Ferocity Token 🟥⚔
+Single-use −2R cost
+Mass Token 🟩🛡
+Permanent −2G discount
+Conversion Token ♻
+Convert up to 2 cubes into another type
+Weight Token ⏫
+Tracks Massive enemy growth
+Wound Token 💀
+−1 VP or −10 VP if 5+
 
-3. STANCES & RESOURCE ENGINE
-Stances determine:
-Resources generated at the start of your turn
-A discount applied to the next fight
-Players may change stance using actions (see Actions section).
+Maximum 3 of each positive token type per player.
 
-Stances Table
-Stance     Start-of-round  Production Fight Discount
-Aggressive 4R / 0B / 1G    Reduce R cost by 1
-Tactical   1R / 3B / 1G    Reduce B cost by 1
-Hunkered   0R / 1B / 4G    Reduce G cost by 1
-Balanced   2R / 2B / 1G    Reduce any ONE stat by 1
+3️⃣ STANCES — WHO ARE YOU?
+Your stance defines:
+Your start-of-turn income
 
-Stance Movement Rule
-You may always move one step between adjacent stances (Agg ↔ Bal ↔ Tac ↔ Bal ↔ Hunk ↔ Bal).
-To switch between corner stances (Agg ↔ Tac, Tac ↔ Hunk, Hunk ↔ Agg) you must pass through Balanced unless you use the Realign action.
 
-4. TOKENS (Core Temporary Mechanics)
-Attack Token
-One use
-Gives +2 Red resources for a single fight
-Great for Feral threats or boss spikes
+Your weakness (which pig type hurts you)
 
-Conversion Token
-Convert up to 2 resources of a single color into another color
-Use anytime
-Blue-build speciality
 
-Mass Token
-Permanent effect
-Reduces all Mass (G) costs by −2
-Extremely rare and powerful
-From Massive threats or Green upgrades
+Stance
+Start Resources
+Weak vs
+Style
+Aggressive
+4R / 0B / 1G
+Feral
+Strike first, risk wounds
+Tactical
+1R / 4B / 0G
+Cunning
+Efficient, opportunistic
+Hunkered
+0R / 1B / 4G
+Massive
+Late power, early stall
+Balanced
+2R / 2B / 2G
+ANY**
+Versatile but fragile
 
-Wild Token
-One use
-Provides +1 resource of ANY color
-Smooths awkward cost requirements
+**Balanced: Not attacked by Hybrid threats, which instead attack other stances with the attack corresponding to stance.
+Re-Stance Action
+Spend your main action to change stance to any other.
 
-Token Limits:
-Players may hold no more than 3 of a given token type.
+4️⃣ THREAT BOARD
+Number of lanes = N_players − 1
+ Each lane displays 3 visible threats:
+Front  —  Mid  —  Back  — (Deck)
 
-5. GAME SETUP
-Give each player:
-A dashboard
-A stance marker (start in Balanced)
-1 upgrade slot, 1 weapon slot (both can be extended up to 4)
+Threats stay in their row until defeated or advanced.
 
-Shuffle:
-Day Threat Deck
-Night Threat Deck
-Upgrades Deck
-Weapons Deck
-Boss Deck (2 bosses: Day Boss, Night Boss)
+5️⃣ THREAT TYPES & ATTACKS
+Threat cost examples: 8R + 2B + 0G
+Attack logic (after each player turn)
+If your stance is weak to that type → you suffer:
+Type
+Icon
+Attack Effect
+Feral
+🟥
+1 Wound 💀
+Cunning
+🟦
+Steal 2 resources; if none → 1 Wound
+Massive
+🟩
+If 3+ Weight tokens → 1 Wound
+Hybrid
+🟨
+Apply effect matching your stance weakness. If Hunkered → also gain +1 Weight and deal 1 Wound independently of how many Weight tokens
 
-Build the Day Army:
-Three rows of 4 threats each (for a standard game)
-Reveal the Day Boss beside them
-Place Night Army & Night Boss aside for later.
-Decide first player using any method.
+Hybrids do not attack Balanced directly.
+ If you are weak → they strike like the pig type you fear.
 
-6. ROUND STRUCTURE
-Each round, players take turns clockwise.
-a. Start-of-Round Phase
-Each player:
-Produces resources from their stance
-Gains any per-round upgrade income
-Tokens and unspent resources DO NOT expire unless a card says so.
+6️⃣ TURN & ROUND STRUCTURE
+Start of Turn
+Produce resources from stance
 
-b. Player Turn (Choose ONE Action)
-ACTION A — Fight a Threat
-You may fight a threat only if you can fully pay its cost using:
-Resources from production
-Tokens
-Weapon effects
-Mass token reductions
-Stance discount (−1)
 
-You may only attack:
-The front threat in any of the three rows
-Second-row threats only if a weapon/ability allows (e.g., Snipe Scope)
+Gain per-round upgrade bonuses
 
-If defeated:
-Gain VP equal to threat’s VP value
-Gain its spoil reward (token or consumable)
-Move it from the row to your spoils zone. If a threat has a "CONSUME:" ability,
-you can consume it any time to activate its effect (discard from spoils zone after resolving effect).
-Slide the column downward to align first threat of that column
-to first threats of other columns
 
-ACTION B — Buy an Upgrade
-Pay the upgrade cost in resources.
-Place it in an available Upgrade Slot.
-Upgrades grant VP when purchased and permanent effects.
-If no slots are available, this action cannot be performed.
+Take ONE Main Action:
+1️⃣ Fight a threat
+2️⃣ Extend a Slot (+Gain 1 Wild token)
+3️⃣ Re-Stance
+Optional Buy (once per turn, anytime)
+Buy 1 Upgrade OR 1 Weapon
+ (must pay cost and have free slot)
+End of Turn: Threat Attack
+Weight Growth: Massive in Front row gain +1 Weight token
+Then, each Front threat that matches your stance weakness triggers its attack.
 
-ACTION C — Extend a Slot
-Choose either:
-+1 Upgrade Slot OR
-+1 Weapon Slot
+7️⃣ END OF ROUND — THREAT ADVANCE
+After all players have played once:
+1️⃣ Advance
+Mid → Front if empty
 
-Then gain 1 Wild Token.
-Max slots: 4 each.
-If you have maxed all slots, this action cannot be performed.
 
-ACTION D — Realign
-Move your stance to ANY stance, bypassing movement rules.
-Gain 1 Wild Token.
-This action is your tempo reset and strategic repositioning tool.
-If you are in a stance from which you can move to any other stance in one step
-(i.e., following the rules), you cannot perform this action.
+Back → Mid if empty
 
-ACTION E - Scavenge
-Gain 1 Wild Token
 
-c. End turn
-Turn passes to next player clockwise.
-When all players played a turn in a round, initiative token moves counter-clockwise.
-This means that the last player in first round becomes the first player in next round
-(effectively playing two turns in a row).
+2️⃣ Spawn
+ Fill each empty Back with new threats
+3️⃣ Initiative rotates counter-clockwise
+ (last player becomes first, effectively playing two turns consecutively)
 
-7. THREATS & SPOILS
-Every threat has:
-A cost vector (e.g., 6R + 2B or 5G + 1R)
-A type (Feral, Cunning, Massive, or Hybrid)
-A VP reward
-A spoil reward (token or consumable ability)
+8️⃣ COMBAT
+You may fight the frontmost visible threat in any lane
+ (even if positioned as Mid/Back)
+You may use:
+Resources (R/B/G)
 
-Examples of Spoils
-Attack Token
-Conversion Token
-Mass Token (rare)
-Weapon Discount (Consume this card: reduce weapon cost by 2”)
-Snipe Consumable (“Consume: attack a second-row threat”)
-Next Turn Bonus (“Next Round: Discount 1B in fights”)
 
-Day threats: cost 6–12
-Night threats: cost 10–18
+Weapon discount effects
 
-8. UPGRADES
-Upgrades provide:
-Permanent resource bonuses
+
+Wild conversions
+
+
+Ferocity Tokens −2R once
+
+
+Mass Tokens −2G permanently
+
+
+On success:
+Remove threat from threats zone and add to your trophies zone. Some threats may have an effect that you can activate by consuming them from your trophies zone.
+Gain printed VP (scored at game end, do not gain VP tokens)
+Gain Spoils (tokens / abilities)
+
+
+
+9️⃣ UPGRADES & WEAPONS
+Upgrades = permanent boosts
+Weapons = limited-use power plays
+Must place in respective slot
+Max 4 each after slot extensions
+
+
+Example upgrade types:
+Resource production
+Permanent discounts
 Token generation
-Combat discounts
-Stance-dependent boosts
-VP on purchase
-
-See the CSV for full reference.
-Examples:
-Ferocity Modulator: +1R per turn
-Precision Optics: Reduce highest stat by 1 in fights
-Mass Core: +2G per turn
-Catalyst Array: Convert Wild → Conversion
-Versatility Module: +2 Wild tokens per round
-Upgrades must be placed in slots; slot extensions allow more upgrades.
-
-9. WEAPONS
-Weapons offer:
-Limited-use or permanent stat reductions
-Snipe effects
-Conversion effects
-Combat manipulation
-
-Placed in weapon slots.
-Examples:
-Shockblade: 3 uses, −3R cost per attack
-Thermal Lance: 1 use, −3 cost to all stats
-Snipe Scope: -2B cost and attack second-row
-Phase Gauntlet: Convert 1 resource freely each round
-
-10. BOSSES & ERA END
-Each Era ends with a Boss Fight Phase.
-Every Boss card shows multiple thresholds.
-Each threshold has:
-A resource cost
-Matching rewards (Boss tokens, one-use attack cards, slot extensions, VP bonus)
-Players independently attempt any one threshold per Era.
-Boss is not shared—each player fights their own attempt.
-Rewards stack across Eras.
-
-11. VICTORY CONDITIONS
-At the end of the Night Boss Phase, totally:
-VP from Threats
-VP from Upgrades
-VP from Boss Tokens
-Bonus VP from items or special awards
-
-Highest total wins.
-Ties:
-Most Night Threats defeated
-Most Mass tokens
-Most remaining resources
-
-12. EXAMPLES
-Example Fight
-You are in Tactical Stance.
- Production: 1R, 3B, 1G.
- Discount: −1B.
-You attack a threat costing 2R + 5B + 1G.
-Modified cost:
-2R
-(5B − 1B = 4B)
-1G
+Snipe access
 
 
-You spend:
-1R (production) + 1R from pool
-3B production + 1B from Wild token
-1G from production
+Example weapon types:
+Cost reductions
+Conversion tricks
+One-shot boss damage
 
-Threat defeated → gain its spoil.
 
-Example Realign Turn
-You need Green next turn.
-You use Realign:
-Switch to Hunkered
-Gain 1 Wild token
- No threat fought this turn.
 
-Next round you produce 0R,1B,4G and get −1G discount.
+🔟 BOSSES — ERA CLIMAX
+Boss revealed at start of each Era
+(1 for Day, 1 for Night)
+Boss appears when:
+Threat deck is empty AND
+No threats in Front row
+Boss card:
+Contains multiple threshold zones, each with its cost (R+B+G), its spoil for paying that threshold cost and its penalty for not being able to pay.
+Boss Fight Phase (simultaneous)
+Each player chooses any thresholds and pays their cost:
+For each threshold:
+Pay → gain Boss reward
+Skip → suffer Boss penalty (e.g. wounds, resource loss)
 
-Example Mixed Build
-You have:
-Precision Optics (−1 to highest stat)
-Catalyst Array (Wild → Conversion)
-Impact Maul (−1G)
-2 Mass Tokens (−4G total)
 
-Now a Night threat of 10G + 2R effectively costs:
-10G − 4G (Mass tokens) − 1G (Maul) = 5G
-2R
+Boss has no lanes, no positioning, no scaling.
+After Day Boss → reset lanes with Night Threat Deck
+After Night Boss → Game End
 
-Very manageable with two Wild tokens and stance production.
+1️⃣1️⃣ WOUNDS — VP Penalties
+1 Wound = −1 VP
 
-13. FULL TURN SUMMARY (CHEAT SHEET)
-Start of Round
- → Produce resources
- → Gain per-round tokens/effects
-Player Turn (one action):
-Fight
-Buy Upgrade
-Extend Slot (+1 Wild)
-Realign (change stance + Wild)
-Scavenge (+1 Wild)
 
+5+ Wounds = −10 VP total
+
+
+You can still have >5 wounds — but never lose more than 10 VP.
+
+1️⃣2️⃣ THREAT DECK SIZE
+Total threats = N_players × 4 per Era × 2 Eras
+ Good pacing, consistent tension.
+
+QUICK REFERENCE (Table)
+Phase
+Event
+Start Turn
+Produce + upgrades
+Main Action
+Fight / Extend / Re-Stance
+Optional Buy
+Once per turn
+End of Turn
+Weight + Attacks vs active player
 End of Round
- → Next player leads next round
- → Threat rows persist until defeated
+Advance + Spawn + Rotate
+
+
+📘 SUPPLEMENT BOOKLET — PROTOTYPE CONTENT
+Example Day Threats
+Name
+Type
+Cost
+Attack
+Spoil
+VP
+Snout Charger
+Feral
+8R+1G
+Wound
++1 Wild
+2
+Loot Squealer
+Cunning
+6B+3R
+Steal 2
+CONSUME: Gain 4VP and get discount on upgrade for this turn: −2B
+3
+Stoneback Crusher
+Massive
+8G+2B
+Weight 3+ → Wound
++1 Mass Token
+3
+Mutant Trio
+Hybrid
+4R+4B+3G
+stance-based
++2 Wild Token
+4
+Rooting Bulldozer
+Massive
+10G+1R
+Weight 3+ → Wound
++1 slot
+4
+Firefang Berserker
+Feral
+10R+1B
+Wound
++1 Ferocity Token
+4
+
+Example Night Threats (harder)
+Costs increased by 3–6 total from Day equivalents.
+Name
+Type
+Cost
+Attack
+Spoil
+VP
+Shadow Thief Hog
+Cunning
+11B+3R
+Steal 2 / Wound
++2 Conversion
+6
+Warboar Colossus
+Massive
+12G+4B
+Weight scaling
++2 Mass tokens
+6
+Bloodrage Alpha
+Feral
+14R+2G
+Wound
++3 Wild
+7
+
+Example Bosses
+Day Boss — The Sowvereign
+Thresholds:
+6R → +3 VP
+ Unpaid threshold → 1 Wound
+
+
+8B → Draw 2 weapons for free from top deck (follow turn order)
+ Unpaid threshold → Loose up to 2 tokens of your choice
+
+
+10G → +1 Slot +3 VP + 1 Wild Token
+ Unpaid threshold → 1 Wound
+
+
+Night Boss — Boarliament of Doom
+Thresholds:
+10R → 4 VP
+
+
+10B → Ignore 2 wounds
+
+
+12G → +4 VP & 1 Mass token
+ Unpaid threshold → Steal 3 resources
+
+
+
+Example Upgrades (6)
+Name
+Effect
+Cost
+VP
+Ferocity Modulator
++1R/turn
+5R
+2
+Precision Optics
+−1 highest stat when fighting
+5B
+2
+Mass Core Booster
++1G/turn
+5G
+2
+Slot Fabricator
++1 slot
+6 Mix
+1
+Conversion Engine
+1 Wild → 1 Conversion/turn
+7B
+2
+Tactical Uplink
+Sniping unlocked
+8B
+3
+
+Example Weapons (6)
+Name
+Uses
+Effect
+VP
+Shock Maul
+3
+−2R cost
+1
+Thermal Piercer
+1
+−3 any stat
+1
+Sniper Scope
+∞
+May target Mid Frontmost
+1
+Gravity Net
+2
+Delay Advance in lane
+2
+Blade of Roots
+1
+Remove 1 Weight token
+1
+Phase Gauntlet
+∞
+Convert 1 resource / turn
+2
+
+
+GLOSSARY
+Term
+Meaning
+Weight Token
+Tracks Massive growth
+Mass Token
+Player token: −2G discount
+Ferocity Token
+Player token: −2R once
+Conversion Token
+Convert up to 2 cubes
+Weakness
+Which type damages current stance
+Lane
+One column of threats
+Front/Mid/Back
+Positional rows of each lane
+Spoils
+Rewards from defeated threats

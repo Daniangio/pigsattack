@@ -49,7 +49,7 @@ STANCE_PROFILES: Dict[Stance, Dict[str, Any]] = {
     Stance.AGGRESSIVE: {"production": {ResourceType.RED: 4, ResourceType.BLUE: 0, ResourceType.GREEN: 1}, "discount": ResourceType.RED},
     Stance.TACTICAL: {"production": {ResourceType.RED: 1, ResourceType.BLUE: 3, ResourceType.GREEN: 1}, "discount": ResourceType.BLUE},
     Stance.HUNKERED: {"production": {ResourceType.RED: 0, ResourceType.BLUE: 1, ResourceType.GREEN: 4}, "discount": ResourceType.GREEN},
-    Stance.BALANCED: {"production": {ResourceType.RED: 2, ResourceType.BLUE: 2, ResourceType.GREEN: 1}, "discount": None},
+    Stance.BALANCED: {"production": {ResourceType.RED: 2, ResourceType.BLUE: 2, ResourceType.GREEN: 2}, "discount": None},
 }
 
 
@@ -122,6 +122,7 @@ class ThreatCard:
     vp: int
     type: str
     reward: str
+    copies: int = 1
     spoils: List[Reward] = field(default_factory=list)
 
     def to_public_dict(self) -> Dict[str, Any]:
@@ -133,6 +134,7 @@ class ThreatCard:
             "type": self.type,
             "reward": self.reward,
             "spoils": [r.to_public_dict() for r in self.spoils],
+            "copies": self.copies,
         }
 
 
@@ -215,6 +217,9 @@ class PlayerBoard:
     upgrades: List[MarketCard] = field(default_factory=list)
     weapons: List[MarketCard] = field(default_factory=list)
     vp: int = 0
+    wounds: int = 0
+    action_used: bool = False
+    buy_used: bool = False
     status: PlayerStatus = PlayerStatus.ACTIVE
 
     def produce(self):
@@ -229,6 +234,22 @@ class PlayerBoard:
         for res, amt in cost.items():
             self.resources[res] = max(0, self.resources.get(res, 0) - amt)
 
+    def add_wounds(self, amount: int = 1):
+        self.wounds = max(0, self.wounds + amount)
+
+    def lose_resources(self, amounts: Dict[ResourceType, int]) -> Dict[ResourceType, int]:
+        """Removes the specified resources, clamping at 0. Returns what was actually removed."""
+        removed: Dict[ResourceType, int] = {}
+        for res, amt in amounts.items():
+            if amt <= 0:
+                continue
+            current = self.resources.get(res, 0)
+            delta = min(current, amt)
+            if delta:
+                self.resources[res] = current - delta
+            removed[res] = delta
+        return removed
+
     def to_public_dict(self) -> Dict[str, Any]:
         return {
             "user_id": self.user_id,
@@ -242,6 +263,9 @@ class PlayerBoard:
             "upgrades": [u.to_public_dict() for u in self.upgrades],
             "weapons": [w.to_public_dict() for w in self.weapons],
             "vp": self.vp,
+            "wounds": self.wounds,
+            "action_used": self.action_used,
+            "buy_used": self.buy_used,
             "status": self.status.value,
         }
 
@@ -252,6 +276,7 @@ class GameState:
     players: Dict[str, PlayerBoard] = field(default_factory=dict)
     threat_rows: List[List[ThreatCard]] = field(default_factory=list)
     boss: Optional[BossCard] = None
+    bosses: List[BossCard] = field(default_factory=list)
     market: MarketState = field(default_factory=MarketState)
     phase: GamePhase = GamePhase.SETUP
     round: int = 0
@@ -280,6 +305,7 @@ class GameState:
             "turn_order": self.turn_order,
             "threat_rows": [[t.to_public_dict() for t in row] for row in self.threat_rows],
             "boss": self.boss.to_public_dict() if self.boss else None,
+            "bosses": [b.to_public_dict() for b in self.bosses],
             "market": self.market.to_public_dict(),
             "log": self.log[-50:],
             "winner_id": self.winner_id,

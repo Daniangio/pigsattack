@@ -1,34 +1,13 @@
 from typing import Any, Dict, List, Optional
 
 from .data_loader import GameDataLoader
-from .models import (
-    GamePhase,
-    GameState,
-    MarketCard,
-    PlayerBoard,
-    PlayerStatus,
-    ResourceType,
-    Stance,
-    TokenType,
-    clamp_cost,
-    STANCE_PROFILES,
-    Stance,
-)
+from .models import GamePhase, GameState, MarketCard, PlayerBoard, PlayerStatus, ResourceType, Stance, TokenType, clamp_cost, STANCE_PROFILES
+from .threats import ThreatManager
+from .utils import parse_resource_key
 
 
 class InvalidActionError(ValueError):
     """Raised when a player attempts an illegal action."""
-
-
-def _parse_resource_key(key: str) -> ResourceType:
-    normalized = key.upper()
-    if normalized in ("R", "RED"):
-        return ResourceType.RED
-    if normalized in ("B", "BLUE"):
-        return ResourceType.BLUE
-    if normalized in ("G", "GREEN"):
-        return ResourceType.GREEN
-    raise InvalidActionError(f"Unknown resource type: {key}")
 
 
 class GameSession:
@@ -39,6 +18,7 @@ class GameSession:
     def __init__(self, game_id: str, players: List[Dict[str, str]], data_loader: Optional[GameDataLoader] = None):
         self.data_loader = data_loader or GameDataLoader()
         self.state = GameState(game_id=game_id)
+        self.threat_manager: Optional[ThreatManager] = None
         for p in players:
             board = PlayerBoard(user_id=p["id"], username=p["username"])
             self.state.players[p["id"]] = board
@@ -46,8 +26,14 @@ class GameSession:
 
     async def async_setup(self):
         """Populate decks/market and start the first round."""
-        self.state.threat_rows, self.state.boss = self.data_loader.load_threats()
+        threat_data = self.data_loader.load_threats()
+        self.threat_manager = ThreatManager(threat_data, len(self.state.players))
+        self.state.bosses = threat_data.bosses
+        self.state.boss = threat_data.bosses[0] if threat_data.bosses else None
         self.state.market = self.data_loader.load_market()
+        for log in self.threat_manager.bootstrap():
+            self.state.add_log(log)
+        self._sync_threat_rows()
         self.state.round = 1
         self.state.phase = GamePhase.ROUND_START
         self.state.add_log("Game initialized.")
@@ -97,22 +83,23 @@ class GameSession:
             if p.status == PlayerStatus.ACTIVE:
                 p.produce()
                 p.turn_initial_stance = p.stance
+                p.action_used = False
+                p.buy_used = False
         self.state.add_log(f"Round {self.state.round} start. Resources produced.")
 
         self.state.phase = GamePhase.PLAYER_TURN
         self.state.active_player_index = 0
         await self._skip_inactive_players()
-        active_id = self.state.get_active_player_id()
-        if active_id:
-            self.state.players[active_id].turn_initial_stance = self.state.players[active_id].stance
+        self._begin_player_turn()
 
     async def _end_round(self):
         self.state.phase = GamePhase.ROUND_END
         self.state.add_log(f"Round {self.state.round} ended.")
 
-        await self._check_game_over()
-        if self.state.phase == GamePhase.GAME_OVER:
-            return
+        if self.threat_manager:
+            for log in self.threat_manager.advance_and_spawn():
+                self.state.add_log(log)
+            self._sync_threat_rows()
 
         # Rotate initiative so the last player of this round starts the next.
         last_player_id = self.state.get_active_player_id()
@@ -121,6 +108,9 @@ class GameSession:
             self.state.turn_order = [last_player_id] + remaining
 
         self.state.round += 1
+        await self._check_game_over()
+        if self.state.phase == GamePhase.GAME_OVER:
+            return
         await self._start_round()
 
     async def _skip_inactive_players(self):
@@ -141,6 +131,33 @@ class GameSession:
         if original_index == self.state.active_player_index:
             await self._end_round()
 
+    def _begin_player_turn(self):
+        active_id = self.state.get_active_player_id()
+        if not active_id:
+            return
+        player = self.state.players.get(active_id)
+        if not player:
+            return
+        player.action_used = False
+        player.buy_used = False
+        player.turn_initial_stance = player.stance
+
+    def _consume_main_action(self, player: PlayerBoard):
+        if player.action_used:
+            raise InvalidActionError("Main action already used this turn.")
+        player.action_used = True
+
+    def _consume_buy_action(self, player: PlayerBoard):
+        if player.buy_used:
+            raise InvalidActionError("Optional buy already used this turn.")
+        player.buy_used = True
+
+    def _sync_threat_rows(self):
+        if self.threat_manager:
+            self.state.threat_rows = self.threat_manager.rows()
+        else:
+            self.state.threat_rows = []
+
     def _assert_turn(self, player: PlayerBoard):
         active_id = self.state.get_active_player_id()
         if self.state.phase != GamePhase.PLAYER_TURN or not active_id:
@@ -153,6 +170,7 @@ class GameSession:
         result = self._compute_fight_cost(player, payload)
         if not result["can_afford"]:
             raise InvalidActionError(result["message"])
+        self._consume_main_action(player)
 
         threat = result["threat"]
         cost = result["adjusted_cost"]
@@ -172,12 +190,12 @@ class GameSession:
                 self.state.add_log(f"{player.username} gains {reward.label}.")
         else:
             self._apply_reward(player, threat.reward)
-        self.state.threat_rows[result["row_index"]].pop(0)
+        if not self.threat_manager:
+            raise InvalidActionError("Threat manager unavailable.")
+        self.threat_manager.remove_front(result["row_index"])
+        self._sync_threat_rows()
         self.state.add_log(f"{player.username} defeated {threat.name} for {threat.vp} VP.")
-
         await self._check_game_over()
-        if self.state.phase != GamePhase.GAME_OVER:
-            await self._handle_end_turn(player, {})
 
     async def _handle_buy_upgrade(self, player: PlayerBoard, payload: Dict[str, Any]):
         self._assert_turn(player)
@@ -189,12 +207,12 @@ class GameSession:
         if not player.can_pay(card.cost):
             raise InvalidActionError("Not enough resources.")
 
+        self._consume_buy_action(player)
         player.pay(card.cost)
         player.upgrades.append(card)
         player.vp += card.vp
         self.state.market.upgrades = [c for c in self.state.market.upgrades if c.id != card.id]
         self.state.add_log(f"{player.username} bought upgrade {card.name}.")
-        await self._handle_end_turn(player, {})
 
     async def _handle_buy_weapon(self, player: PlayerBoard, payload: Dict[str, Any]):
         self._assert_turn(player)
@@ -206,12 +224,12 @@ class GameSession:
         if not player.can_pay(card.cost):
             raise InvalidActionError("Not enough resources.")
 
+        self._consume_buy_action(player)
         player.pay(card.cost)
         player.weapons.append(card)
         player.vp += card.vp
         self.state.market.weapons = [c for c in self.state.market.weapons if c.id != card.id]
         self.state.add_log(f"{player.username} bought weapon {card.name}.")
-        await self._handle_end_turn(player, {})
 
     async def _handle_extend_slot(self, player: PlayerBoard, payload: Dict[str, Any]):
         self._assert_turn(player)
@@ -222,15 +240,16 @@ class GameSession:
         if slot_type == "upgrade":
             if player.upgrade_slots >= 4:
                 raise InvalidActionError("Upgrade slots already at max.")
+            self._consume_main_action(player)
             player.upgrade_slots += 1
         else:
             if player.weapon_slots >= 4:
                 raise InvalidActionError("Weapon slots already at max.")
+            self._consume_main_action(player)
             player.weapon_slots += 1
 
         player.tokens[TokenType.WILD] = min(3, player.tokens.get(TokenType.WILD, 0) + 1)
         self.state.add_log(f"{player.username} extended a {slot_type} slot and gained a wild token.")
-        await self._handle_end_turn(player, {})
 
     async def _handle_realign(self, player: PlayerBoard, payload: Dict[str, Any]):
         self._assert_turn(player)
@@ -242,9 +261,9 @@ class GameSession:
         except KeyError:
             raise InvalidActionError("Unknown stance.")
 
+        self._consume_main_action(player)
         player.tokens[TokenType.WILD] = min(3, player.tokens.get(TokenType.WILD, 0) + 1)
         self.state.add_log(f"{player.username} realigned to {player.stance.value} and gained a wild token.")
-        await self._handle_end_turn(player, {})
 
     async def _handle_convert(self, player: PlayerBoard, payload: Dict[str, Any]):
         # Conversion token can be used outside of action flow; no turn assertion
@@ -252,8 +271,8 @@ class GameSession:
         to_key = payload.get("to") or payload.get("to_res")
         if not from_key or not to_key:
             raise InvalidActionError("from and to are required for conversion.")
-        from_res = _parse_resource_key(from_key)
-        to_res = _parse_resource_key(to_key)
+        from_res = parse_resource_key(from_key, InvalidActionError)
+        to_res = parse_resource_key(to_key, InvalidActionError)
         if from_res == to_res:
             raise InvalidActionError("Cannot convert to the same resource.")
         if player.tokens.get(TokenType.CONVERSION, 0) <= 0:
@@ -268,27 +287,20 @@ class GameSession:
         self.state.add_log(f"{player.username} converted {amount} {from_res.value} → {to_res.value}.")
 
     async def _handle_stance_step(self, player: PlayerBoard, payload: Dict[str, Any]):
-        self._assert_turn(player)
-        target = payload.get("stance")
-        if not target:
-            raise InvalidActionError("Target stance required.")
-        try:
-            target_stance = Stance[target.upper()]
-        except KeyError:
-            raise InvalidActionError("Unknown stance.")
-
-        baseline = player.turn_initial_stance or player.stance
-        if player.stance == target_stance:
-            return
-
-        if not self._is_adjacent_stance(baseline, target_stance):
-            raise InvalidActionError("Free stance change must be to an adjacent stance from turn start.")
-
-        player.stance = target_stance
-        self.state.add_log(f"{player.username} shifted stance to {player.stance.value}.")
+        await self._handle_realign(player, payload)
 
     async def _handle_end_turn(self, player: PlayerBoard, payload: Dict[str, Any]):
         self._assert_turn(player)
+        # Players can optionally pass a steal_allocation payload to choose which resources a Cunning attack steals.
+        steal_pref = payload.get("steal_allocation") or payload.get("steal") or payload.get("cunning_allocation")
+        if self.threat_manager:
+            for msg in self.threat_manager.resolve_end_of_turn(player, steal_pref):
+                self.state.add_log(msg)
+            self._sync_threat_rows()
+
+        await self._check_game_over()
+        if self.state.phase == GamePhase.GAME_OVER:
+            return
         # Advance to next player
         total_players = len(self.state.turn_order)
         next_index = (self.state.active_player_index + 1) % total_players if total_players else 0
@@ -298,9 +310,7 @@ class GameSession:
         else:
             self.state.active_player_index = next_index
             await self._skip_inactive_players()
-            active_id = self.state.get_active_player_id()
-            if active_id:
-                self.state.players[active_id].turn_initial_stance = self.state.players[active_id].stance
+            self._begin_player_turn()
 
     async def _handle_surrender(self, player: PlayerBoard, payload: Dict[str, Any]):
         player.status = PlayerStatus.SURRENDERED
@@ -347,7 +357,10 @@ class GameSession:
         return next((c for c in cards if c.id == card_id), None)
 
     async def _check_game_over(self, force: bool = False):
-        all_threats_defeated = all(not row for row in self.state.threat_rows)
+        if self.threat_manager:
+            all_threats_defeated = self.threat_manager.is_cleared()
+        else:
+            all_threats_defeated = all(not row for row in self.state.threat_rows)
         active_players = [p for p in self.state.players.values() if p.status == PlayerStatus.ACTIVE]
 
         if force or all_threats_defeated or len(active_players) <= 1:
@@ -368,20 +381,25 @@ class GameSession:
         Shared logic for computing fight costs. Does not mutate state.
         """
         row_index = int(payload.get("row", 0))
-        if row_index < 0 or row_index >= len(self.state.threat_rows):
-            raise InvalidActionError("Invalid row.")
-        if not self.state.threat_rows[row_index]:
-            raise InvalidActionError("No threat in that row.")
-
-        threat = self.state.threat_rows[row_index][0]
+        if not self.threat_manager:
+            raise InvalidActionError("Threats not initialized.")
+        threat = self.threat_manager.front_threat(row_index)
+        if not threat:
+            raise InvalidActionError("No threat at the front of that lane.")
+        requested_id = payload.get("threat_id")
+        if requested_id and requested_id != threat.id:
+            raise InvalidActionError("Targeted threat is no longer in front.")
         cost = dict(threat.cost)
+        weight_cost = getattr(threat, "weight", 0) or 0
+        if weight_cost:
+            cost[ResourceType.GREEN] = cost.get(ResourceType.GREEN, 0) + weight_cost
 
         # Apply stance discount
         if player.stance == Stance.BALANCED:
             discount_key = payload.get("discount_resource")
             if not discount_key:
                 raise InvalidActionError("Balanced stance requires a discount resource.")
-            stance_discount = _parse_resource_key(discount_key)
+            stance_discount = parse_resource_key(discount_key, InvalidActionError)
         else:
             stance_discount = self._stance_discount(player)
 
@@ -403,7 +421,7 @@ class GameSession:
         wild_allocation_raw = use_tokens.get("wild_allocation", {})
         wild_allocated = 0
         for key, amount in wild_allocation_raw.items():
-            res_type = _parse_resource_key(key)
+            res_type = parse_resource_key(key, InvalidActionError)
             wild_allocated += int(amount)
             cost[res_type] = max(0, cost.get(res_type, 0) - int(amount))
 

@@ -11,14 +11,7 @@ import MarketCardDetail from '../components/market/MarketCardDetail';
 import FightPanel from '../components/fight/FightPanel';
 import { X } from 'lucide-react';
 
-const stanceDistance = (a, b) => {
-  if (!a || !b) return 2;
-  if (a === b) return 0;
-  const lowerA = String(a).toLowerCase();
-  const lowerB = String(b).toLowerCase();
-  if (lowerA === "balanced" || lowerB === "balanced") return 1;
-  return 2;
-};
+const STEAL_AMOUNT = 2;
 
 function ConfirmModal({ card, onConfirm, onCancel }) {
   if (!card) return null;
@@ -66,7 +59,6 @@ export default function App({
   onBuyWeapon,
   onExtendSlot,
   onRealign,
-  onStanceStep,
   onLocalToast,
   onEndTurn,
 }) {
@@ -95,6 +87,9 @@ export default function App({
       resources: p.resources || { R: 0, B: 0, G: 0 },
       tokens: p.tokens || {},
       vp: p.vp ?? 0,
+      wounds: p.wounds ?? p.wound ?? 0,
+      actionUsed: p.action_used ?? p.actionUsed ?? false,
+      buyUsed: p.buy_used ?? p.buyUsed ?? false,
       upgrades: p.upgrades || [],
       weapons: p.weapons || [],
       upgradeSlots: p.upgrade_slots ?? p.upgradeSlots ?? 1,
@@ -130,6 +125,9 @@ export default function App({
   const [fightDiscountResource, setFightDiscountResource] = useState("R");
   const [fightResourceSpend, setFightResourceSpend] = useState({ R: 0, B: 0, G: 0 });
   const [fightMissingCost, setFightMissingCost] = useState({ R: 0, B: 0, G: 0 });
+  const [stealAllocation, setStealAllocation] = useState({ R: 0, B: 0, G: 0 });
+  const [stealRequired, setStealRequired] = useState(STEAL_AMOUNT);
+  const [stealPromptOpen, setStealPromptOpen] = useState(false);
   const [isFollowingTurn, setIsFollowingTurn] = useState(true);
   const [selectedCard, setSelectedCard] = useState(null); // selected card for confirmation
   const [highlightBuyables, setHighlightBuyables] = useState(false);
@@ -143,18 +141,14 @@ export default function App({
     () => backendActivePlayer?.turnInitialStance || backendActivePlayer?.stance,
     [backendActivePlayer?.turnInitialStance, backendActivePlayer?.stance]
   );
-
   const activePlayer = players.find(p => p.id === activePlayerId);
   const me = players.find((p) => p.id === userId);
+  const mainActionUsed = !!me?.actionUsed;
+  const buyUsed = !!me?.buyUsed;
   const threatRows = gameData?.threat_rows || gameData?.threatRows;
   const boss = gameData?.boss;
   const market = gameData?.market;
   const gameId = gameData?.game_id || gameData?.gameId;
-  const firstFrontRow = useMemo(() => {
-    if (!threatRows || !threatRows.length) return 0;
-    const idx = threatRows.findIndex((row) => row && row.length);
-    return idx >= 0 ? idx : 0;
-  }, [threatRows]);
 
   const bestDiscountResource = (cost = {}) => {
     const vals = {
@@ -163,6 +157,30 @@ export default function App({
       G: cost.G ?? cost.g ?? 0,
     };
     return Object.keys(vals).sort((a, b) => (vals[b] || 0) - (vals[a] || 0))[0] || "R";
+  };
+  const threatTargetsStance = (threat, stance) => {
+    const type = String(threat?.type || "").toLowerCase();
+    const s = String(stance || "").toUpperCase();
+    if (!type || !s) return false;
+    if (type === "hybrid") return s !== "BALANCED";
+    const weakMap = {
+      AGGRESSIVE: new Set(["feral"]),
+      TACTICAL: new Set(["cunning"]),
+      HUNKERED: new Set(["massive"]),
+      BALANCED: new Set(["feral", "cunning", "massive"]),
+    };
+    return weakMap[s]?.has(type);
+  };
+  const resolveAttackType = (threat, stance) => {
+    const type = String(threat?.type || "").toLowerCase();
+    const s = String(stance || "").toUpperCase();
+    if (type === "hybrid") {
+      if (s === "AGGRESSIVE") return "feral";
+      if (s === "TACTICAL") return "cunning";
+      if (s === "HUNKERED") return "massive";
+      return "none";
+    }
+    return type;
   };
   const cardCatalog = useMemo(
     () => [
@@ -281,9 +299,6 @@ export default function App({
       }
       return next;
     });
-    if (fallback) {
-      onStanceStep?.(fallback.toUpperCase());
-    }
   };
 
   const setPromptSafe = (payload) => {
@@ -321,8 +336,16 @@ export default function App({
       onLocalToast?.("You can only fight during your turn with your board selected.", "amber");
       return;
     }
-    if (rowIndex !== firstFrontRow) {
-      onLocalToast?.("Only the front row can be fought right now.", "amber");
+    if (me?.actionUsed) {
+      onLocalToast?.("Main action already used this turn.", "amber");
+      return;
+    }
+    const row = threatRows?.[rowIndex] || [];
+    const frontId = row[0]?.id;
+    const positionFront = (threat.position || "").toLowerCase() === "front";
+    const isFront = positionFront || (!threat.position && threat.id === frontId);
+    if (!isFront) {
+      onLocalToast?.("Only front threats can be fought right now.", "amber");
       return;
     }
     clearBuySelection();
@@ -376,6 +399,85 @@ export default function App({
     });
   };
 
+  const handleEndTurnClick = () => {
+    if (!isMyTurn) {
+      onLocalToast?.("Not your turn.", "amber");
+      return;
+    }
+    if (activePlayerId !== userId) {
+      onLocalToast?.("Select your board to end your turn.", "amber");
+      return;
+    }
+    const stanceUpper = String(me?.stance || "").toUpperCase();
+    const totalResources =
+      (me?.resources?.R || 0) + (me?.resources?.B || 0) + (me?.resources?.G || 0);
+    const frontThreats = (threatRows || [])
+      .map((row = []) => {
+        if (!row.length) return null;
+        const explicitFront = row.find((t) => (t.position || "").toLowerCase() === "front");
+        if (explicitFront) return explicitFront;
+        const first = row[0];
+        if (first && !first.position) return first;
+        return null;
+      })
+      .filter(Boolean);
+    const cunningFronts = frontThreats.filter(
+      (t) =>
+        threatTargetsStance(t, stanceUpper) &&
+        resolveAttackType(t, stanceUpper) === "cunning"
+    );
+    const stealBudget = STEAL_AMOUNT * (cunningFronts.length || 0);
+    if (stealBudget > 0 && totalResources > stealBudget) {
+      const available = me?.resources || {};
+      let remaining = stealBudget;
+      const allocation = { R: 0, B: 0, G: 0 };
+      ["R", "B", "G"]
+        .sort((a, b) => (available[b] || 0) - (available[a] || 0))
+        .forEach((key) => {
+          if (remaining <= 0) return;
+          const take = Math.min(available[key] || 0, remaining);
+          allocation[key] = take;
+          remaining -= take;
+        });
+      setStealRequired(stealBudget);
+      setStealAllocation(allocation);
+      setStealPromptOpen(true);
+      return;
+    }
+    onEndTurn?.({});
+    clearFightPanel();
+    setSelectedCard(null);
+    setStanceMenuOpen(false);
+  };
+
+  const totalStealSelected =
+    (stealAllocation.R || 0) + (stealAllocation.B || 0) + (stealAllocation.G || 0);
+
+  const adjustSteal = (key, delta) => {
+    if (!me?.resources) return;
+    setStealAllocation((prev) => {
+      const cap = me.resources?.[key] || 0;
+      const current = prev?.[key] || 0;
+      const nextVal = Math.min(Math.max(0, current + delta), cap);
+      const prevTotal = (prev.R || 0) + (prev.B || 0) + (prev.G || 0);
+      const newTotal = prevTotal - current + nextVal;
+      if (newTotal > stealRequired) return prev;
+      return { ...prev, [key]: nextVal };
+    });
+  };
+
+  const confirmStealChoice = () => {
+    setStealPromptOpen(false);
+    onEndTurn?.({ steal_allocation: stealAllocation });
+    clearFightPanel();
+    setSelectedCard(null);
+    setStanceMenuOpen(false);
+  };
+
+  const cancelStealChoice = () => {
+    setStealPromptOpen(false);
+  };
+
   const handleCardToggleForFight = (card) => {
     if (!card) return;
     const id = card.id || card.name;
@@ -427,41 +529,32 @@ export default function App({
   const handleFreeStanceChange = (stance) => {
     if (!isMyTurn) return;
     if (!activePlayer) return;
-
-    const baseline = backendBaseline || activePlayer.turnInitialStance || activePlayer.stance;
-    const distance = stanceDistance(baseline, stance);
-    const revertTo = lastLegalStanceRef.current || baseline;
-
-    const applyStance = (shouldSubmit = false) => {
-      updatePlayerStance(stance);
-      lastLegalStanceRef.current = stance;
-      setPrompt(null);
-      if (shouldSubmit) {
-        onRealign?.(stance);
-      } else {
-        onStanceStep?.(stance.toUpperCase());
-      }
-    };
-
-    if (distance <= 1) {
-      applyStance(false);
+    if (activePlayerId !== userId) {
+      onLocalToast?.("Select your board to change stance.", "amber");
+      return;
+    }
+    if (me?.actionUsed) {
+      onLocalToast?.("Main action already used this turn.", "amber");
       return;
     }
 
-    // Move to the chosen stance visually, but require confirm if it's a long jump
-    updatePlayerStance(stance);
+    const baseline = backendActivePlayer?.stance || activePlayer.stance;
+    lastLegalStanceRef.current = baseline;
+    const target = normalizeStance(stance);
 
+    updatePlayerStance(target);
     setPromptSafe({
       type: "stance",
-      message: `Change stance to ${stance}?`,
-      onConfirm: () => applyStance(true),
+      message: `Spend your action to change stance to ${target}?`,
+      onConfirm: () => {
+        onRealign?.(target.toUpperCase());
+        setStanceMenuOpen(false);
+      },
       onCancel: () => {
-        if (revertTo && revertTo !== activePlayer.stance) {
-          updatePlayerStance(revertTo);
-          lastLegalStanceRef.current = revertTo;
-          onStanceStep?.(revertTo.toUpperCase());
+        if (baseline) {
+          updatePlayerStance(baseline);
         }
-        setPrompt(null);
+        setStanceMenuOpen(false);
       },
     });
   };
@@ -469,6 +562,14 @@ export default function App({
   const startExtendFlowWithChoice = (slotType) => {
     clearBuySelection();
     if (!activePlayer) return;
+    if (!isMyTurn || activePlayerId !== userId) {
+      onLocalToast?.("You can extend slots only on your turn.", "amber");
+      return;
+    }
+    if (me?.actionUsed) {
+      onLocalToast?.("Main action already used this turn.", "amber");
+      return;
+    }
     const key = slotType === "weapon" ? "weaponSlots" : "upgradeSlots";
     const current = activePlayer[key] ?? 1;
     if (current >= 4) {
@@ -497,6 +598,14 @@ export default function App({
 
   const handleCardBuyClick = (card) => {
     if (!card) return;
+    if (!isMyTurn || activePlayerId !== userId) {
+      onLocalToast?.("Wait for your turn to buy.", "amber");
+      return;
+    }
+    if (me?.buyUsed) {
+      onLocalToast?.("Optional buy already used this turn.", "amber");
+      return;
+    }
     setPromptSafe(null);
     const actionType = card.type === "Weapon" ? "buy_weapon" : "buy_upgrade";
     setStanceMenuOpen(false);
@@ -531,6 +640,10 @@ export default function App({
   const submitSelectedAction = () => {
     if (!selectedCard?.card) return;
     if (!isMyTurn) return;
+    if (me?.buyUsed) {
+      onLocalToast?.("Optional buy already used this turn.", "amber");
+      return;
+    }
     if (!canAfford(selectedCard.card)) return;
     if (!hasSlotForCard(selectedCard.card)) return;
     if (selectedCard.type === "buy_upgrade") {
@@ -543,6 +656,7 @@ export default function App({
 
   const canBuyCard = (card) => {
     if (!card) return false;
+    if (me?.buyUsed) return false;
     return canAfford(card) && hasSlotForCard(card);
   };
 
@@ -561,6 +675,29 @@ export default function App({
         {/* Main content area */}
         <div className="flex-1 min-h-0 px-6 py-4 overflow-hidden">
           <div className="relative w-full h-full overflow-hidden rounded-3xl">
+            <div className="absolute top-3 right-3 z-20 flex flex-wrap gap-2 justify-end">
+              <div
+                className={`px-3 py-2 rounded-lg border text-[11px] uppercase tracking-[0.12em] ${
+                  mainActionUsed ? "border-slate-700 text-slate-500" : "border-emerald-400 text-emerald-200"
+                }`}
+              >
+                Main Action: {mainActionUsed ? "Used" : "Ready"}
+              </div>
+              <div
+                className={`px-3 py-2 rounded-lg border text-[11px] uppercase tracking-[0.12em] ${
+                  buyUsed ? "border-slate-700 text-slate-500" : "border-sky-400 text-sky-200"
+                }`}
+              >
+                Optional Buy: {buyUsed ? "Used" : "Ready"}
+              </div>
+              <button
+                onClick={handleEndTurnClick}
+                className="px-3 py-2 rounded-lg border border-amber-400 text-amber-200 hover:bg-amber-400/10 text-[11px] uppercase tracking-[0.14em] disabled:opacity-50"
+                disabled={!isMyTurn}
+              >
+                End Turn
+              </button>
+            </div>
             {activeFight ? (
               <div className="h-full">
                 <FightPanel
@@ -594,7 +731,7 @@ export default function App({
                     rows={threatRows}
                     boss={boss}
                     onFightRow={handleStartFight}
-                    fightableRowIndex={firstFrontRow}
+                    activeStance={activePlayer?.stance}
                     onZoom={() => setZoomedPanel('threats')}
                   />
                   <MarketPanel
@@ -634,7 +771,7 @@ export default function App({
                               rows={threatRows}
                               boss={boss}
                               onFightRow={handleStartFight}
-                              fightableRowIndex={firstFrontRow}
+                              activeStance={activePlayer?.stance}
                             />
                           ) : (
                             <MarketPanel
@@ -710,6 +847,55 @@ export default function App({
               <button
                 onClick={() => { prompt.onConfirm?.(); setPrompt(null); }}
                 className="px-3 py-1 rounded-full border border-emerald-500 text-emerald-200 hover:bg-emerald-500/10"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {stealPromptOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl p-4 w-[340px] shadow-2xl">
+            <div className="text-sm text-slate-100 mb-2">
+              Cunning threats will steal {stealRequired} resources. Choose what to lose.
+            </div>
+            <div className="flex gap-2 mb-3">
+              {["R", "B", "G"].map((key) => (
+                <div key={key} className="flex-1 bg-slate-800/60 border border-slate-700 rounded-lg p-2 text-center">
+                  <div className="text-[11px] uppercase text-slate-400"> {key} </div>
+                  <div className="text-lg font-semibold text-slate-100">{stealAllocation[key] || 0}</div>
+                  <div className="text-[10px] text-slate-500">Avail: {me?.resources?.[key] || 0}</div>
+                  <div className="flex justify-center gap-2 mt-2">
+                    <button
+                      className="px-2 py-1 rounded border border-slate-700 text-slate-200 hover:bg-slate-700/60"
+                      onClick={() => adjustSteal(key, -1)}
+                    >
+                      −
+                    </button>
+                    <button
+                      className="px-2 py-1 rounded border border-slate-700 text-slate-200 hover:bg-slate-700/60 disabled:opacity-50"
+                      disabled={(stealAllocation[key] || 0) >= (me?.resources?.[key] || 0) || totalStealSelected >= stealRequired}
+                      onClick={() => adjustSteal(key, 1)}
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2 text-[11px]">
+              <button
+                className="px-3 py-1 rounded-full border border-slate-700 text-slate-300 hover:bg-slate-800"
+                onClick={cancelStealChoice}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-3 py-1 rounded-full border border-emerald-500 text-emerald-200 hover:bg-emerald-500/10 disabled:opacity-50"
+                onClick={confirmStealChoice}
+                disabled={totalStealSelected !== stealRequired}
               >
                 Confirm
               </button>

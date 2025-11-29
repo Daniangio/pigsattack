@@ -6,6 +6,7 @@ This package owns all domain logic for the Wild Pigs game and is intentionally i
 Key pieces
 - `GameSession`: orchestrates turns/phases, holds `GameState`, and exposes `player_action`/`public_preview`.
 - `GameDataLoader`: loads static data from `data/market.json` and `data/threats.json`.
+- `ThreatManager`: owns the threat deck/board (advances, spawns, resolves attacks, and weight growth).
 - `models.py`: domain enums (`GamePhase`, `Stance`, `TokenType`), dataclasses for cards/state, and helpers for resource conversion.
 - `data/`: JSON seeds for threats/boss and market pulled from the existing frontend JS.
 

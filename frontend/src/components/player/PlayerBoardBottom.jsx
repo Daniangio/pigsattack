@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { Trophy, Flame, Zap, Shield } from "lucide-react";
+import { Trophy, Flame, Zap, Shield, Skull } from "lucide-react";
 import ResourcePip from "../ui/ResourcePip";
 import StanceModal from "./StanceModal";
 import { MarketData } from "../../state/market";
@@ -241,6 +241,10 @@ export default function PlayerBoardBottom({
               <Trophy size={14} className="text-amber-300" />
               <span>VP: {player.vp}</span>
             </div>
+            <div className="flex items-center gap-1 text-xs text-rose-200">
+              <Skull size={12} />
+              <span>Wounds: {player.wounds ?? 0}</span>
+            </div>
             </div>
           </div>
         ) : (
@@ -268,6 +272,10 @@ export default function PlayerBoardBottom({
               <div className="flex items-center gap-1 text-sm text-slate-300">
                 <Trophy size={14} className="text-amber-300" />
                 <span>VP: {player.vp}</span>
+              </div>
+              <div className="flex items-center gap-1 text-xs text-rose-200">
+                <Skull size={13} />
+                <span>Wounds: {player.wounds ?? 0}{player.wounds >= 5 ? " (-10 VP)" : ""}</span>
               </div>
               {stanceInfo && (
                 <div className="text-[11px] text-slate-400 mt-1">

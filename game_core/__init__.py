@@ -17,6 +17,7 @@ from .models import (
 )
 from .session import GameSession
 from .data_loader import GameDataLoader
+from .threats import ThreatManager, ThreatDeckData, ThreatInstance
 
 __all__ = [
     "GamePhase",
@@ -28,4 +29,7 @@ __all__ = [
     "PlayerBoard",
     "GameSession",
     "GameDataLoader",
+    "ThreatManager",
+    "ThreatDeckData",
+    "ThreatInstance",
 ]

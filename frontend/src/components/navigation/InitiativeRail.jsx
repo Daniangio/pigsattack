@@ -1,4 +1,5 @@
 import React from "react";
+import { Skull } from "lucide-react";
 import { stanceColorRing } from "../../utils/stanceColorRing";
 
 export default function InitiativeRail({ players, activePlayerId, currentTurnPlayerId, onSelect }) {
@@ -40,6 +41,10 @@ export default function InitiativeRail({ players, activePlayerId, currentTurnPla
             <span className="text-[9px] text-slate-400">
               VP {player.vp}
             </span>
+            <div className="text-[9px] text-rose-200 flex items-center gap-1">
+              <Skull size={10} />
+              <span>{player.wounds ?? 0}</span>
+            </div>
             <div className="text-[9px] text-center leading-tight">
               <div className="flex justify-center gap-1">
                 <span className="text-red-300">R{player.resources?.R ?? 0}</span>

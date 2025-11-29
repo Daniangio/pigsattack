@@ -21,12 +21,26 @@ export default function ThreatsPanel({
   boss,
   onFightRow,
   onZoom,
-  fightableRowIndex = 0,
+  activeStance,
 }) {
   const bossCard = boss || ThreatData.boss;
   const threatRows = rows && rows.length ? rows : ThreatData.rows;
   const allThreats = threatRows.flat();
   const compactRows = chunkBy(allThreats, playersCount || allThreats.length);
+
+  const stanceWeakness = (threatType = "", stance = "") => {
+    const type = threatType.toLowerCase();
+    const s = stance.toUpperCase();
+    if (!type || !s) return false;
+    if (type === "hybrid") return s !== "BALANCED";
+    const weakMap = {
+      AGGRESSIVE: new Set(["feral"]),
+      TACTICAL: new Set(["cunning"]),
+      HUNKERED: new Set(["massive"]),
+      BALANCED: new Set(["feral", "cunning", "massive"]),
+    };
+    return weakMap[s]?.has(type);
+  };
 
   return (
     <div className="w-full h-full bg-slate-950/60 border border-slate-800 
@@ -57,11 +71,13 @@ export default function ThreatsPanel({
                 {row.map((threat) => {
                   const foundRowIndex = threatRows.findIndex((r) => r.some((t) => t.id === threat.id));
                   const resolvedRowIndex = foundRowIndex >= 0 ? foundRowIndex : i;
+                  const resolvedRow = threatRows[resolvedRowIndex] || [];
+                  const positionFront = (threat.position || "").toLowerCase() === "front";
                   const isFront =
-                    foundRowIndex >= 0
-                      ? threatRows[foundRowIndex]?.[0]?.id === threat.id
-                      : threatRows.find((r) => r.some((t) => t.id === threat.id))?.[0]?.id === threat.id;
-                  const canFight = isFront && resolvedRowIndex === fightableRowIndex;
+                    positionFront ||
+                    (!threat.position && resolvedRow?.[0]?.id === threat.id);
+                  const isAttacking = isFront && stanceWeakness(threat.type, activeStance);
+                  const canFight = isFront;
                   return (
                     <ThreatCardCompact
                       key={threat.id}
@@ -70,6 +86,9 @@ export default function ThreatsPanel({
                       rowIndex={resolvedRowIndex}
                       isFront={isFront}
                       canFight={canFight}
+                      isAttacking={isAttacking}
+                      weight={threat.weight || 0}
+                      position={threat.position}
                     />
                   );
                 })}
@@ -84,8 +103,10 @@ export default function ThreatsPanel({
               {threatRows.map((row, rowIdx) => (
                 <div key={`row-${rowIdx}`} className="flex gap-3">
                   {row.map((threat) => {
-                    const isFront = row[0]?.id === threat.id;
-                    const canFight = isFront && rowIdx === fightableRowIndex;
+                    const positionFront = (threat.position || "").toLowerCase() === "front";
+                    const isFront = positionFront || (!threat.position && row[0]?.id === threat.id);
+                    const isAttacking = isFront && stanceWeakness(threat.type, activeStance);
+                    const canFight = isFront;
                     return (
                       <ThreatCardMini
                         key={threat.id}
@@ -93,6 +114,9 @@ export default function ThreatsPanel({
                         rowIndex={rowIdx}
                         isFront={isFront}
                         canFight={canFight}
+                        isAttacking={isAttacking}
+                        weight={threat.weight || 0}
+                        position={threat.position}
                         onFight={onFightRow}
                       />
                     );
