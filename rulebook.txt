@@ -100,7 +100,7 @@ Re-Stance Action
 Spend your main action to change stance to any other.
 
 4️⃣ THREAT BOARD
-Number of lanes = N_players − 1
+Number of lanes = N_players
  Each lane displays 3 visible threats:
 Front  —  Mid  —  Back  — (Deck)
 
@@ -139,8 +139,10 @@ Gain per-round upgrade bonuses
 
 Take ONE Main Action:
 1️⃣ Fight a threat
-2️⃣ Extend a Slot (+Gain 1 Wild token)
+2️⃣ Extend a Slot
 3️⃣ Re-Stance
+4️⃣ Prepare (choose a token among ferocity, conversion or wild and add to your board). Token limit is always 3 per type.
+
 Optional Buy (once per turn, anytime)
 Buy 1 Upgrade OR 1 Weapon
  (must pay cost and have free slot)

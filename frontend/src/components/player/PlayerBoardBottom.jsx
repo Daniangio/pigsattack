@@ -24,6 +24,8 @@ export default function PlayerBoardBottom({
   onCardToggleForFight,
   onTokenToggleForFight,
   onConvertToken,
+  onPickToken,
+  canPickToken = false,
   stagedFightCards,
   stagedFightTokens,
 }) {
@@ -332,6 +334,22 @@ export default function PlayerBoardBottom({
 
             {/* Tokens */}
             <div className="relative flex flex-col justify-center gap-2 min-w-[200px]">
+              {onPickToken && (
+                <div className="flex justify-start">
+                  <button
+                    type="button"
+                    onClick={() => onPickToken?.()}
+                    disabled={!canPickToken}
+                    className={`px-3 py-2 rounded-lg border text-[11px] uppercase tracking-[0.14em] ${
+                      canPickToken
+                        ? "border-emerald-400 text-emerald-200 hover:bg-emerald-400/10"
+                        : "border-slate-700 text-slate-500 cursor-not-allowed"
+                    }`}
+                  >
+                    Pick Token (Action)
+                  </button>
+                </div>
+              )}
               {["attack", "wild", "mass", "conversion"].some((k) => (player.tokens?.[k] ?? player.tokens?.[k?.toUpperCase?.()] ?? 0) > 0) ? (
                 <div className="grid grid-cols-2 gap-2">
                   {["attack", "wild", "mass", "conversion"].map((key) => {

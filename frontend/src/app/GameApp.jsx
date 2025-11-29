@@ -58,6 +58,7 @@ export default function App({
   onBuyUpgrade,
   onBuyWeapon,
   onExtendSlot,
+  onPickToken,
   onRealign,
   onLocalToast,
   onEndTurn,
@@ -128,6 +129,8 @@ export default function App({
   const [stealAllocation, setStealAllocation] = useState({ R: 0, B: 0, G: 0 });
   const [stealRequired, setStealRequired] = useState(STEAL_AMOUNT);
   const [stealPromptOpen, setStealPromptOpen] = useState(false);
+  const [pickTokenOpen, setPickTokenOpen] = useState(false);
+  const [pickTokenChoice, setPickTokenChoice] = useState(null);
   const [isFollowingTurn, setIsFollowingTurn] = useState(true);
   const [selectedCard, setSelectedCard] = useState(null); // selected card for confirmation
   const [highlightBuyables, setHighlightBuyables] = useState(false);
@@ -478,6 +481,25 @@ export default function App({
     setStealPromptOpen(false);
   };
 
+  const handleOpenPickToken = () => {
+    if (!isMyTurn || activePlayerId !== userId) {
+      onLocalToast?.("You can pick a token only on your turn.", "amber");
+      return;
+    }
+    if (mainActionUsed) {
+      onLocalToast?.("Main action already used this turn.", "amber");
+      return;
+    }
+    setPickTokenChoice(null);
+    setPickTokenOpen(true);
+  };
+
+  const confirmPickToken = () => {
+    if (!pickTokenChoice) return;
+    onPickToken?.(pickTokenChoice);
+    setPickTokenOpen(false);
+  };
+
   const handleCardToggleForFight = (card) => {
     if (!card) return;
     const id = card.id || card.name;
@@ -810,6 +832,8 @@ export default function App({
           onCardToggleForFight={activeFight ? handleCardToggleForFight : undefined}
           onTokenToggleForFight={activeFight ? handleTokenClickForFight : undefined}
           onConvertToken={onConvert}
+          onPickToken={handleOpenPickToken}
+          canPickToken={isMyTurn && activePlayerId === userId && !mainActionUsed}
           stagedFightCards={
             activeFight
               ? { upgrades: fightPlayedUpgrades, weapons: fightPlayedWeapons }
@@ -896,6 +920,56 @@ export default function App({
                 className="px-3 py-1 rounded-full border border-emerald-500 text-emerald-200 hover:bg-emerald-500/10 disabled:opacity-50"
                 onClick={confirmStealChoice}
                 disabled={totalStealSelected !== stealRequired}
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pickTokenOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl p-4 w-[340px] shadow-2xl">
+            <div className="text-sm text-slate-100 mb-2">Pick a token (costs your main action).</div>
+            <div className="grid grid-cols-3 gap-2 mb-3">
+              {[
+                { key: "attack", label: "Ferocity", color: "border-red-500 text-red-200", count: me?.tokens?.attack ?? me?.tokens?.ATTACK ?? 0 },
+                { key: "conversion", label: "Conversion", color: "border-blue-500 text-blue-200", count: me?.tokens?.conversion ?? me?.tokens?.CONVERSION ?? 0 },
+                { key: "wild", label: "Wild", color: "border-amber-500 text-amber-200", count: me?.tokens?.wild ?? me?.tokens?.WILD ?? 0 },
+              ].map((opt) => {
+                const capped = opt.count >= 3;
+                const selected = pickTokenChoice === opt.key;
+                return (
+                  <button
+                    key={opt.key}
+                    disabled={capped}
+                    onClick={() => setPickTokenChoice(opt.key)}
+                    className={`px-2 py-3 rounded-lg border text-sm transition ${
+                      capped
+                        ? "border-slate-700 text-slate-500 cursor-not-allowed"
+                        : selected
+                          ? `${opt.color} bg-slate-800`
+                          : "border-slate-700 text-slate-200 hover:border-emerald-400"
+                    }`}
+                  >
+                    <div className="uppercase text-[10px] tracking-[0.18em]">{opt.label}</div>
+                    <div className="text-xs text-slate-400">Have: {opt.count}</div>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex justify-end gap-2 text-[11px]">
+              <button
+                className="px-3 py-1 rounded-full border border-slate-700 text-slate-300 hover:bg-slate-800"
+                onClick={() => setPickTokenOpen(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-3 py-1 rounded-full border border-emerald-500 text-emerald-200 hover:bg-emerald-500/10 disabled:opacity-50"
+                onClick={confirmPickToken}
+                disabled={!pickTokenChoice}
               >
                 Confirm
               </button>

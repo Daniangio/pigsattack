@@ -64,6 +64,11 @@ export default function GamePage() {
     [handleGameAction]
   );
 
+  const handlePickToken = useCallback(
+    (token) => handleGameAction("pick_token", { token }),
+    [handleGameAction]
+  );
+
   const handleExtendSlot = useCallback(
     (slotType = "upgrade") => handleGameAction("extend_slot", { slot_type: slotType }),
     [handleGameAction]
@@ -177,6 +182,7 @@ export default function GamePage() {
               onBuyUpgrade={handleBuyUpgrade}
               onBuyWeapon={handleBuyWeapon}
               onExtendSlot={handleExtendSlot}
+              onPickToken={handlePickToken}
               onRealign={handleRealign}
               onLocalToast={pushToast}
               onEndTurn={handleEndTurn}

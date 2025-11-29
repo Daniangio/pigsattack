@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from .room_manager import RoomManager
 
 from .server_models import User, Room, GameParticipant, PlayerStatus as ServerPlayerStatus
-from game_core import GameSession, GamePhase, PlayerStatus, Stance
+from game_core import GameSession, GamePhase, PlayerStatus, Stance, TokenType
 from game_core.session import InvalidActionError
 from .routers import fake_games_db 
 import random
@@ -390,6 +390,18 @@ class GameManager:
         if stance_choices:
             target = random.choice(stance_choices)
             actions.append({"type": "realign", "payload": {"stance": target.value}})
+
+        # Token pick if below cap
+        token_choices = []
+        if player.tokens.get(TokenType.ATTACK, 0) < 3:
+            token_choices.append("attack")
+        if player.tokens.get(TokenType.CONVERSION, 0) < 3:
+            token_choices.append("conversion")
+        if player.tokens.get(TokenType.WILD, 0) < 3:
+            token_choices.append("wild")
+        if token_choices:
+            token = random.choice(token_choices)
+            actions.append({"type": "pick_token", "payload": {"token": token}})
 
         def can_afford(cost):
             for k, v in cost.items():

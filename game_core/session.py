@@ -55,6 +55,7 @@ class GameSession:
             "fight": self._handle_fight,
             "buy_upgrade": self._handle_buy_upgrade,
             "buy_weapon": self._handle_buy_weapon,
+            "pick_token": self._handle_pick_token,
             "extend_slot": self._handle_extend_slot,
             "realign": self._handle_realign,
             "stance_step": self._handle_stance_step,
@@ -192,7 +193,7 @@ class GameSession:
             self._apply_reward(player, threat.reward)
         if not self.threat_manager:
             raise InvalidActionError("Threat manager unavailable.")
-        self.threat_manager.remove_front(result["row_index"])
+        self.threat_manager.remove_threat(result["row_index"], threat.id)
         self._sync_threat_rows()
         self.state.add_log(f"{player.username} defeated {threat.name} for {threat.vp} VP.")
         await self._check_game_over()
@@ -230,6 +231,26 @@ class GameSession:
         player.vp += card.vp
         self.state.market.weapons = [c for c in self.state.market.weapons if c.id != card.id]
         self.state.add_log(f"{player.username} bought weapon {card.name}.")
+
+    async def _handle_pick_token(self, player: PlayerBoard, payload: Dict[str, Any]):
+        self._assert_turn(player)
+        self._consume_main_action(player)
+        token_raw = (payload.get("token") or payload.get("token_type") or "").lower()
+        token_map = {
+            "ferocity": TokenType.ATTACK,
+            "attack": TokenType.ATTACK,
+            "conversion": TokenType.CONVERSION,
+            "convert": TokenType.CONVERSION,
+            "wild": TokenType.WILD,
+        }
+        token_type = token_map.get(token_raw)
+        if not token_type:
+            raise InvalidActionError("Unknown token type.")
+        current = player.tokens.get(token_type, 0)
+        if current >= 3:
+            raise InvalidActionError("You already have the maximum of that token.")
+        player.tokens[token_type] = min(3, current + 1)
+        self.state.add_log(f"{player.username} picked a {token_type.value} token.")
 
     async def _handle_extend_slot(self, player: PlayerBoard, payload: Dict[str, Any]):
         self._assert_turn(player)
@@ -385,10 +406,12 @@ class GameSession:
             raise InvalidActionError("Threats not initialized.")
         threat = self.threat_manager.front_threat(row_index)
         if not threat:
-            raise InvalidActionError("No threat at the front of that lane.")
+            raise InvalidActionError("No threat available in that lane.")
         requested_id = payload.get("threat_id")
-        if requested_id and requested_id != threat.id:
-            raise InvalidActionError("Targeted threat is no longer in front.")
+        if self.threat_manager and requested_id:
+            threat = self.threat_manager.fightable_threat(row_index, requested_id)
+            if not threat:
+                raise InvalidActionError("That threat is not currently fightable.")
         cost = dict(threat.cost)
         weight_cost = getattr(threat, "weight", 0) or 0
         if weight_cost:

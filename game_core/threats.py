@@ -138,12 +138,58 @@ class ThreatBoard:
     def front_threat(self, row_index: int) -> Optional[ThreatInstance]:
         if row_index < 0 or row_index >= len(self.lanes):
             return None
-        return self.lanes[row_index].front
+        lane = self.lanes[row_index]
+        if lane.front:
+            lane.front.position = "front"
+            return lane.front
+        # Return next visible threat if front is empty
+        if lane.mid:
+            lane.mid.position = "mid"
+            return lane.mid
+        if lane.back:
+            lane.back.position = "back"
+            return lane.back
+        return None
+
+    def fightable_threat(self, row_index: int, threat_id: Optional[str] = None) -> Optional[ThreatInstance]:
+        if row_index < 0 or row_index >= len(self.lanes):
+            return None
+        lane = self.lanes[row_index]
+        candidates = [
+            ("front", lane.front),
+            ("mid", lane.mid),
+            ("back", lane.back),
+        ]
+        # First visible threat is the first non-empty slot
+        visible = next(((pos, t) for pos, t in candidates if t), None)
+        if not visible:
+            return None
+        pos, threat = visible
+        threat.position = pos
+        if threat_id and threat.id != threat_id:
+            return None
+        return threat
 
     def remove_front(self, row_index: int) -> Optional[ThreatInstance]:
         if row_index < 0 or row_index >= len(self.lanes):
             return None
         return self.lanes[row_index].remove_front()
+
+    def remove_threat(self, row_index: int, threat_id: str) -> Optional[ThreatInstance]:
+        if row_index < 0 or row_index >= len(self.lanes):
+            return None
+        lane = self.lanes[row_index]
+        if lane.front and lane.front.id == threat_id:
+            return lane.remove_front()
+        if lane.mid and lane.mid.id == threat_id:
+            threat = lane.mid
+            lane.mid = None
+            return threat
+        if lane.back and lane.back.id == threat_id:
+            threat = lane.back
+            lane.back = None
+            return threat
+        return None
 
     def front_threats_with_index(self) -> List[Tuple[int, ThreatInstance]]:
         result: List[Tuple[int, ThreatInstance]] = []
@@ -205,7 +251,7 @@ class ThreatDeckBuilder:
 class ThreatManager:
     def __init__(self, deck_data: ThreatDeckData, player_count: int):
         self.deck = ThreatDeckBuilder(deck_data, player_count)
-        self.board = ThreatBoard(max(1, player_count - 1))
+        self.board = ThreatBoard(max(1, player_count))
         self.bosses = deck_data.bosses
 
     def bootstrap(self) -> List[str]:
@@ -225,8 +271,14 @@ class ThreatManager:
     def remove_front(self, row_index: int) -> Optional[ThreatInstance]:
         return self.board.remove_front(row_index)
 
+    def remove_threat(self, row_index: int, threat_id: str) -> Optional[ThreatInstance]:
+        return self.board.remove_threat(row_index, threat_id)
+
     def front_threat(self, row_index: int) -> Optional[ThreatInstance]:
         return self.board.front_threat(row_index)
+
+    def fightable_threat(self, row_index: int, threat_id: Optional[str]) -> Optional[ThreatInstance]:
+        return self.board.fightable_threat(row_index, threat_id)
 
     def rows(self) -> List[List[ThreatInstance]]:
         return self.board.to_rows()
