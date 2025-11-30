@@ -19,6 +19,7 @@ class ThreatInstance:
     weight: int = 0
     era: str = "day"
     position: str = "back"
+    enrage_tokens: int = 0
 
     @property
     def id(self) -> str:
@@ -54,7 +55,14 @@ class ThreatInstance:
 
     def to_public_dict(self) -> Dict[str, Any]:
         data = self.card.to_public_dict()
-        data.update({"weight": self.weight, "position": self.position, "era": self.era})
+        data.update(
+            {
+                "weight": self.weight,
+                "position": self.position,
+                "era": self.era,
+                "enrage_tokens": self.enrage_tokens,
+            }
+        )
         return data
 
 
@@ -69,8 +77,13 @@ class ThreatLane:
         self.mid = None
         self.back = None
 
-    def advance(self) -> bool:
+    def advance(self) -> Tuple[bool, bool]:
         moved = False
+        enraged = False
+        if self.front:
+            # Cannot move further; becomes enraged.
+            self.front.enrage_tokens = max(0, getattr(self.front, "enrage_tokens", 0)) + 1
+            enraged = True
         if not self.front and self.mid:
             self.front = self.mid
             self.mid = None
@@ -79,7 +92,7 @@ class ThreatLane:
             self.mid = self.back
             self.back = None
             moved = True
-        return moved
+        return moved, enraged
 
     def spawn(self, draw: Callable[[], Optional[ThreatInstance]]) -> bool:
         if self.back:
@@ -119,11 +132,16 @@ class ThreatBoard:
         for lane in self.lanes:
             lane.clear()
 
-    def advance(self) -> bool:
+    def advance(self) -> Tuple[bool, List[ThreatInstance]]:
         moved = False
+        enraged: List[ThreatInstance] = []
         for lane in self.lanes:
-            moved = lane.advance() or moved
-        return moved
+            lane_moved, lane_enraged = lane.advance()
+            moved = lane_moved or moved
+            if lane_enraged and lane.front:
+                lane.front.position = "front"
+                enraged.append(lane.front)
+        return moved, enraged
 
     def spawn(self, draw: Callable[[], Optional[ThreatInstance]]) -> int:
         spawned = 0
@@ -169,6 +187,17 @@ class ThreatBoard:
         if threat_id and threat.id != threat_id:
             return None
         return threat
+
+    def threat_by_id(self, row_index: int, threat_id: str) -> Optional[ThreatInstance]:
+        if row_index < 0 or row_index >= len(self.lanes):
+            return None
+        lane = self.lanes[row_index]
+        for pos in ["front", "mid", "back"]:
+            threat = getattr(lane, pos)
+            if threat and threat.id == threat_id:
+                threat.position = pos
+                return threat
+        return None
 
     def remove_front(self, row_index: int) -> Optional[ThreatInstance]:
         if row_index < 0 or row_index >= len(self.lanes):
@@ -261,8 +290,11 @@ class ThreatManager:
 
     def advance_and_spawn(self) -> List[str]:
         logs: List[str] = []
-        if self.board.advance():
+        moved, enraged = self.board.advance()
+        if moved:
             logs.append("Threats advance toward the survivors.")
+        for threat in enraged:
+            logs.append(f"{threat.name} becomes enraged in the front line (+2R cost, attacks all stances).")
         spawned = self.board.spawn(self.deck.draw_next)
         if spawned:
             logs.append(f"{spawned} threat{'s' if spawned > 1 else ''} emerge in the backline.")
@@ -279,6 +311,9 @@ class ThreatManager:
 
     def fightable_threat(self, row_index: int, threat_id: Optional[str]) -> Optional[ThreatInstance]:
         return self.board.fightable_threat(row_index, threat_id)
+
+    def threat_by_id(self, row_index: int, threat_id: str) -> Optional[ThreatInstance]:
+        return self.board.threat_by_id(row_index, threat_id)
 
     def rows(self) -> List[List[ThreatInstance]]:
         return self.board.to_rows()
@@ -299,6 +334,11 @@ class ThreatManager:
         return logs
 
     def _threat_targets_player(self, threat: ThreatInstance, stance: Stance) -> bool:
+        # Only explicit front-row threats may attack the player.
+        if getattr(threat, "position", "front") != "front":
+            return False
+        if getattr(threat, "enrage_tokens", 0) > 0:
+            return True
         threat_key = threat.type_key
         if threat_key == "hybrid":
             return stance != Stance.BALANCED

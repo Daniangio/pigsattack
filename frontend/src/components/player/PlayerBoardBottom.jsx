@@ -10,6 +10,7 @@ import { normalizeStance } from "../../utils/formatters";
 
 export default function PlayerBoardBottom({
   player,
+  era,
   players,
   setPlayers,
   activePlayerId,
@@ -26,6 +27,10 @@ export default function PlayerBoardBottom({
   onConvertToken,
   onPickToken,
   canPickToken = false,
+  mainActionUsed = false,
+  buyUsed = false,
+  onEndTurn,
+  isMyBoard = false,
   stagedFightCards,
   stagedFightTokens,
 }) {
@@ -99,6 +104,71 @@ export default function PlayerBoardBottom({
   const weaponSlots = Math.min(player.weaponSlots ?? maxSlots, maxSlots);
   const upgradeCards = (player.upgrades || []).map(resolveCard).filter(Boolean);
   const weaponCards = (player.weapons || []).map(resolveCard).filter(Boolean);
+  const stanceProduction = stanceInfo?.production || { R: 0, B: 0, G: 0 };
+
+  const upgradeProduction = useMemo(() => {
+    const prod = { R: 0, B: 0, G: 0 };
+    const resMap = { R: "R", B: "B", G: "G" };
+    const stanceRes = {
+      Aggressive: "R",
+      AGGRESSIVE: "R",
+      Tactical: "B",
+      TACTICAL: "B",
+      Hunkered: "G",
+      HUNKERED: "G",
+      Balanced: null,
+      BALANCED: null,
+    }[currentStance];
+
+    const resources = player.resources || {};
+    const lowestRes = (() => {
+      const entries = Object.entries(resMap).map(([k, v]) => ({ key: v, val: resources[v] || 0 }));
+      const minVal = Math.min(...entries.map((e) => e.val));
+      const lowest = entries.filter((e) => e.val === minVal).map((e) => e.key);
+      if (lowest.includes("B")) return "B";
+      return lowest[0] || "R";
+    })();
+
+    upgradeCards.forEach((card) => {
+      const tags = card.tags || [];
+      tags.forEach((tag) => {
+        if (typeof tag !== "string") return;
+        if (tag.startsWith("production:")) {
+          const payload = tag.replace("production:", "");
+          const parts = payload.split(":");
+          if (parts[0] === "stance") {
+            const amt = parseInt(parts[1], 10);
+            if (!isNaN(amt)) {
+              const target = stanceRes || "B"; // Balanced defaults to Blue
+              prod[target] = (prod[target] || 0) + amt;
+            }
+          } else if (parts[0] === "lowest") {
+            const amt = parseInt(parts[1], 10);
+            if (!isNaN(amt)) {
+              prod[lowestRes] = (prod[lowestRes] || 0) + amt;
+            }
+          } else {
+            const tagEra = parts[1]?.toLowerCase();
+            const resKey = parts[0]?.[0]?.toUpperCase?.();
+            const amt = parseInt(parts[0]?.slice(1), 10);
+            if (resKey && !isNaN(amt) && resMap[resKey]) {
+              const activeEra = (era || player?.era || "").toLowerCase();
+              if (!tagEra || activeEra === tagEra) {
+                prod[resKey] = (prod[resKey] || 0) + amt;
+              }
+            }
+          }
+        }
+      });
+    });
+    return prod;
+  }, [currentStance, player?.resources, player?.era, era, upgradeCards]);
+
+  const totalProduction = {
+    R: (stanceProduction.R || 0) + (upgradeProduction.R || 0),
+    B: (stanceProduction.B || 0) + (upgradeProduction.B || 0),
+    G: (stanceProduction.G || 0) + (upgradeProduction.G || 0),
+  };
   const modalPlayers = players;
   const stagedUpgrades = stagedFightCards?.upgrades || new Set();
   const stagedWeapons = stagedFightCards?.weapons || new Set();
@@ -206,7 +276,7 @@ export default function PlayerBoardBottom({
     <div className="flex flex-col gap-2">
       <div
         className={`relative bg-slate-950/90 border-t border-slate-800 backdrop-blur-xl ${
-          collapsed ? "h-12 px-4 py-2" : "h-44 px-6 py-4"
+          collapsed ? "h-12 px-4 py-2" : "px-6 py-4"
         }`}
       >
         <button
@@ -237,239 +307,270 @@ export default function PlayerBoardBottom({
             >
               {(currentStance || "?")[0]}
             </div>
-          <div className="flex items-center gap-3 min-w-0">
-            <span className="text-sm font-semibold text-slate-50 truncate">{player.name}</span>
-            <div className="flex items-center gap-1 text-sm text-slate-300 shrink-0">
-              <Trophy size={14} className="text-amber-300" />
-              <span>VP: {player.vp}</span>
-            </div>
-            <div className="flex items-center gap-1 text-xs text-rose-200">
-              <Skull size={12} />
-              <span>Wounds: {player.wounds ?? 0}</span>
-            </div>
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="text-sm font-semibold text-slate-50 truncate">{player.name}</span>
+              <div className="flex items-center gap-3 text-sm text-slate-300 shrink-0">
+                <div className="flex items-center gap-1">
+                  <Trophy size={14} className="text-amber-300" />
+                  <span>VP: {player.vp}</span>
+                </div>
+                <div className="flex items-center gap-1 text-xs text-rose-200">
+                  <Skull size={12} />
+                  <span>Wounds: {player.wounds ?? 0}</span>
+                </div>
+              </div>
             </div>
           </div>
         ) : (
-          <div className="h-full flex items-start gap-4 overflow-visible">
-            {/* Player icon */}
-          <div className="flex flex-col items-center gap-2 min-w-[72px]">
-            <div
-              onClick={() => {
-                if (!canChangeStance) return;
-                onToggleStance();
-              }}
-              className={`w-16 h-16 rounded-full border-4 ${stanceColorRing(currentStance)}
-                            bg-slate-900 flex items-center justify-center text-xs uppercase tracking-[0.2em] text-slate-200 ${
-                              canChangeStance ? "cursor-pointer" : "opacity-50 cursor-not-allowed"
-                            }`}
-            >
-              {currentStance}
-            </div>
-          </div>
-
-            {/* Name/VP/discount */}
-            <div className="flex flex-col justify-center min-w-[160px]">
-              <div className="text-[11px] uppercase tracking-[0.3em] text-slate-500">Active Player</div>
-              <div className="text-xl font-bold text-slate-50 leading-tight">{player.name}</div>
-              <div className="flex items-center gap-1 text-sm text-slate-300">
-                <Trophy size={14} className="text-amber-300" />
-                <span>VP: {player.vp}</span>
-              </div>
-              <div className="flex items-center gap-1 text-xs text-rose-200">
-                <Skull size={13} />
-                <span>Wounds: {player.wounds ?? 0}{player.wounds >= 5 ? " (-10 VP)" : ""}</span>
-              </div>
-              {stanceInfo && (
-                <div className="text-[11px] text-slate-400 mt-1">
-                  Discount: <span className={stanceTextColor}>{stanceInfo.discount}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Resources + gains */}
-            <div className="flex flex-col justify-center gap-1 min-w-[100px]">
-              <div className="flex items-center gap-2">
-                <ResourcePip
-                  icon={Flame}
-                  value={effectiveResources?.R || 0}
-                  color={{
-                    border: "border-red-900",
-                    bg: "bg-red-950/40",
-                    icon: "text-red-400",
-                  }}
-                />
-                {stanceInfo && (
-                  <span className="text-xs text-slate-300 min-w-[50px]">+{stanceInfo.production.R} / rd</span>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <ResourcePip
-                  icon={Zap}
-                  value={effectiveResources?.B || 0}
-                  color={{
-                    border: "border-blue-900",
-                    bg: "bg-blue-950/40",
-                    icon: "text-blue-400",
-                  }}
-                />
-                {stanceInfo && (
-                  <span className="text-xs text-slate-300 min-w-[50px]">+{stanceInfo.production.B} / rd</span>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <ResourcePip
-                  icon={Shield}
-                  value={effectiveResources?.G || 0}
-                  color={{
-                    border: "border-green-900",
-                    bg: "bg-green-950/40",
-                    icon: "text-green-400",
-                  }}
-                />
-                {stanceInfo && (
-                  <span className="text-xs text-slate-300 min-w-[50px]">+{stanceInfo.production.G} / rd</span>
-                )}
-              </div>
-            </div>
-
-            {/* Tokens */}
-            <div className="relative flex flex-col justify-center gap-2 min-w-[200px]">
-              {onPickToken && (
-                <div className="flex justify-start">
-                  <button
-                    type="button"
-                    onClick={() => onPickToken?.()}
-                    disabled={!canPickToken}
-                    className={`px-3 py-2 rounded-lg border text-[11px] uppercase tracking-[0.14em] ${
-                      canPickToken
-                        ? "border-emerald-400 text-emerald-200 hover:bg-emerald-400/10"
-                        : "border-slate-700 text-slate-500 cursor-not-allowed"
-                    }`}
+            <div className="flex flex-col gap-3 overflow-visible">
+              <div className="flex items-start gap-4">
+                {/* Player icon */}
+                <div className="flex flex-col items-center gap-2 min-w-[72px]">
+                  <div
+                    onClick={() => {
+                      if (!canChangeStance) return;
+                      onToggleStance();
+                    }}
+                    className={`w-16 h-16 rounded-full border-4 ${stanceColorRing(currentStance)}
+                                  bg-slate-900 flex items-center justify-center text-xs uppercase tracking-[0.2em] text-slate-200 ${
+                                    canChangeStance ? "cursor-pointer" : "opacity-50 cursor-not-allowed"
+                                  }`}
                   >
-                    Pick Token (Action)
-                  </button>
+                    {currentStance}
+                  </div>
+                  {isMyBoard && (
+                    <div className="flex flex-col items-center gap-1 w-full">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className={`px-2 py-1 rounded-md border text-[10px] uppercase tracking-[0.12em] ${
+                            mainActionUsed ? "border-slate-700 text-slate-500" : "border-emerald-400 text-emerald-200"
+                          }`}
+                        >
+                          Main Action
+                        </div>
+                        <div
+                          className={`px-2 py-1 rounded-md border text-[10px] uppercase tracking-[0.12em] ${
+                            buyUsed ? "border-slate-700 text-slate-500" : "border-sky-400 text-sky-200"
+                          }`}
+                        >
+                          Optional Buy
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-              {["attack", "wild", "mass", "conversion"].some((k) => (player.tokens?.[k] ?? player.tokens?.[k?.toUpperCase?.()] ?? 0) > 0) ? (
-                <div className="grid grid-cols-2 gap-2">
-                  {["attack", "wild", "mass", "conversion"].map((key) => {
-                    const total =
-                      player.tokens?.[key] ??
-                      player.tokens?.[key?.toUpperCase?.()] ??
-                      0;
-                    if (total <= 0) return null;
-                    const style = tokenStyles[key] || {};
-                    const remaining =
-                      key === "attack"
-                        ? Math.max(0, total - stagedAttackTokens)
-                        : key === "wild"
-                          ? Math.max(0, total - stagedWildTotal)
-                          : total;
-                    
-                    // Display token even if remaining is 0, just disable
-                    const displayTotal = total;
-                    const isDisabled = remaining <= 0 && key !== "conversion";
 
-                    const isConversion = key === "conversion";
-                    const isConversionActive = isConversion && displayTotal > 0;
-                    
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        className={`${tokenChipClass} ${style.bg || "bg-slate-900"} ${style.border || "border-slate-700"} ${style.text || "text-slate-200"}
-                                   ${isDisabled ? "opacity-50 cursor-not-allowed" : "hover:border-amber-400"}
-                                   ${isConversionActive ? "relative" : ""}
-                                  `}
-                        onClick={() => {
-                          if (isConversionActive) {
-                            setConversionOpen(true);
-                          } else if (!isDisabled) {
-                            onTokenToggleForFight?.(key);
+              {/* Name/VP */}
+              <div className="flex flex-col justify-center min-w-[160px]">
+                <div className="text-[11px] uppercase tracking-[0.3em] text-slate-500">Active Player</div>
+                <div className="text-xl font-bold text-slate-50 leading-tight">{player.name}</div>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1 text-sm text-slate-300">
+                  <Trophy size={14} className="text-amber-300" />
+                  <span>VP: {player.vp}</span>
+                </div>
+                <div className="flex items-center gap-1 text-xs text-rose-200">
+                  <Skull size={13} />
+                  <span>Wounds: {player.wounds ?? 0}{player.wounds >= 5 ? " (-10 VP)" : ""}</span>
+                </div>
+              </div>
+                {isMyBoard && (
+                  <div className="flex justify-start pt-2">
+                    <button
+                      type="button"
+                      onClick={onEndTurn}
+                      disabled={!onEndTurn}
+                      className="px-2 py-1 rounded-md border border-amber-400 text-amber-200 hover:bg-amber-400/10 text-[10px] uppercase tracking-[0.12em] disabled:opacity-50"
+                    >
+                      End Turn
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Resources + gains */}
+              <div className="flex flex-col justify-center gap-1 min-w-[100px]">
+                <div className="flex items-center gap-2">
+                  <ResourcePip
+                    icon={Flame}
+                    value={effectiveResources?.R || 0}
+                    color={{
+                      border: "border-red-900",
+                      bg: "bg-red-950/40",
+                      icon: "text-red-400",
+                    }}
+                  />
+                  <span className="text-xs text-slate-300 min-w-[50px]">+{totalProduction.R} / rd</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <ResourcePip
+                    icon={Zap}
+                    value={effectiveResources?.B || 0}
+                    color={{
+                      border: "border-blue-900",
+                      bg: "bg-blue-950/40",
+                      icon: "text-blue-400",
+                    }}
+                  />
+                  <span className="text-xs text-slate-300 min-w-[50px]">+{totalProduction.B} / rd</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <ResourcePip
+                    icon={Shield}
+                    value={effectiveResources?.G || 0}
+                    color={{
+                      border: "border-green-900",
+                      bg: "bg-green-950/40",
+                      icon: "text-green-400",
+                    }}
+                  />
+                  <span className="text-xs text-slate-300 min-w-[50px]">+{totalProduction.G} / rd</span>
+                </div>
+              </div>
+
+              {/* Tokens */}
+              <div className="relative flex flex-col justify-center gap-2 min-w-[240px]">
+                {onPickToken && (
+                  <div className="flex">
+                    <button
+                      type="button"
+                      onClick={() => onPickToken?.()}
+                      disabled={!canPickToken}
+                      className={`px-2 py-1 rounded-md border text-[10px] uppercase tracking-[0.14em] ${
+                        canPickToken
+                          ? "border-emerald-400 text-emerald-200 hover:bg-emerald-400/10"
+                          : "border-slate-700 text-slate-500 cursor-not-allowed"
+                      }`}
+                    >
+                      Pick Token
+                    </button>
+                  </div>
+                )}
+                <div className="flex items-start gap-3">
+                  {["attack", "wild", "mass", "conversion"].some((k) => (player.tokens?.[k] ?? player.tokens?.[k?.toUpperCase?.()] ?? 0) > 0) ? (
+                  <div className="grid grid-cols-2 gap-2 flex-1">
+                    {["attack", "wild", "mass", "conversion"].map((key) => {
+                      const total =
+                        player.tokens?.[key] ??
+                        player.tokens?.[key?.toUpperCase?.()] ??
+                        0;
+                      if (total <= 0) return null;
+                      const style = tokenStyles[key] || {};
+                      const remaining =
+                        key === "attack"
+                          ? Math.max(0, total - stagedAttackTokens)
+                          : key === "wild"
+                            ? Math.max(0, total - stagedWildTotal)
+                            : total;
+                      
+                      // Display token even if remaining is 0, just disable
+                      const displayTotal = total;
+                      const isDisabled = remaining <= 0 && key !== "conversion";
+
+                      const isConversion = key === "conversion";
+                      const isConversionActive = isConversion && displayTotal > 0;
+                      
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          className={`${tokenChipClass} ${style.bg || "bg-slate-900"} ${style.border || "border-slate-700"} ${style.text || "text-slate-200"}
+                                     ${isDisabled ? "opacity-50 cursor-not-allowed" : "hover:border-amber-400"}
+                                     ${isConversionActive ? "relative" : ""}
+                                    `}
+                          onClick={() => {
+                            if (isConversionActive) {
+                              setConversionOpen(true);
+                            } else if (!isDisabled) {
+                              onTokenToggleForFight?.(key);
+                            }
+                          }}
+                          disabled={isDisabled && !isConversionActive}
+                          draggable={Boolean(onTokenToggleForFight) && !isConversion}
+                          onDragStart={(e) => {
+                            if (onTokenToggleForFight && !isConversion) {
+                              e.dataTransfer.setData("token_type", key);
+                            }
+                          }}
+                          title={
+                            isConversionActive ? "Click to convert resources" : (isDisabled ? "No tokens remaining" : `${remaining} available`)
                           }
-                        }}
-                        disabled={isDisabled && !isConversionActive}
-                        draggable={Boolean(onTokenToggleForFight) && !isConversion}
-                        onDragStart={(e) => {
-                          if (onTokenToggleForFight && !isConversion) {
-                            e.dataTransfer.setData("token_type", key);
-                          }
-                        }}
-                        title={
-                          isConversionActive ? "Click to convert resources" : (isDisabled ? "No tokens remaining" : `${remaining} available`)
-                        }
-                      >
-                        {tokenLabels[key] || key} × {displayTotal}
-                        {/* Correctly position the overlay anchor on the Conversion Token button */}
-                        {isConversionActive && conversionOpen && (
-                          <div className="absolute z-50 bottom-full right-0 mb-2">
-                            <div className="relative bg-slate-900 border border-slate-700 rounded-xl p-3 shadow-xl w-64">
-                              <div className="absolute -bottom-2 right-4 w-4 h-4 bg-slate-900 border-b border-l border-slate-700 transform rotate-45 z-0"></div>
-                              <div className="relative z-10">
-                                <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.16em] text-slate-400 mb-2">
-                                  <span>Use Conversion Token</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => setConversionOpen(false)}
-                                    className="text-slate-300 hover:text-amber-200 text-xs"
-                                    aria-label="Close conversion panel"
-                                  >
-                                    ×
-                                  </button>
-                                </div>
-                                <div className="flex flex-col gap-2">
-                                  {conversionOptions.length === 0 && (
-                                    <div className="text-[11px] text-slate-500">Not enough resources to convert (Min 2).</div>
-                                  )}
-                                  {conversionOptions.map((opt, idx) => (
-                                    <button
-                                      key={`${opt.from}-${opt.to}-${idx}`}
-                                      type="button"
-                                      onClick={() => {
-                                        onConvertToken?.(opt.from, opt.to);
-                                        setConversionOpen(false);
-                                      }}
-                                      className="w-full px-2 py-2 rounded-lg border border-slate-700 bg-slate-800/60 text-slate-100 text-sm hover:border-amber-400 flex items-center justify-between transition-colors"
-                                    >
-                                      <span className="flex items-center gap-2">
-                                        {opt.fromIcon}
-                                        <span className="text-slate-200">{opt.amount}</span>
-                                      </span>
-                                      <span className="text-[11px] uppercase tracking-[0.16em] text-slate-400">→</span>
-                                      <span className="flex items-center gap-2">
-                                        {opt.toIcon}
-                                        <span className="text-slate-200">{opt.amount}</span>
-                                      </span>
-                                    </button>
-                                  ))}
+                        >
+                          {tokenLabels[key] || key} × {displayTotal}
+                          {/* Correctly position the overlay anchor on the Conversion Token button */}
+                          {isConversionActive && conversionOpen && (
+                            <>
+                              <div className="absolute z-50 bottom-full right-0 mb-2">
+                                <div className="relative bg-slate-900 border border-slate-700 rounded-xl p-3 shadow-xl w-64">
+                                  <div className="absolute -bottom-2 right-4 w-4 h-4 bg-slate-900 border-b border-l border-slate-700 transform rotate-45 z-0"></div>
+                                  <div className="relative z-10">
+                                    <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.16em] text-slate-400 mb-2">
+                                      <span>Use Conversion Token</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => setConversionOpen(false)}
+                                        className="text-slate-300 hover:text-amber-200 text-xs"
+                                        aria-label="Close conversion panel"
+                                      >
+                                        ×
+                                      </button>
+                                    </div>
+                                    <div className="flex flex-col gap-2">
+                                      {conversionOptions.length === 0 && (
+                                        <div className="text-[11px] text-slate-500">Not enough resources to convert (Min 2).</div>
+                                      )}
+                                      {conversionOptions.map((opt, idx) => (
+                                        <button
+                                          key={`${opt.from}-${opt.to}-${idx}`}
+                                          type="button"
+                                          onClick={() => {
+                                            onConvertToken?.(opt.from, opt.to);
+                                            setConversionOpen(false);
+                                          }}
+                                          className="w-full px-2 py-2 rounded-lg border border-slate-700 bg-slate-800/60 text-slate-100 text-sm hover-border-amber-400 flex items-center justify-between transition-colors"
+                                        >
+                                          <span className="flex items-center gap-2">
+                                            {opt.fromIcon}
+                                            <span className="text-slate-200">{opt.amount}</span>
+                                          </span>
+                                          <span className="text-[11px] uppercase tracking-[0.16em] text-slate-400">→</span>
+                                          <span className="flex items-center gap-2">
+                                            {opt.toIcon}
+                                            <span className="text-slate-200">{opt.amount}</span>
+                                          </span>
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                            {/* Backdrop to close when clicking outside */}
-                            <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setConversionOpen(false); }} />
-                          </div>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="text-[11px] text-slate-500">No tokens</div>
-              )}
-            </div>
-
-            {/* Upgrades + Weapons */}
-            <div className="flex-1 flex flex-col gap-1 min-w-[320px] overflow-hidden">
-              <div>
-                <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500 mb-1">Upgrades</div>
-                <div className="grid grid-cols-4 gap-2">
-                  {renderSlots(upgradeCards, upgradeSlots, "upgrade")}
+                              {/* Backdrop to close when clicking outside */}
+                              <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setConversionOpen(false); }} />
+                            </>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-[11px] text-slate-500">No tokens</div>
+                )}
                 </div>
               </div>
-              <div>
-                <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500 mb-1">Weapons</div>
-                <div className="grid grid-cols-4 gap-2">
-                  {renderSlots(weaponCards, weaponSlots, "weapon")}
+
+              {/* Upgrades + Weapons */}
+              <div className="flex-1 flex flex-col gap-1 min-w-[320px] overflow-hidden">
+                <div>
+                  <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500 mb-1">Upgrades</div>
+                  <div className="grid grid-cols-4 gap-2">
+                    {renderSlots(upgradeCards, upgradeSlots, "upgrade")}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500 mb-1">Weapons</div>
+                  <div className="grid grid-cols-4 gap-2">
+                    {renderSlots(weaponCards, weaponSlots, "weapon")}
+                  </div>
                 </div>
               </div>
             </div>

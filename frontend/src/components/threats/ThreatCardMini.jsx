@@ -4,6 +4,12 @@ import { formatCostParts } from "../../utils/formatters";
 
 export default function ThreatCardMini({ threat, onFight, rowIndex, isFront, canFight, isAttacking, weight = 0, position }) {
   const fightAllowed = typeof canFight === "boolean" ? canFight : isFront;
+  const enrageTokens = threat?.enrage_tokens ?? threat?.enrageTokens ?? 0;
+  const typeColor = {
+    feral: "text-red-300",
+    cunning: "text-blue-300",
+    massive: "text-green-300",
+  }[String(threat?.type || "").toLowerCase()] || "text-slate-300";
   const effectiveCost = {
     R: threat?.cost?.R ?? threat?.cost?.r ?? threat?.cost?.RED ?? 0,
     B: threat?.cost?.B ?? threat?.cost?.b ?? threat?.cost?.BLUE ?? 0,
@@ -32,13 +38,13 @@ export default function ThreatCardMini({ threat, onFight, rowIndex, isFront, can
     <div
       className={`w-full bg-slate-900 border rounded-xl p-3
                  flex flex-col gap-2 text-xs transition cursor-pointer
-                 ${isAttacking ? "border-red-500 shadow-[0_0_0_2px_rgba(248,113,113,0.3)]" : "border-slate-700 hover:border-amber-400"}`}
+                 ${isAttacking || enrageTokens > 0 ? "border-amber-400 shadow-[0_0_0_2px_rgba(251,191,36,0.35)]" : "border-slate-700 hover:border-amber-400"}`}
       onMouseEnter={handleHover}
       onMouseLeave={handleLeave}
       onClick={handleClick}
     >
       <div className="flex justify-between items-start text-[11px] text-slate-400 leading-tight">
-        <span className="uppercase tracking-[0.1em]">{threat.type}</span>
+        <span className={`uppercase tracking-[0.1em] ${typeColor}`}>{threat.type}</span>
         <span className="text-amber-300 font-semibold">{threat.vp} VP</span>
       </div>
       <div className="font-bold text-slate-50 text-sm leading-tight">{threat.name}</div>
@@ -49,14 +55,19 @@ export default function ThreatCardMini({ threat, onFight, rowIndex, isFront, can
             Weight +{weight} (cost)
           </span>
         )}
+        {enrageTokens > 0 && (
+          <span className="px-2 py-1 rounded-full border border-amber-500 bg-amber-500/10 text-amber-200">
+            Enraged +{2 * enrageTokens}R
+          </span>
+        )}
         {isAttacking && (
-          <span className="px-2 py-1 rounded-full border border-red-500 bg-red-500/10 text-red-200">
+          <span className="px-2 py-1 rounded-full border border-amber-500 bg-amber-500/10 text-amber-200">
             Attacking
           </span>
         )}
       </div>
       <div className="text-slate-200 leading-snug flex gap-1 items-center mt-1">
-        <span>Cost (+weight):</span>
+        <span>Cost:</span>
         <span className="flex gap-1">
           {costParts.map((p) => (
             <span key={p.key} className={p.className}>{`${p.val}${p.key}`}</span>

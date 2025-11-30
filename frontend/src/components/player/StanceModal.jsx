@@ -107,7 +107,6 @@ export default function StanceModal({ players = [], setPlayers, activePlayerId, 
               <span className="text-slate-300">
                 Production: {activeConfig.production.R}R / {activeConfig.production.B}B / {activeConfig.production.G}G
               </span>
-              <span className="text-emerald-300">Discount: {activeConfig.discount}</span>
             </div>
           </div>
         )}

@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { X, Swords, Flame, Zap, Shield } from "lucide-react";
 import { useStore } from "../../store";
-import { formatCost } from "../../utils/formatters";
 
 const RESOURCE_KEYS = ["R", "B", "G"];
 
@@ -37,7 +36,6 @@ export default function FightPanel({
   gameId,
   onClose,
   onSubmit,
-  defaultDiscount = "R",
   attackUsed,
   setAttackUsed,
   wildAllocation,
@@ -46,8 +44,6 @@ export default function FightPanel({
   setPlayedUpgrades,
   playedWeapons,
   setPlayedWeapons,
-  discountResource,
-  setDiscountResource,
   onResourcePreview,
   onMissingPreview,
 }) {
@@ -97,12 +93,6 @@ export default function FightPanel({
     }
   }, [availableAttack, availableWild, wildAlloc, setAttackUsed, setWildAllocation]);
 
-  useEffect(() => {
-    if (setDiscountResource && discountResource === undefined && defaultDiscount) {
-      setDiscountResource(defaultDiscount);
-    }
-  }, [defaultDiscount, discountResource, setDiscountResource]);
-
   const baseCost = useMemo(() => {
     const base = normalizeResourceMap(threat?.cost);
     if (threatWeight > 0) {
@@ -136,7 +126,6 @@ export default function FightPanel({
     const payload = {
       row: rowIndex,
       threat_id: threat?.id,
-      discount_resource: discountResource,
       use_tokens: {
         attack: attackValue,
         wild_allocation: wildAlloc,
@@ -170,7 +159,6 @@ export default function FightPanel({
     };
   }, [
     attackValue,
-    discountResource,
     gameId,
     httpGameRequest,
     playedUpgradesKey,
@@ -219,92 +207,6 @@ export default function FightPanel({
   );
   const canConfirm = fullyPaid && !isLoading && !error;
 
-  const discountSummary = useMemo(() => {
-    const diff = RESOURCE_KEYS.map((key) => ({
-      key,
-      amount: Math.max(0, (baseCost[key] || 0) - (adjustedCost[key] || 0)),
-    })).filter((d) => d.amount > 0);
-
-    const entries = [];
-    const stance = String(player?.stance || "").toUpperCase();
-    if (stance === "BALANCED") {
-      entries.push({
-        label: "Stance",
-        detail: (
-          <span className="flex items-center gap-1">
-            -1 {iconFor(discountResource)}
-          </span>
-        ),
-      });
-    } else if (["AGGRESSIVE", "TACTICAL", "HUNKERED"].includes(stance)) {
-      const map = { AGGRESSIVE: "R", TACTICAL: "B", HUNKERED: "G" };
-      const res = map[stance];
-      if (res)
-        entries.push({
-          label: "Stance",
-          detail: (
-            <span className="flex items-center gap-1">
-              -1 {iconFor(res)}
-            </span>
-          ),
-        });
-    }
-    if (availableMass > 0) {
-      entries.push({
-        label: "Mass tokens",
-        detail: `-${2 * availableMass} G (passive)`,
-      });
-    }
-    if (attackValue > 0) {
-      entries.push({
-        label: "Attack tokens",
-        detail: `-${2 * attackValue} R`,
-      });
-    }
-    RESOURCE_KEYS.forEach((key) => {
-      if ((wildAlloc[key] || 0) > 0) {
-        entries.push({
-          label: "Wild",
-          detail: (
-            <span className="flex items-center gap-1">
-              -{wildAlloc[key]} {iconFor(key)}
-            </span>
-          ),
-        });
-      }
-    });
-    if (safePlayedUpgrades.size) {
-      entries.push({
-        label: "Upgrades",
-        detail: `${safePlayedUpgrades.size} played`,
-      });
-    }
-    if (safePlayedWeapons.size) {
-      entries.push({
-        label: "Weapons",
-        detail: `${safePlayedWeapons.size} played`,
-      });
-    }
-
-    if (!entries.length && diff.length) {
-      entries.push({
-        label: "Discounts",
-        detail: diff.map((d) => `-${d.amount} ${d.key}`).join(", "),
-      });
-    }
-    return entries;
-  }, [
-    adjustedCost,
-    attackUsed,
-    availableMass,
-    baseCost,
-    discountResource,
-    player?.stance,
-    playedUpgrades.size,
-    playedWeapons.size,
-    wildAllocation,
-  ]);
-
   const wildRemaining = Math.max(0, availableWild - sumValues(wildAlloc));
 
   const resolveCard = (entry) => {
@@ -350,7 +252,6 @@ export default function FightPanel({
     const payload = {
       row: rowIndex,
       threat_id: threat?.id,
-      discount_resource: discountResource,
       use_tokens: {
         attack: attackValue,
         wild_allocation: wildAlloc,
@@ -595,20 +496,25 @@ export default function FightPanel({
               </div>
             )}
             {renderCostLine("Original cost", baseCost, "text-slate-400")}
-            {discountSummary.length > 0 && (
-              <div className="flex flex-wrap gap-2 text-[11px] text-slate-200">
-                {discountSummary.map((entry, idx) => (
+            {renderCostLine("Adjusted cost", adjustedCost, "text-emerald-300")}
+            {Array.isArray(preview?.applied_effects) && preview.applied_effects.length > 0 && (
+              <div className="flex flex-wrap gap-2 text-[11px] text-slate-200 mt-1">
+                {preview.applied_effects.map((eff, idx) => (
                   <span
-                    key={`${entry.label}-${idx}`}
-                    className="px-2 py-1 rounded-lg bg-slate-800 border border-slate-700"
+                    key={`${eff.kind}-${eff.value}-${eff.context || "any"}-${idx}`}
+                    className="px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 flex items-center gap-1"
                   >
-                    <span className="text-slate-400 mr-1">{entry.label}:</span>
-                    {entry.detail}
+                    <span className="text-slate-400">{eff.kind}</span>
+                    {eff.value && <span className="font-semibold">{eff.value}</span>}
+                    {eff.amount ? <span>-{eff.amount}</span> : null}
+                    {eff.context && <span className="text-amber-300 uppercase">{eff.context}</span>}
+                    {(eff.source_name || eff.source_id) && (
+                      <span className="text-[10px] text-slate-500">(from {eff.source_name || eff.source_id})</span>
+                    )}
                   </span>
                 ))}
               </div>
             )}
-            {renderCostLine("Discounted cost", adjustedCost, "text-emerald-300")}
             <div className="pt-1">
               <div className="text-xs text-slate-400 mb-1">Auto-spent from resources</div>
               <div className="flex gap-2">
@@ -674,25 +580,6 @@ export default function FightPanel({
         >
          <div className="flex justify-between items-center">
             <div className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Tokens</div>
-            {String(player?.stance || "").toUpperCase() === "BALANCED" && (
-              <div className="flex items-center gap-1 text-[11px]">
-                <span className="text-slate-400">Balanced Stance Discount:</span>
-                {RESOURCE_KEYS.map((key) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => setDiscountResource(key)}
-                    className={`px-2 py-1 rounded-md border text-[11px] ${
-                      discountResource === key
-                        ? "border-amber-400 text-amber-200"
-                        : "border-slate-700 text-slate-300"
-                    }`}
-                  >
-                    {iconFor(key)}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
 
           <div className="grid grid-cols-[1.2fr,0.8fr] gap-2">
@@ -787,7 +674,7 @@ export default function FightPanel({
 
       <div className="mt-4 flex justify-between items-center">
         <div className="text-[11px] text-slate-400">
-          Resources auto-allocated. Adjust tokens/cards to change discounts; preview refreshes on every change.
+          Resources auto-allocated. Adjust tokens/cards to change costs; preview refreshes on every change.
         </div>
         <div className="flex gap-2">
           <button

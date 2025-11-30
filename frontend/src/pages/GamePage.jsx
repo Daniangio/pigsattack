@@ -145,22 +145,21 @@ export default function GamePage() {
         ))}
       </div>
 
-      <div className="px-4 py-3 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between">
-        <div>
-          <div className="text-xs uppercase tracking-[0.3em] text-slate-500">Game</div>
-          <div className="text-sm text-slate-200">
-            {bannerText(gameState)}
-            {isMyTurn ? " • Your turn" : ""}
+      <div className="px-4 py-2 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between min-h-[48px]">
+        <div className="flex items-center gap-3">
+          <div className="text-xs uppercase tracking-[0.28em] text-slate-500">Game</div>
+          <div className="text-sm text-slate-200 whitespace-nowrap">
+            {bannerText(gameState)}{isMyTurn ? " • Your turn" : ""}
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="text-xs text-slate-400">
-            {gameState?.game_id ? `Game ID: ${gameState.game_id}` : "Waiting for game to start"}
+        <div className="flex items-center gap-3 text-xs text-slate-400">
+          <div>
+            {gameState?.game_id ? `ID: ${gameState.game_id}` : "Waiting for game to start"}
           </div>
           <button
             type="button"
             onClick={() => setIsLogOpen(true)}
-            className="px-3 py-1 rounded-lg border border-slate-700 text-xs uppercase tracking-[0.12em] text-slate-100 hover:border-amber-400"
+            className="px-3 py-1 rounded-lg border border-slate-700 uppercase tracking-[0.12em] text-slate-100 hover:border-amber-400"
           >
             Open Log
           </button>

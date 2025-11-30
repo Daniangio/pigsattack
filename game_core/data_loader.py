@@ -119,6 +119,7 @@ class GameDataLoader:
                 cost=resource_from_json(raw.get("cost", {})),
                 vp=raw.get("vp", 0),
                 effect=raw.get("effect", ""),
+                tags=raw.get("tags", []),
             )
             for raw in data.get("upgrades", [])
         ]
@@ -132,6 +133,7 @@ class GameDataLoader:
                 vp=raw.get("vp", 0),
                 effect=raw.get("effect", ""),
                 uses=raw.get("uses"),
+                tags=raw.get("tags", []),
             )
             for raw in data.get("weapons", [])
         ]

@@ -46,10 +46,10 @@ class PlayerStatus(str, Enum):
 
 
 STANCE_PROFILES: Dict[Stance, Dict[str, Any]] = {
-    Stance.AGGRESSIVE: {"production": {ResourceType.RED: 4, ResourceType.BLUE: 0, ResourceType.GREEN: 1}, "discount": ResourceType.RED},
-    Stance.TACTICAL: {"production": {ResourceType.RED: 1, ResourceType.BLUE: 3, ResourceType.GREEN: 1}, "discount": ResourceType.BLUE},
-    Stance.HUNKERED: {"production": {ResourceType.RED: 0, ResourceType.BLUE: 1, ResourceType.GREEN: 4}, "discount": ResourceType.GREEN},
-    Stance.BALANCED: {"production": {ResourceType.RED: 2, ResourceType.BLUE: 2, ResourceType.GREEN: 2}, "discount": None},
+    Stance.AGGRESSIVE: {"production": {ResourceType.RED: 4, ResourceType.BLUE: 0, ResourceType.GREEN: 1}},
+    Stance.TACTICAL: {"production": {ResourceType.RED: 1, ResourceType.BLUE: 3, ResourceType.GREEN: 1}},
+    Stance.HUNKERED: {"production": {ResourceType.RED: 0, ResourceType.BLUE: 1, ResourceType.GREEN: 4}},
+    Stance.BALANCED: {"production": {ResourceType.RED: 2, ResourceType.BLUE: 2, ResourceType.GREEN: 2}},
 }
 
 
@@ -179,6 +179,7 @@ class MarketCard:
     vp: int
     effect: str
     uses: Optional[int] = None
+    tags: List[str] = field(default_factory=list)
 
     def to_public_dict(self) -> Dict[str, Any]:
         return {
@@ -189,6 +190,7 @@ class MarketCard:
             "vp": self.vp,
             "effect": self.effect,
             "uses": self.uses,
+            "tags": self.tags,
         }
 
 
@@ -196,11 +198,15 @@ class MarketCard:
 class MarketState:
     upgrades: List[MarketCard] = field(default_factory=list)
     weapons: List[MarketCard] = field(default_factory=list)
+    upgrade_deck: List[MarketCard] = field(default_factory=list)
+    weapon_deck: List[MarketCard] = field(default_factory=list)
 
     def to_public_dict(self) -> Dict[str, Any]:
         return {
             "upgrades": [c.to_public_dict() for c in self.upgrades],
             "weapons": [c.to_public_dict() for c in self.weapons],
+            "upgrade_deck_remaining": len(self.upgrade_deck),
+            "weapon_deck_remaining": len(self.weapon_deck),
         }
 
 
@@ -226,6 +232,10 @@ class PlayerBoard:
         profile = STANCE_PROFILES[self.stance]
         for res, amount in profile["production"].items():
             self.resources[res] = self.resources.get(res, 0) + amount
+
+    def add_resources(self, additions: Dict[ResourceType, int]):
+        for res, amt in additions.items():
+            self.resources[res] = self.resources.get(res, 0) + amt
 
     def can_pay(self, cost: Dict[ResourceType, int]) -> bool:
         return all(self.resources.get(res, 0) >= amt for res, amt in cost.items())
@@ -277,8 +287,10 @@ class GameState:
     threat_rows: List[List[ThreatCard]] = field(default_factory=list)
     boss: Optional[BossCard] = None
     bosses: List[BossCard] = field(default_factory=list)
+    threat_deck_remaining: int = 0
     market: MarketState = field(default_factory=MarketState)
     phase: GamePhase = GamePhase.SETUP
+    era: str = "day"
     round: int = 0
     turn_order: List[str] = field(default_factory=list)
     active_player_index: int = 0
@@ -306,6 +318,8 @@ class GameState:
             "threat_rows": [[t.to_public_dict() for t in row] for row in self.threat_rows],
             "boss": self.boss.to_public_dict() if self.boss else None,
             "bosses": [b.to_public_dict() for b in self.bosses],
+            "threat_deck_remaining": self.threat_deck_remaining,
+            "era": self.era,
             "market": self.market.to_public_dict(),
             "log": self.log[-50:],
             "winner_id": self.winner_id,

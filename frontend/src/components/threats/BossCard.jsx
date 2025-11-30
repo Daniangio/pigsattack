@@ -15,10 +15,13 @@ export default function BossCard({ boss, compact, enablePreview }) {
     if (!enablePreview) return;
     setHoverPreview({ type: "boss", data: boss, sourceId: boss.id, lock: true });
   };
+  const containerClass = compact
+    ? "w-56 bg-slate-900 border-2 border-amber-500 rounded-2xl p-3 shadow-xl transition hover:border-amber-300 cursor-pointer"
+    : "w-72 bg-slate-900 border-2 border-amber-500 rounded-2xl p-4 shadow-xl transition hover:border-amber-300 cursor-pointer";
 
   return (
     <div
-      className="w-72 bg-slate-900 border-2 border-amber-500 rounded-2xl p-4 shadow-xl transition hover:border-amber-300 cursor-pointer"
+      className={containerClass}
       onMouseEnter={handleHover}
       onMouseLeave={handleLeave}
       onClick={handleClick}
@@ -28,7 +31,7 @@ export default function BossCard({ boss, compact, enablePreview }) {
         <span className="text-amber-300">{boss.vp} VP</span>
       </div>
 
-      <div className="text-lg font-bold text-slate-50 mt-1">
+      <div className={`${compact ? "text-base" : "text-lg"} font-bold text-slate-50 mt-1`}>
         {boss.name}
       </div>
 
