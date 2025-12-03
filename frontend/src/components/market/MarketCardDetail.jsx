@@ -1,7 +1,7 @@
 import React from "react";
 import { formatCost, formatCostParts } from "../../utils/formatters";
 
-export default function MarketCardDetail({ card, actionLabel, actionDisabled, onAction }) {
+export default function MarketCardDetail({ card, actionLabel, actionDisabled, onAction, secondaryAction, onSecondaryAction }) {
   if (!card) return null;
 
   return (
@@ -49,6 +49,20 @@ export default function MarketCardDetail({ card, actionLabel, actionDisabled, on
           }`}
         >
           {actionLabel}
+        </button>
+      )}
+      {secondaryAction && (
+        <button
+          type="button"
+          disabled={secondaryAction.disabled}
+          onClick={onSecondaryAction || secondaryAction.onClick}
+          className={`mt-2 w-full py-2 rounded-lg text-xs uppercase tracking-[0.2em] border ${
+            secondaryAction.disabled
+              ? "border-slate-700 text-slate-500 cursor-not-allowed"
+              : "border-emerald-400 text-emerald-200 hover:bg-emerald-400/10"
+          }`}
+        >
+          {secondaryAction.label}
         </button>
       )}
     </div>

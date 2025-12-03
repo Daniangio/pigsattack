@@ -227,6 +227,7 @@ class PlayerBoard:
     action_used: bool = False
     buy_used: bool = False
     extend_used: bool = False
+    active_used: Dict[str, bool] = field(default_factory=dict)
     status: PlayerStatus = PlayerStatus.ACTIVE
 
     def produce(self):
@@ -278,6 +279,7 @@ class PlayerBoard:
             "action_used": self.action_used,
             "buy_used": self.buy_used,
             "extend_used": self.extend_used,
+            "active_used": self.active_used,
             "status": self.status.value,
         }
 

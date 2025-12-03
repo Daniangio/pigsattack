@@ -47,9 +47,11 @@ export default function GamePage() {
   );
 
   const handleConvert = useCallback(
-    (fromRes, toRes) => {
+    (fromRes, toRes, amount) => {
       if (!fromRes || !toRes) return;
-      handleGameAction("convert", { from: fromRes, to: toRes });
+      const payload = { from: fromRes, to: toRes };
+      if (amount) payload.amount = amount;
+      handleGameAction("convert", payload);
     },
     [handleGameAction]
   );
@@ -71,6 +73,16 @@ export default function GamePage() {
 
   const handleExtendSlot = useCallback(
     (slotType = "upgrade") => handleGameAction("extend_slot", { slot_type: slotType }),
+    [handleGameAction]
+  );
+
+  const handleActivateCard = useCallback(
+    (cardId, token) => {
+      if (!cardId) return;
+      const payload = { card_id: cardId };
+      if (token) payload.token = token;
+      handleGameAction("activate_card", payload);
+    },
     [handleGameAction]
   );
 
@@ -182,6 +194,7 @@ export default function GamePage() {
               onBuyWeapon={handleBuyWeapon}
               onExtendSlot={handleExtendSlot}
               onPickToken={handlePickToken}
+              onActivateCard={handleActivateCard}
               onRealign={handleRealign}
               onLocalToast={pushToast}
               onEndTurn={handleEndTurn}

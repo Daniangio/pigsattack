@@ -58,7 +58,10 @@ export default function HoverPreviewPortal({ disabled = false }) {
             threat={content.data}
             actionLabel={content.actionLabel}
             actionDisabled={content.actionDisabled}
-            onAction={content.onAction}
+            onAction={() => {
+              content.onAction?.();
+              close();
+            }}
           />
         )}
         {content.type === "market" && (
@@ -66,7 +69,15 @@ export default function HoverPreviewPortal({ disabled = false }) {
             card={content.data}
             actionLabel={content.actionLabel}
             actionDisabled={content.actionDisabled}
-            onAction={content.onAction}
+            onAction={() => {
+              content.onAction?.();
+              close();
+            }}
+            secondaryAction={content.secondaryAction}
+            onSecondaryAction={() => {
+              content.secondaryAction?.onClick?.();
+              close();
+            }}
           />
         )}
         {content.type === "boss" && <BossCardDetail boss={content.data} />}

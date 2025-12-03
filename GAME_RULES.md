@@ -79,7 +79,7 @@ Each player board shows:
 
 - **Conversion Token** 🔄  
   - One use  
-  - Convert up to **2 cubes** of the same color into another color in your pool
+  - Convert up to **3 cubes** of the same color into another color in your pool
 
 - **Mass Token** 🟩🛡  
   - Permanent  
@@ -289,6 +289,7 @@ At **any time** during your turn (before or after your main action), you may:
 
 At the end of your turn, in order:
 
+1. **Gain 1 Wild token** (capped at 3 total)
 1. **Massive Weight Growth**
 
    * For each **Massive threat** in **Front** row:
@@ -645,6 +646,7 @@ Use tiebreakers listed in **Section 1** if needed.
 
 **End of Turn**
 
+* Gain 1 Wild token (max 3)
 * Front Massive threats each gain **+1 Weight**
 * Front threats attack (based on vulnerabilities & Enrage)
 

@@ -25,6 +25,7 @@ export default function PlayerBoardBottom({
   onCardToggleForFight,
   onTokenToggleForFight,
   onConvertToken,
+  onActivateCard,
   onPickToken,
   canPickToken = false,
   mainActionUsed = false,
@@ -32,6 +33,7 @@ export default function PlayerBoardBottom({
   extendUsed = false,
   onEndTurn,
   isMyBoard = false,
+  activeUsedMap = {},
   stagedFightCards,
   stagedFightTokens,
 }) {
@@ -62,11 +64,25 @@ export default function PlayerBoardBottom({
   const previewCard = (cardName, lock = false) => {
     const card = cardLookup[cardName];
     if (!card) return;
+    const hasActive = Array.isArray(card.tags) && card.tags.some((t) => t.startsWith("active:mass_token"));
+    const alreadyUsed = activeUsedMap?.[card.id] || false;
+    const canUseActive = hasActive && isMyBoard && !alreadyUsed;
     setHoverPreview({
       type: "market",
       data: card,
       sourceId: card.id,
       lock,
+      secondaryAction: canUseActive
+        ? {
+            label: "Activate",
+            disabled: false,
+            onClick: () => {
+              setHoverPreview(null);
+              setActiveCard(card);
+              setSelectedActiveToken(null);
+            },
+          }
+        : undefined,
     });
   };
   const clearPreview = () => setHoverPreview(null);
@@ -180,6 +196,9 @@ export default function PlayerBoardBottom({
   const stagedWildTotal = Object.values(stagedWildAllocation || {}).reduce((a, b) => a + (b || 0), 0);
   const stagedMass = stagedFightTokens?.massUsed || 0;
   const effectiveResources = resourceOverride || player.resources || {};
+  const [conversionAmounts, setConversionAmounts] = useState({});
+  const [activeCard, setActiveCard] = useState(null);
+  const [selectedActiveToken, setSelectedActiveToken] = useState(null);
   const conversionOptions = useMemo(() => {
     const keys = [
       { key: "R", icon: <Flame size={14} className="text-red-400" /> },
@@ -191,9 +210,9 @@ export default function PlayerBoardBottom({
     keys.forEach((from) => {
       keys.forEach((to) => {
         if (from.key === to.key) return;
-        const amount = Math.min(2, res[from.key] || 0);
-        if (amount <= 0) return;
-        opts.push({ from: from.key, to: to.key, amount, fromIcon: from.icon, toIcon: to.icon });
+        const maxAmount = Math.min(3, res[from.key] || 0);
+        if (maxAmount <= 0) return;
+        opts.push({ from: from.key, to: to.key, maxAmount, fromIcon: from.icon, toIcon: to.icon });
       });
     });
     return opts;
@@ -299,6 +318,108 @@ export default function PlayerBoardBottom({
   };
 
   const tokenChipClass = "px-2 py-1 text-[11px] rounded-md border cursor-pointer";
+  const tokenOptions = [
+    { key: "attack", label: "Attack", color: "border-red-400 text-red-200 bg-red-400/10" },
+    { key: "conversion", label: "Conversion", color: "border-blue-400 text-blue-200 bg-blue-400/10" },
+    { key: "wild", label: "Wild", color: "border-amber-400 text-amber-200 bg-amber-400/10" },
+    { key: "mass", label: "Mass", color: "border-green-400 text-green-200 bg-green-400/10" },
+    { key: "boss", label: "Boss", color: "border-purple-400 text-purple-200 bg-purple-400/10" },
+  ];
+
+  const tokenCount = (key) => player.tokens?.[key] ?? player.tokens?.[key?.toUpperCase?.()] ?? 0;
+  const ActiveAbilityPanel = ({ card }) => {
+    const massCount = player.tokens?.mass ?? player.tokens?.MASS ?? 0;
+    const gAvailable = player.resources?.G ?? 0;
+    const canConfirm =
+      !!selectedActiveToken &&
+      tokenCount(selectedActiveToken) > 0 &&
+      gAvailable >= 2 &&
+      massCount < 3 &&
+      !activeUsedMap?.[card.id];
+
+    return (
+      <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3 flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-xs uppercase tracking-[0.16em] text-slate-400">Activate</div>
+            <div className="text-sm text-slate-100">{card.name}</div>
+          </div>
+          <button
+            type="button"
+            onClick={() => { setActiveCard(null); setSelectedActiveToken(null); }}
+            className="text-slate-400 hover:text-amber-200 text-sm px-2"
+          >
+            Close
+          </button>
+        </div>
+        <div className="flex flex-col md:flex-row gap-3 items-start">
+          <div className="flex flex-col gap-2 min-w-[80px]">
+            <div className="px-2 py-1 rounded-md border border-green-700 bg-green-900/30 text-green-200 text-xs flex items-center gap-2">
+              <Shield size={14} className="text-green-300" /> Cost: 2G
+            </div>
+            <div className="px-2 py-1 rounded-md border border-slate-700 bg-slate-800/50 text-slate-200 text-xs">
+              G Available: {gAvailable}
+            </div>
+            <div className="text-[11px] text-slate-400">
+              Spend any 1 token + 2G to forge 1 Mass token (once per turn).
+            </div>
+            <div className="text-[11px] text-slate-300">
+              Mass tokens: {massCount} / 3 {activeUsedMap?.[card.id] ? "(used)" : ""}
+            </div>
+          </div>
+          <div className="flex-1 min-w-[200px]">
+            <div className="grid grid-cols-2 sm:grid-cols-2 gap-1">
+              {tokenOptions.map((opt) => {
+                const count = tokenCount(opt.key);
+                const isSelected = selectedActiveToken === opt.key;
+                const disabled = count <= 0;
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => {
+                      if (disabled) return;
+                      setSelectedActiveToken((prev) => (prev === opt.key ? null : opt.key));
+                    }}
+                    className={`flex items-center justify-between px-2 py-2 rounded-lg border text-[11px] transition ${
+                      disabled
+                        ? "border-slate-800 text-slate-600 cursor-not-allowed"
+                        : `${opt.color} hover:border-amber-400`
+                    } ${isSelected ? "ring-2 ring-amber-400" : ""}`}
+                  >
+                    <span>{opt.label}</span>
+                    <span className="text-slate-200">{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex justify-end gap-2 mt-3">
+              <button
+                type="button"
+                onClick={() => { setActiveCard(null); setSelectedActiveToken(null); }}
+                className="px-3 py-1 rounded-full border border-slate-700 text-slate-300 hover:bg-slate-800 text-[11px]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!canConfirm}
+                onClick={() => {
+                  onActivateCard?.(card.id, selectedActiveToken);
+                  setActiveCard(null);
+                  setSelectedActiveToken(null);
+                }}
+                className="px-3 py-1 rounded-full border border-emerald-500 text-emerald-200 hover:bg-emerald-500/10 text-[11px] disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="flex flex-col gap-2">
@@ -552,29 +673,47 @@ export default function PlayerBoardBottom({
                                     </div>
                                     <div className="flex flex-col gap-2">
                                       {conversionOptions.length === 0 && (
-                                        <div className="text-[11px] text-slate-500">Not enough resources to convert (Min 2).</div>
+                                        <div className="text-[11px] text-slate-500">Not enough resources to convert.</div>
                                       )}
-                                      {conversionOptions.map((opt, idx) => (
-                                        <button
-                                          key={`${opt.from}-${opt.to}-${idx}`}
-                                          type="button"
-                                          onClick={() => {
-                                            onConvertToken?.(opt.from, opt.to);
-                                            setConversionOpen(false);
-                                          }}
-                                          className="w-full px-2 py-2 rounded-lg border border-slate-700 bg-slate-800/60 text-slate-100 text-sm hover-border-amber-400 flex items-center justify-between transition-colors"
-                                        >
-                                          <span className="flex items-center gap-2">
-                                            {opt.fromIcon}
-                                            <span className="text-slate-200">{opt.amount}</span>
-                                          </span>
-                                          <span className="text-[11px] uppercase tracking-[0.16em] text-slate-400">→</span>
-                                          <span className="flex items-center gap-2">
-                                            {opt.toIcon}
-                                            <span className="text-slate-200">{opt.amount}</span>
-                                          </span>
-                                        </button>
-                                      ))}
+          {conversionOptions.map((opt, idx) => {
+            const key = `${opt.from}-${opt.to}`;
+            const current = conversionAmounts[key] || 1;
+            const amount = Math.max(1, Math.min(opt.maxAmount, current));
+            const cycleAmount = () => {
+                                          const next = amount >= opt.maxAmount ? 1 : amount + 1;
+                                          setConversionAmounts((prev) => ({ ...prev, [key]: next }));
+                                        };
+                                        return (
+                                          <div
+                                            key={key}
+                                            className="w-full px-2 py-2 rounded-lg border border-slate-700 bg-slate-800/60 text-slate-100 text-sm flex items-center justify-between gap-2"
+                                          >
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                cycleAmount();
+                                              }}
+                                              className="flex items-center gap-2 px-2 py-1 rounded-md border border-slate-700 hover:border-amber-400 transition text-slate-200"
+                                            >
+                                              {opt.fromIcon}
+                                              <span className="text-slate-200">x{amount}</span>
+                                            </button>
+                                            <span className="text-[11px] uppercase tracking-[0.16em] text-slate-400">→</span>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                onConvertToken?.(opt.from, opt.to, amount);
+                                                setConversionOpen(false);
+                                              }}
+                                              className="flex items-center gap-2 px-3 py-1 rounded-md border border-slate-700 hover:border-amber-400 transition text-slate-200"
+                                            >
+                                              {opt.toIcon}
+                                              <span className="text-slate-200">+{amount}</span>
+                                            </button>
+                                          </div>
+                                        );
+                                      })}
                                     </div>
                                   </div>
                                 </div>
@@ -593,24 +732,31 @@ export default function PlayerBoardBottom({
                 </div>
               </div>
 
-              {/* Upgrades + Weapons */}
-              <div className="flex-1 flex flex-col gap-1 min-w-[320px] overflow-hidden">
-                <div>
-                  <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500 mb-1">Upgrades</div>
-                  <div className="grid grid-cols-4 gap-2">
-                    {renderSlots(upgradeCards, upgradeSlots, "upgrade")}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500 mb-1">Weapons</div>
-                  <div className="grid grid-cols-4 gap-2">
-                    {renderSlots(weaponCards, weaponSlots, "weapon")}
-                  </div>
-                </div>
+              {/* Upgrades + Weapons OR Active Panel */}
+              <div className="flex-1 flex flex-col gap-1 min-w-[320px] overflow-hidden relative">
+                {!activeCard ? (
+                  <>
+                    <div>
+                      <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500 mb-1">Upgrades</div>
+                      <div className="grid grid-cols-4 gap-2">
+                        {renderSlots(upgradeCards, upgradeSlots, "upgrade")}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500 mb-1">Weapons</div>
+                      <div className="grid grid-cols-4 gap-2">
+                        {renderSlots(weaponCards, weaponSlots, "weapon")}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <ActiveAbilityPanel card={activeCard} />
+                )}
               </div>
             </div>
-          </div>
-        )}
+        </div>
+      )}
+
       </div>
     </div>
   );

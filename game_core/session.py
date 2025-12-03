@@ -130,6 +130,7 @@ class GameSession:
             "extend_slot": self._handle_extend_slot,
             "realign": self._handle_realign,
             "stance_step": self._handle_stance_step,
+            "activate_card": self._handle_activate_card,
             "end_turn": self._handle_end_turn,
             "surrender": self._handle_surrender,
             "disconnect": self._handle_disconnect,
@@ -221,6 +222,7 @@ class GameSession:
         player.action_used = False
         player.buy_used = False
         player.extend_used = False
+        player.active_used = {}
         player.turn_initial_stance = player.stance
 
     def _consume_main_action(self, player: PlayerBoard):
@@ -237,6 +239,10 @@ class GameSession:
         if player.extend_used:
             raise InvalidActionError("Extend slot already used this turn.")
         player.extend_used = True
+
+    def _assert_active_available(self, player: PlayerBoard, card_id: str):
+        if player.active_used.get(card_id):
+            raise InvalidActionError("This card's active ability was already used this turn.")
 
     def _sync_threat_rows(self):
         if self.threat_manager:
@@ -390,6 +396,47 @@ class GameSession:
 
         self.state.add_log(f"{player.username} spent a wild token to extend a {slot_type} slot.")
 
+    async def _handle_activate_card(self, player: PlayerBoard, payload: Dict[str, Any]):
+        self._assert_turn(player)
+        card_id = payload.get("card_id")
+        if not card_id:
+            raise InvalidActionError("card_id is required.")
+        # Ensure we have normalized cards
+        player.upgrades = self._ensure_market_cards(player.upgrades, CardType.UPGRADE)
+        card = self._find_card(player.upgrades, card_id)
+        if not card:
+            raise InvalidActionError("Upgrade not found.")
+        effects = self._card_effects(card)
+        if not any(eff.kind == "active_mass_token" for eff in effects):
+            raise InvalidActionError("This card has no active ability.")
+        self._assert_active_available(player, card.id)
+
+        token_raw = (payload.get("token") or payload.get("token_type") or "").lower()
+        token_map = {
+            "attack": TokenType.ATTACK,
+            "conversion": TokenType.CONVERSION,
+            "wild": TokenType.WILD,
+            "mass": TokenType.MASS,
+            "boss": TokenType.BOSS,
+        }
+        token_type = token_map.get(token_raw)
+        if not token_type:
+            raise InvalidActionError("A token type is required to activate this card.")
+        if player.tokens.get(token_type, 0) <= 0:
+            raise InvalidActionError("Selected token not available.")
+        if player.resources.get(ResourceType.GREEN, 0) < 2:
+            raise InvalidActionError("Not enough green resources (need 2G).")
+        if player.tokens.get(TokenType.MASS, 0) >= 3:
+            raise InvalidActionError("You already have the maximum Mass tokens.")
+
+        # Consume costs
+        player.tokens[token_type] = max(0, player.tokens.get(token_type, 0) - 1)
+        player.resources[ResourceType.GREEN] = max(0, player.resources.get(ResourceType.GREEN, 0) - 2)
+        player.tokens[TokenType.MASS] = min(3, player.tokens.get(TokenType.MASS, 0) + 1)
+        player.active_used[card.id] = True
+
+        self.state.add_log(f"{player.username} activated {self._card_name(card)} to forge a Mass token (spent 1 token and 2G).")
+
     async def _handle_realign(self, player: PlayerBoard, payload: Dict[str, Any]):
         self._assert_turn(player)
         target = payload.get("stance")
@@ -407,6 +454,7 @@ class GameSession:
         # Conversion token can be used outside of action flow; no turn assertion
         from_key = payload.get("from") or payload.get("from_res")
         to_key = payload.get("to") or payload.get("to_res")
+        amount_requested = int(payload.get("amount", 0)) if payload.get("amount") is not None else None
         if not from_key or not to_key:
             raise InvalidActionError("from and to are required for conversion.")
         from_res = parse_resource_key(from_key, InvalidActionError)
@@ -415,7 +463,13 @@ class GameSession:
             raise InvalidActionError("Cannot convert to the same resource.")
         if player.tokens.get(TokenType.CONVERSION, 0) <= 0:
             raise InvalidActionError("No conversion tokens available.")
-        amount = min(2, player.resources.get(from_res, 0))
+        available = player.resources.get(from_res, 0)
+        if available <= 0:
+            raise InvalidActionError("Not enough resources to convert.")
+        if amount_requested is None or amount_requested <= 0:
+            amount = min(3, available)
+        else:
+            amount = min(3, amount_requested, available)
         if amount <= 0:
             raise InvalidActionError("Not enough resources to convert.")
 
@@ -435,6 +489,12 @@ class GameSession:
             for msg in self.threat_manager.resolve_end_of_turn(player, steal_pref):
                 self.state.add_log(msg)
             self._sync_threat_rows()
+
+        # End-of-turn wild token income (capped at 3)
+        current_wild = player.tokens.get(TokenType.WILD, 0)
+        if current_wild < 3:
+            player.tokens[TokenType.WILD] = min(3, current_wild + 1)
+            self.state.add_log(f"{player.username} gains 1 wild token at end of turn.")
 
         await self._check_game_over()
         if self.state.phase == GamePhase.GAME_OVER:
@@ -484,6 +544,11 @@ class GameSession:
         if token_type:
             player.tokens[token_type] = min(3, player.tokens.get(token_type, 0) + 1)
             self.state.add_log(f"{player.username} gained a {token_type.value} token.")
+        # Effect-driven rewards (e.g., Catalyst Array)
+        for eff in self._card_effects(reward):
+            if eff.kind == "on_kill_conversion" and eff.amount:
+                player.tokens[TokenType.CONVERSION] = min(3, player.tokens.get(TokenType.CONVERSION, 0) + eff.amount)
+                self.state.add_log(f"{player.username} gained {eff.amount} conversion token(s) from {eff.source_name or 'an upgrade'}.")
 
     def _init_market(self):
         """Shuffle decks and reveal initial market (N_players + 1)."""
@@ -626,7 +691,10 @@ class GameSession:
         # Mass tokens are permanent reductions on green
         mass_tokens = player.tokens.get(TokenType.MASS, 0)
         if mass_tokens:
-            cost[ResourceType.GREEN] = max(0, cost.get(ResourceType.GREEN, 0) - 2 * mass_tokens)
+            # Mass Core may boost defense value; default reduction is 2 per token
+            defense_boosts = [eff.amount for eff in active_effects if eff.kind == "mass_token_defense" and eff.amount]
+            reduction_per = max(defense_boosts) if defense_boosts else 2
+            cost[ResourceType.GREEN] = max(0, cost.get(ResourceType.GREEN, 0) - reduction_per * mass_tokens)
 
         use_tokens = payload.get("use_tokens", {}) or {}
         attack_used = int(use_tokens.get("attack", 0))

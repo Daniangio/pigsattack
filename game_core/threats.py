@@ -139,8 +139,10 @@ class ThreatBoard:
             lane_moved, lane_enraged = lane.advance()
             moved = lane_moved or moved
             if lane_enraged and lane.front:
-                lane.front.position = "front"
-                enraged.append(lane.front)
+                # Enrage only once
+                if getattr(lane.front, "enrage_tokens", 0) <= 0:
+                    lane.front.position = "front"
+                    enraged.append(lane.front)
         return moved, enraged
 
     def spawn(self, draw: Callable[[], Optional[ThreatInstance]]) -> int:
@@ -232,8 +234,9 @@ class ThreatBoard:
         logs: List[str] = []
         for idx, threat in self.front_threats_with_index():
             if threat.type_key == "massive":
-                threat.weight += 1
-                logs.append(f"Front Massive threat {threat.name} in lane {idx + 1} grows heavier (weight {threat.weight}).")
+                if threat.weight < 5:
+                    threat.weight += 1
+                    logs.append(f"Front Massive threat {threat.name} in lane {idx + 1} grows heavier (weight {threat.weight}).")
         return logs
 
     def has_threats(self) -> bool:

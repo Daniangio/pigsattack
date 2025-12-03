@@ -111,32 +111,26 @@ class GameDataLoader:
     def load_market(self) -> MarketState:
         data = self._load_json("market.json")
 
-        upgrades = [
-            MarketCard(
-                id=raw["id"],
-                card_type=CardType.UPGRADE,
-                name=raw["name"],
-                cost=resource_from_json(raw.get("cost", {})),
-                vp=raw.get("vp", 0),
-                effect=raw.get("effect", ""),
-                tags=raw.get("tags", []),
-            )
-            for raw in data.get("upgrades", [])
-        ]
+        def build_cards(raw_items, card_type: CardType) -> List[MarketCard]:
+            cards: List[MarketCard] = []
+            for raw in raw_items:
+                copies = int(raw.get("copies", 1)) if isinstance(raw, dict) else 1
+                card = MarketCard(
+                    id=raw["id"],
+                    card_type=card_type,
+                    name=raw["name"],
+                    cost=resource_from_json(raw.get("cost", {})),
+                    vp=raw.get("vp", 0),
+                    effect=raw.get("effect", ""),
+                    uses=raw.get("uses") if card_type == CardType.WEAPON else None,
+                    tags=raw.get("tags", []),
+                )
+                for _ in range(max(1, copies)):
+                    cards.append(card)
+            return cards
 
-        weapons = [
-            MarketCard(
-                id=raw["id"],
-                card_type=CardType.WEAPON,
-                name=raw["name"],
-                cost=resource_from_json(raw.get("cost", {})),
-                vp=raw.get("vp", 0),
-                effect=raw.get("effect", ""),
-                uses=raw.get("uses"),
-                tags=raw.get("tags", []),
-            )
-            for raw in data.get("weapons", [])
-        ]
+        upgrades = build_cards(data.get("upgrades", []), CardType.UPGRADE)
+        weapons = build_cards(data.get("weapons", []), CardType.WEAPON)
 
         return MarketState(upgrades=upgrades, weapons=weapons)
 

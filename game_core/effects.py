@@ -35,6 +35,9 @@ def parse_effect_tags(card: Dict) -> List[CardEffect]:
       - "production:R1:day"                -> +1R at start of turn during Day
       - "production:stance:1"              -> +1 in stance color (Balanced chooses internally)
       - "production:lowest:1"              -> +1 to lowest resource (custom tie-break)
+      - "mass_token:defense_boost:3"       -> Mass tokens reduce G by 3 instead of 2
+      - "active:mass_token:once_per_turn"  -> Action: spend any token + 2G to gain 1 Mass token (once/turn)
+      - "on_kill:conversion:1"             -> Gain 1 conversion token when defeating a threat
       - "spec:red"                         -> thematic specialization hint
     """
     tags = card.get("tags") or []
@@ -78,6 +81,22 @@ def parse_effect_tags(card: Dict) -> List[CardEffect]:
         elif raw.startswith("spec:"):
             spec = raw.split("spec:")[-1]
             parsed.append(CardEffect(kind="specialization", value=spec, source_id=source_id, source_name=source_name))
+        elif raw.startswith("mass_token:defense_boost:"):
+            payload = raw.split("mass_token:defense_boost:")[-1]
+            try:
+                boost = int(payload)
+            except ValueError:
+                continue
+            parsed.append(CardEffect(kind="mass_token_defense", amount=boost, source_id=source_id, source_name=source_name))
+        elif raw.startswith("active:mass_token:once_per_turn"):
+            parsed.append(CardEffect(kind="active_mass_token", source_id=source_id, source_name=source_name))
+        elif raw.startswith("on_kill:conversion:"):
+            payload = raw.split("on_kill:conversion:")[-1]
+            try:
+                amt = int(payload)
+            except ValueError:
+                continue
+            parsed.append(CardEffect(kind="on_kill_conversion", amount=amt, source_id=source_id, source_name=source_name))
         elif raw.startswith("production:"):
             payload = raw.split("production:")[-1]
             parts = payload.split(":")

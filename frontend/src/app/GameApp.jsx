@@ -59,6 +59,7 @@ export default function App({
   onBuyWeapon,
   onExtendSlot,
   onPickToken,
+  onActivateCard,
   onRealign,
   onLocalToast,
   onEndTurn,
@@ -94,6 +95,7 @@ export default function App({
       actionUsed: p.action_used ?? p.actionUsed ?? false,
       buyUsed: p.buy_used ?? p.buyUsed ?? false,
       extendUsed: p.extend_used ?? p.extendUsed ?? false,
+      activeUsed: p.active_used ?? p.activeUsed ?? {},
       upgrades: p.upgrades || [],
       weapons: p.weapons || [],
       upgradeSlots: p.upgrade_slots ?? p.upgradeSlots ?? 1,
@@ -160,6 +162,7 @@ export default function App({
   const marketPanelFlex = zoomedPanel === 'threats' ? 0 : zoomedPanel === 'market' ? 1 : 0.5;
   const threatsCollapsed = zoomedPanel === 'market';
   const marketCollapsed = zoomedPanel === 'threats';
+  const activeUsedMap = me?.activeUsed || {};
 
   const threatTargetsStance = (threat, stance) => {
     const type = String(threat?.type || "").toLowerCase();
@@ -793,6 +796,7 @@ export default function App({
           onCardToggleForFight={activeFight ? handleCardToggleForFight : undefined}
           onTokenToggleForFight={activeFight ? handleTokenClickForFight : undefined}
           onConvertToken={onConvert}
+          onActivateCard={onActivateCard}
           onPickToken={handleOpenPickToken}
           canPickToken={isMyTurn && activePlayerId === userId && !mainActionUsed}
           mainActionUsed={mainActionUsed}
@@ -800,6 +804,7 @@ export default function App({
           extendUsed={extendUsed}
           onEndTurn={handleEndTurnClick}
           isMyBoard={activePlayerId === userId}
+          activeUsedMap={activeUsedMap}
           stagedFightCards={
             activeFight
               ? { upgrades: fightPlayedUpgrades, weapons: fightPlayedWeapons }
