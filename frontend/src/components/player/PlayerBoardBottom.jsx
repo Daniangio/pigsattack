@@ -29,6 +29,7 @@ export default function PlayerBoardBottom({
   canPickToken = false,
   mainActionUsed = false,
   buyUsed = false,
+  extendUsed = false,
   onEndTurn,
   isMyBoard = false,
   stagedFightCards,
@@ -40,6 +41,8 @@ export default function PlayerBoardBottom({
   const [conversionOpen, setConversionOpen] = useState(false);
   const currentStance = player.stance;
   const stanceInfo = STANCE_CONFIG[currentStance] || STANCE_CONFIG[normalizeStance(currentStance)];
+  const wildTokens = player?.tokens?.wild ?? player?.tokens?.WILD ?? 0;
+  const canExtendThisTurn = isMyBoard && !extendUsed && wildTokens > 0;
   const cardLookup = useMemo(() => {
     const source = (cardCatalog && cardCatalog.length ? cardCatalog : [...MarketData.upgrades, ...MarketData.weapons]);
     // Also include the player's owned cards so preview works even if not in market catalog
@@ -235,24 +238,49 @@ export default function PlayerBoardBottom({
           </div>
         );
       } else if (isLocked) {
+        const canExtendSlot = isNextLocked && onExtendSlot && canExtendThisTurn;
+        const extendHint = isNextLocked
+          ? !isMyBoard
+            ? "Only the active player can extend slots."
+            : extendUsed
+              ? "Extend slot already used this turn."
+              : wildTokens <= 0
+                ? "Need a Wild token to extend."
+                : `Spend 1 Wild to unlock this ${type} slot.`
+          : "";
+        const chipBase = "px-2 py-1 text-[10px] rounded-md border uppercase tracking-[0.16em]";
+        const chipTint = canExtendSlot
+          ? "border-amber-400 text-amber-200 bg-amber-400/10 hover:border-amber-300"
+          : "border-slate-700 text-slate-500 bg-slate-900/60 cursor-not-allowed";
         slots.push(
           <div
             key={`${type}-${i}`}
             className={`${baseClasses} bg-slate-900/40 border-dashed border-slate-800 text-slate-500 flex flex-col items-center justify-center gap-1 ${
-              isNextLocked ? "cursor-pointer hover:border-amber-400" : ""
+              canExtendSlot ? "cursor-pointer hover:border-amber-400" : isNextLocked ? "opacity-60" : ""
             }`}
             onClick={() => {
-              if (isNextLocked) {
+              if (canExtendSlot) {
                 onExtendSlot?.(type);
               }
             }}
-            title={isNextLocked ? `Extend a ${type} slot` : ""}
+            title={extendHint}
           >
             <span>Locked</span>
             {isNextLocked && (
-              <span className="text-[9px] uppercase tracking-[0.18em] text-amber-300">
-                Click to extend
-              </span>
+              <button
+                type="button"
+                className={`${chipBase} ${chipTint} tracking-[0.1em]`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (canExtendSlot) {
+                    onExtendSlot?.(type);
+                  }
+                }}
+                disabled={!canExtendSlot}
+                title={extendHint || "Spend 1 Wild token"}
+              >
+                Wild (1)
+              </button>
             )}
           </div>
         );
@@ -339,29 +367,36 @@ export default function PlayerBoardBottom({
                     {currentStance}
                   </div>
                   {isMyBoard && (
-                    <div className="flex flex-col items-center gap-1 w-full">
-                      <div className="flex items-center gap-2">
+                    <div className="flex flex-col items-center gap-2 w-full">
+                      <div className="grid grid-cols-[1fr,1fr] grid-rows-2 gap-1 w-full">
                         <div
-                          className={`px-2 py-1 rounded-md border text-[10px] uppercase tracking-[0.12em] ${
+                          className={`row-span-2 px-2 py-1 rounded-md border text-[10px] uppercase tracking-[0.12em] text-center flex items-center justify-center ${
                             mainActionUsed ? "border-slate-700 text-slate-500" : "border-emerald-400 text-emerald-200"
                           }`}
                         >
                           Main Action
                         </div>
                         <div
-                          className={`px-2 py-1 rounded-md border text-[10px] uppercase tracking-[0.12em] ${
+                          className={`px-2 py-1 rounded-md border text-[10px] uppercase tracking-[0.12em] text-center ${
                             buyUsed ? "border-slate-700 text-slate-500" : "border-sky-400 text-sky-200"
                           }`}
                         >
-                          Optional Buy
+                          Market Buy
+                        </div>
+                        <div
+                          className={`px-2 py-1 rounded-md border text-[10px] uppercase tracking-[0.12em] text-center ${
+                            extendUsed ? "border-slate-700 text-slate-500" : "border-sky-400 text-sky-200"
+                          }`}
+                        >
+                          Extend Slot
                         </div>
                       </div>
                     </div>
                   )}
-                </div>
+              </div>
 
               {/* Name/VP */}
-              <div className="flex flex-col justify-center min-w-[160px]">
+              <div className="flex flex-col justify-center min-w-[120px] h-full">
                 <div className="text-[11px] uppercase tracking-[0.3em] text-slate-500">Active Player</div>
                 <div className="text-xl font-bold text-slate-50 leading-tight">{player.name}</div>
               <div className="flex items-center gap-3">
@@ -375,12 +410,12 @@ export default function PlayerBoardBottom({
                 </div>
               </div>
                 {isMyBoard && (
-                  <div className="flex justify-start pt-2">
+                  <div className="flex justify-start pt-3">
                     <button
                       type="button"
                       onClick={onEndTurn}
                       disabled={!onEndTurn}
-                      className="px-2 py-1 rounded-md border border-amber-400 text-amber-200 hover:bg-amber-400/10 text-[10px] uppercase tracking-[0.12em] disabled:opacity-50"
+                      className="px-2 py-1 rounded-md border border-amber-400 text-amber-200 hover:bg-amber-400/10 text-[10px] uppercase tracking-[0.12em] disabled:opacity-50 w-full"
                     >
                       End Turn
                     </button>

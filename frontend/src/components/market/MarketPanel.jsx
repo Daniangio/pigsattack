@@ -29,7 +29,7 @@ export default function MarketPanel({
     ? "grid grid-cols-1 xl:grid-cols-2 gap-3"
     : "grid grid-cols-1 xl:grid-cols-2 gap-5";
   const cardGridClasses = compact
-    ? "grid auto-rows-min gap-1.5 grid-cols-[repeat(auto-fit,minmax(220px,1fr))]"
+    ? "grid auto-rows-min gap-1.5 grid-cols-[repeat(auto-fit,minmax(80px,1fr))] justify-start items-start"
     : "grid auto-rows-min gap-3 md:gap-4 grid-cols-[repeat(auto-fit,minmax(240px,1fr))]";
 
   return (

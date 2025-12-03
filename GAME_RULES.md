@@ -93,6 +93,7 @@ Each player board shows:
 - **Weight Token** ⏫  
   - Placed on **Massive threats**  
   - Each Weight increases that threat’s **Green cost by +1G**
+  - Threats cannot have more than 5 *Weight tokens** placed on
 
 - **Enrage Token** 🔥  
   - Placed on **any threat** that becomes Enraged  
@@ -130,12 +131,12 @@ Your **stance** determines:
 - Your **resource production**  
 - Which threat types you are **naturally weak** to (i.e., which attacks can hurt you)
 
-| Stance      | Start-of-Turn Production | Attacked by            | Playstyle                 |
+| Stance      | Start-of-Turn Production | Naturally Weak To      | Playstyle                 |
 | ----------- | ------------------------ | ---------------------- | ------------------------- |
-| Aggressive  | 4R / 0B / 1G             | **Feral & Hybrid**      | High tempo, high risk    |
-| Tactical    | 1R / 4B / 0G             | **Cunning & Hybrid**    | Efficient, opportunistic |
-| Hunkered    | 0R / 1B / 4G             | **Massive & Hybrid**    | Slow, resilient          |
-| Balanced    | 2R / 2B / 2G             | **Feral, Cunning, Massive** (not Hybrid) | Flexible but exposed |
+| Aggressive  | 4R / 0B / 1G            | **Feral & Hybrid**     | High tempo, high risk    |
+| Tactical    | 1R / 4B / 0G            | **Cunning & Hybrid**   | Efficient, opportunistic |
+| Hunkered    | 0R / 1B / 4G            | **Massive & Hybrid**   | Slow, resilient          |
+| Balanced    | 2R / 2B / 2G            | **Feral, Cunning, Massive** (not Hybrid) | Flexible but exposed |
 
 > **Balanced stance** is weak to **all basic types** (Feral, Cunning, Massive)  
 > but **not** weak to **Hybrid** threats.  
@@ -259,11 +260,9 @@ On your turn, perform the following steps in order.
 You must choose **one** of the following main actions:
 
 1. **Fight** — Attack a threat (see Section 7.4)
-2. **Extend Slot**
-   * Gain **+1 Upgrade slot** **or** **+1 Weapon slot** (max 4 each)
-3. **Re-Stance**
+2. **Re-Stance**
    * Change your stance to any other stance
-4. **Prepare**
+3. **Prepare**
    * Gain **1 token** of your choice:
      * Attack token
      * Conversion token
@@ -272,7 +271,7 @@ You must choose **one** of the following main actions:
      * You may choose a **Mass token** instead
    * You cannot choose a token for which you already possess max number of copies (which is 3 by default)
 
-#### 3. Optional Buy (Once Per Turn)
+#### 3. Optional Action (Once Per Turn)
 
 At **any time** during your turn (before or after your main action), you may:
 
@@ -283,20 +282,24 @@ At **any time** during your turn (before or after your main action), you may:
 
 *(You may not buy more than 1 card per turn.)*
 
+* **Extend Slot**:
+   * Pay 1 Wild Token -> Gain **+1 Upgrade slot** **or** **+1 Weapon slot** (max 4 each)
+
 #### 4. End of Turn — Threat Attacks & Massive Growth
 
-At the end of your turn:
+At the end of your turn, in order:
 
-1. **Threat Attacks**
+1. **Massive Weight Growth**
+
+   * For each **Massive threat** in **Front** row:
+     * Add **1 Weight token** to that threat, only if the number of **Weight tokens** already present is smaller than 5
+     * Each Weight token increases its **G** cost by **+1G**
+
+
+2. **Threat Attacks**
 
    * Each threat in **Front** row of any lane that your stance is **weak to** attacks you
    * See **Section 7.3** for detailed attack rules
-
-2. **Massive Weight Growth**
-
-   * For each **Massive threat** in **Front** row:
-     * Add **1 Weight token** to that threat
-     * Each Weight token increases its **G** cost by **+1G**
 
 ---
 
@@ -309,7 +312,7 @@ After **all players** have taken one turn in the Round:
    * For each lane, any threat currently in **Front** row that is still alive
      receives **1 Enrage token** 🔥:
      * Its cost gains **+2R**
-     * It is now **Enraged** and **cannot be avoided by stance**; every stance is weak to it
+     * It is now **Enraged** and **cannot be avoided by stance**; every stance is weak to it. Threats can become enraged only once.
 
 2. **Threat Advance**
 
@@ -394,14 +397,13 @@ Extending does **not** grant tokens or VP directly; it increases your capacity f
 ### 6.4 Prepare
 
 * Gain exactly **1 token** from:
-
   * **Attack**
   * **Conversion**
   * **Wild**
 * If you own an upgrade that **unlocks Mass tokens**:
   * You may choose a **Mass token** instead
 
-Prepare is your “no dead turn” action: it advances your position even when you can’t or don’t want to fight, extend, or re-stance.
+Prepare is your “no dead turn” action: it advances your position even when you can’t or don’t want to fight or re-stance.
 
 ---
 
@@ -443,7 +445,7 @@ Each threat card includes:
 #### Massive (🟩)
 
 * Represents heavily armored, slow-moving behemoths
-* Gains **Weight tokens** after each player turn while in Front row, just before attacking
+* Gains **Weight tokens** after each player turn while in Front row, just before attacking. Cannot have more than 5 **Weight tokens** placed on.
 * Attack effect:
 
   * If the Massive threat has **3 or more Weight tokens**
@@ -461,7 +463,7 @@ Each threat card includes:
 
     * Threat gains **+1 Weight token**
     * If Weight ≥3, it also inflicts **1 Wound**
-  * If **Balanced** → Hybrid **does not attack** (unless Enraged)
+  * If **Balanced** → Hybrid **does not attack** (unless Enraged, in that case it inflicts **1 Wound**)
 
 > **Important:**
 >
@@ -516,7 +518,7 @@ Enrage tokens remain on a threat until it is defeated.
 
 * Whenever a **Massive threat** is in **Front row** at the **end of a player’s turn**:
 
-  * It gains **+1 Weight token** ⏫
+  * If the number of **Weight tokens** is < 5, it gains **+1 Weight token** ⏫
 
 Each Weight token:
 
@@ -633,18 +635,18 @@ Use tiebreakers listed in **Section 1** if needed.
 **Main Action (choose ONE)**
 
 * Fight
-* Extend Slot
 * Re-Stance
 * Prepare (gain 1 token)
 
-**Optional Buy (once)**
+**Optional (once)**
 
 * Buy 1 Upgrade **or** 1 Weapon, any time during your turn
+* Pay 1 Wild token -> Extend Slot, any time during your turn
 
 **End of Turn**
 
-* Front threats attack (based on vulnerabilities & Enrage)
 * Front Massive threats each gain **+1 Weight**
+* Front threats attack (based on vulnerabilities & Enrage)
 
 ---
 

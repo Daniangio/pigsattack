@@ -30,7 +30,7 @@ export default function PlayerActionPanel({
         Buy Upgrade/Weapon
       </button>
       <button className="action-btn hover:border-purple-400 disabled:opacity-50 disabled:cursor-not-allowed" onClick={onExtendSlot} disabled={!onExtendSlot}>
-        Extend Slot (+1 wild)
+        Extend Slot (spend 1 Wild)
       </button>
       <button className="action-btn hover:border-amber-400 disabled:opacity-50 disabled:cursor-not-allowed" onClick={onRealign} disabled={!onRealign}>
         Tinker & Realign

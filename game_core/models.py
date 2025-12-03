@@ -226,6 +226,7 @@ class PlayerBoard:
     wounds: int = 0
     action_used: bool = False
     buy_used: bool = False
+    extend_used: bool = False
     status: PlayerStatus = PlayerStatus.ACTIVE
 
     def produce(self):
@@ -276,6 +277,7 @@ class PlayerBoard:
             "wounds": self.wounds,
             "action_used": self.action_used,
             "buy_used": self.buy_used,
+            "extend_used": self.extend_used,
             "status": self.status.value,
         }
 

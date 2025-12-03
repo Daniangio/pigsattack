@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional
 import random
 
 from .data_loader import GameDataLoader
-from .models import GamePhase, GameState, MarketCard, PlayerBoard, PlayerStatus, ResourceType, Stance, TokenType, clamp_cost, STANCE_PROFILES
+from .models import CardType, GamePhase, GameState, MarketCard, PlayerBoard, PlayerStatus, ResourceType, Stance, TokenType, clamp_cost, STANCE_PROFILES
 from .effects import CardEffect, parse_effect_tags, effect_to_wire
 from .threats import ThreatManager
 from .utils import parse_resource_key
@@ -28,6 +28,69 @@ class GameSession:
             self.state.players[p["id"]] = board
             self.state.turn_order.append(p["id"])
         self._update_deck_remaining()
+
+    def _card_effects(self, card: Any) -> List[CardEffect]:
+        """
+        Safely parse effect tags for a card-like object. Returns empty list when
+        the object is a string or missing expected attributes to avoid crashes.
+        """
+        if not card:
+            return []
+        tags = getattr(card, "tags", None)
+        if tags is None:
+            return []
+        return parse_effect_tags(
+            {
+                "tags": tags,
+                "id": getattr(card, "id", None) or str(card),
+                "name": getattr(card, "name", None) or str(card),
+            }
+        )
+
+    def _card_name(self, card: Any) -> str:
+        """Best-effort readable card name for logging."""
+        return getattr(card, "name", None) or getattr(card, "id", None) or str(card)
+
+    def _ensure_market_cards(self, entries: List[Any], default_type: CardType) -> List[MarketCard]:
+        """Normalize loose card representations (dict/str) into MarketCard objects to keep bots/states stable."""
+        normalized: List[MarketCard] = []
+        for entry in entries or []:
+            if isinstance(entry, MarketCard):
+                normalized.append(entry)
+                continue
+            if isinstance(entry, dict):
+                raw_type = entry.get("type") or entry.get("card_type") or entry.get("cardType") or default_type.value
+                try:
+                    card_type = CardType(raw_type.upper()) if isinstance(raw_type, str) else CardType(raw_type)
+                except Exception:
+                    card_type = default_type
+                normalized.append(
+                    MarketCard(
+                        id=str(entry.get("id") or entry.get("name") or len(normalized)),
+                        card_type=card_type,
+                        name=str(entry.get("name") or entry.get("id") or "Unknown"),
+                        cost={},
+                        vp=int(entry.get("vp") or 0),
+                        effect=str(entry.get("effect") or ""),
+                        uses=entry.get("uses"),
+                        tags=entry.get("tags", []) if isinstance(entry.get("tags", []), list) else [],
+                    )
+                )
+                continue
+            # Fallback for raw strings/objects
+            normalized.append(
+                MarketCard(
+                    id=str(entry),
+                    card_type=default_type,
+                    name=str(entry),
+                    cost={},
+                    vp=0,
+                    effect="",
+                    uses=None,
+                    tags=[],
+                )
+            )
+        return normalized
 
     async def async_setup(self):
         """Populate decks/market and start the first round."""
@@ -95,6 +158,7 @@ class GameSession:
                 p.turn_initial_stance = p.stance
                 p.action_used = False
                 p.buy_used = False
+                p.extend_used = False
         self._sync_era_from_deck()
         self._refill_market()
         self.state.add_log(f"Round {self.state.round} start. Resources produced.")
@@ -109,11 +173,9 @@ class GameSession:
         self.state.add_log(f"Round {self.state.round} ended.")
 
         if self.threat_manager:
-            moved, enraged = self.threat_manager.advance_and_spawn()
-            if moved:
-                self.state.add_log("Threats advance toward the survivors.")
-            for threat in enraged:
-                self.state.add_log(f"{threat.name} becomes enraged in the front line (+2R cost, attacks all stances).")
+            logs = self.threat_manager.advance_and_spawn()
+            for log in logs:
+                self.state.add_log(log)
             self._sync_threat_rows()
             self._sync_era_from_deck()
 
@@ -154,8 +216,11 @@ class GameSession:
         player = self.state.players.get(active_id)
         if not player:
             return
+        player.upgrades = self._ensure_market_cards(player.upgrades, CardType.UPGRADE)
+        player.weapons = self._ensure_market_cards(player.weapons, CardType.WEAPON)
         player.action_used = False
         player.buy_used = False
+        player.extend_used = False
         player.turn_initial_stance = player.stance
 
     def _consume_main_action(self, player: PlayerBoard):
@@ -165,8 +230,13 @@ class GameSession:
 
     def _consume_buy_action(self, player: PlayerBoard):
         if player.buy_used:
-            raise InvalidActionError("Optional buy already used this turn.")
+            raise InvalidActionError("Market buy already used this turn.")
         player.buy_used = True
+
+    def _consume_extend_action(self, player: PlayerBoard):
+        if player.extend_used:
+            raise InvalidActionError("Extend slot already used this turn.")
+        player.extend_used = True
 
     def _sync_threat_rows(self):
         if self.threat_manager:
@@ -208,17 +278,20 @@ class GameSession:
         if played_weapon_ids:
           remaining_weapons: List[MarketCard] = []
           for weapon in player.weapons:
-            if weapon.id not in played_weapon_ids:
+            weapon_id = getattr(weapon, "id", None)
+            if weapon_id not in played_weapon_ids:
               remaining_weapons.append(weapon)
               continue
-            if weapon.uses is None:
+            # Only decrement uses if present; strings will skip this safely.
+            uses = getattr(weapon, "uses", None)
+            if uses is None:
               remaining_weapons.append(weapon)
               continue
-            weapon.uses = max(0, weapon.uses - 1)
+            weapon.uses = max(0, uses - 1)
             if weapon.uses > 0:
               remaining_weapons.append(weapon)
             else:
-              self.state.add_log(f"{player.username}'s {weapon.name} was discarded after being used up.")
+              self.state.add_log(f"{player.username}'s {self._card_name(weapon)} was discarded after being used up.")
           player.weapons = remaining_weapons
 
         # Resolve fight
@@ -252,7 +325,7 @@ class GameSession:
         player.vp += card.vp
         self.state.market.upgrades = [c for c in self.state.market.upgrades if c.id != card.id]
         self._refill_market()
-        self.state.add_log(f"{player.username} bought upgrade {card.name}.")
+        self.state.add_log(f"{player.username} bought upgrade {self._card_name(card)}.")
 
     async def _handle_buy_weapon(self, player: PlayerBoard, payload: Dict[str, Any]):
         self._assert_turn(player)
@@ -270,7 +343,7 @@ class GameSession:
         player.vp += card.vp
         self.state.market.weapons = [c for c in self.state.market.weapons if c.id != card.id]
         self._refill_market()
-        self.state.add_log(f"{player.username} bought weapon {card.name}.")
+        self.state.add_log(f"{player.username} bought weapon {self._card_name(card)}.")
 
     async def _handle_pick_token(self, player: PlayerBoard, payload: Dict[str, Any]):
         self._assert_turn(player)
@@ -298,19 +371,24 @@ class GameSession:
         if slot_type not in {"upgrade", "weapon"}:
             raise InvalidActionError("slot_type must be 'upgrade' or 'weapon'.")
 
+        if player.tokens.get(TokenType.WILD, 0) <= 0:
+            raise InvalidActionError("You need a wild token to extend a slot.")
+
         if slot_type == "upgrade":
             if player.upgrade_slots >= 4:
                 raise InvalidActionError("Upgrade slots already at max.")
-            self._consume_main_action(player)
-            player.upgrade_slots += 1
         else:
             if player.weapon_slots >= 4:
                 raise InvalidActionError("Weapon slots already at max.")
-            self._consume_main_action(player)
+
+        self._consume_extend_action(player)
+        player.tokens[TokenType.WILD] = max(0, player.tokens.get(TokenType.WILD, 0) - 1)
+        if slot_type == "upgrade":
+            player.upgrade_slots += 1
+        else:
             player.weapon_slots += 1
 
-        player.tokens[TokenType.WILD] = min(3, player.tokens.get(TokenType.WILD, 0) + 1)
-        self.state.add_log(f"{player.username} extended a {slot_type} slot and gained a wild token.")
+        self.state.add_log(f"{player.username} spent a wild token to extend a {slot_type} slot.")
 
     async def _handle_realign(self, player: PlayerBoard, payload: Dict[str, Any]):
         self._assert_turn(player)
@@ -323,8 +401,7 @@ class GameSession:
             raise InvalidActionError("Unknown stance.")
 
         self._consume_main_action(player)
-        player.tokens[TokenType.WILD] = min(3, player.tokens.get(TokenType.WILD, 0) + 1)
-        self.state.add_log(f"{player.username} realigned to {player.stance.value} and gained a wild token.")
+        self.state.add_log(f"{player.username} realigned to {player.stance.value}.")
 
     async def _handle_convert(self, player: PlayerBoard, payload: Dict[str, Any]):
         # Conversion token can be used outside of action flow; no turn assertion
@@ -440,10 +517,11 @@ class GameSession:
         """Apply start-of-turn production from upgrade tags (era-aware)."""
         if not player.upgrades:
             return
+        player.upgrades = self._ensure_market_cards(player.upgrades, CardType.UPGRADE)
         era = getattr(self.threat_manager.deck, "phase", None) if self.threat_manager else None
         effects = []
         for card in player.upgrades:
-            effects.extend(parse_effect_tags({"tags": getattr(card, "tags", []), "id": card.id, "name": card.name}))
+            effects.extend(self._card_effects(card))
 
         for eff in effects:
             if eff.context and era and eff.context.lower() != str(era).lower():
@@ -507,18 +585,24 @@ class GameSession:
             raise InvalidActionError("Threats not initialized.")
         requested_id = payload.get("threat_id")
 
+        # Normalize stored cards to avoid attribute errors if state contained raw strings/dicts
+        player.upgrades = self._ensure_market_cards(player.upgrades, CardType.UPGRADE)
+        player.weapons = self._ensure_market_cards(player.weapons, CardType.WEAPON)
+
         played_weapon_ids = set(payload.get("played_weapons") or [])
-        active_weapons: List[MarketCard] = [
-            card for card in (player.weapons or []) if card.id in played_weapon_ids
-        ]
+        active_weapons: List[MarketCard] = []
+        for card in (player.weapons or []):
+            card_id = getattr(card, "id", None) or (str(card) if card else None)
+            if card_id in played_weapon_ids:
+                active_weapons.append(card)
         active_effects = []
         for card in active_weapons:
-            active_effects.extend(parse_effect_tags({"tags": getattr(card, "tags", []), "id": card.id, "name": card.name}))
+            active_effects.extend(self._card_effects(card))
 
         # Include played upgrades that have fight tags (e.g., stance-based reductions)
         active_upgrades: List[MarketCard] = player.upgrades or []
         for card in active_upgrades:
-            active_effects.extend(parse_effect_tags({"tags": getattr(card, "tags", []), "id": card.id, "name": card.name}))
+            active_effects.extend(self._card_effects(card))
         has_range_any = any(e.kind == "fight_range" and e.value == "any" for e in active_effects)
 
         threat = self.threat_manager.front_threat(row_index)

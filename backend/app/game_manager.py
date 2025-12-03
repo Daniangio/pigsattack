@@ -322,13 +322,13 @@ class GameManager:
             if not active_id or active_id not in bot_ids:
                 break
             try:
-                # 1) Optional buy if available
+                # 1) Optional buy/extend if available
                 buy_action = self._sample_bot_buy(game, active_id)
                 if buy_action:
                     await self.player_action(game_id, active_id, buy_action["type"], buy_action["payload"])
                     continue
 
-                # 2) Main action (stance change or extend slot)
+                # 2) Main action (stance change or token pick)
                 main_action = self._sample_bot_main_action(game, active_id)
                 if main_action:
                     await self.player_action(game_id, active_id, main_action["type"], main_action["payload"])
@@ -344,7 +344,7 @@ class GameManager:
     def _sample_bot_buy(self, game: GameSession, bot_id: str) -> Optional[Dict[str, Any]]:
         state = game.state
         player = state.players.get(bot_id)
-        if not player or getattr(player, "buy_used", False):
+        if not player or (getattr(player, "buy_used", False) and getattr(player, "extend_used", False)):
             return None
 
         def can_afford(cost):
@@ -360,14 +360,25 @@ class GameManager:
                 return len(player.weapons) < player.weapon_slots
             return True
 
+        extendable: List[Dict[str, Any]] = []
         purchasable: List[Dict[str, Any]] = []
         for card in state.market.upgrades:
-            if can_afford(card.cost) and has_slot("Upgrade"):
+            if not player.buy_used and can_afford(card.cost) and has_slot("Upgrade"):
                 purchasable.append({"type": "buy_upgrade", "payload": {"card_id": card.id}})
         for card in state.market.weapons:
-            if can_afford(card.cost) and has_slot("Weapon"):
+            if not player.buy_used and can_afford(card.cost) and has_slot("Weapon"):
                 purchasable.append({"type": "buy_weapon", "payload": {"card_id": card.id}})
+        wild_tokens = player.tokens.get(TokenType.WILD, 0)
+        if wild_tokens > 0 and not player.extend_used:
+            # Extend only when current slots are filled and there is room to grow
+            if len(player.upgrades) >= player.upgrade_slots and player.upgrade_slots < 4:
+                extendable.append({"type": "extend_slot", "payload": {"slot_type": "upgrade"}})
+            if len(player.weapons) >= player.weapon_slots and player.weapon_slots < 4:
+                extendable.append({"type": "extend_slot", "payload": {"slot_type": "weapon"}})
 
+        # Prefer extending slots before attempting to buy, then fall back to buys
+        if extendable:
+            return random.choice(extendable)
         if not purchasable:
             return None
         return random.choice(purchasable)
@@ -379,11 +390,6 @@ class GameManager:
             return None
 
         actions: List[Dict[str, Any]] = []
-        # Extend slot if there is room
-        if player.upgrade_slots < 4:
-            actions.append({"type": "extend_slot", "payload": {"slot_type": "upgrade"}})
-        if player.weapon_slots < 4:
-            actions.append({"type": "extend_slot", "payload": {"slot_type": "weapon"}})
 
         # Random stance change
         stance_choices = [s for s in Stance if s != player.stance]
@@ -403,14 +409,6 @@ class GameManager:
             token = random.choice(token_choices)
             actions.append({"type": "pick_token", "payload": {"token": token}})
 
-        def can_afford(cost):
-            for k, v in cost.items():
-                if player.resources.get(k, 0) < v:
-                    return False
-            return True
-
-        if not actions:
-            return None
         if not actions:
             return None
         return random.choice(actions)

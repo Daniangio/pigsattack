@@ -93,6 +93,7 @@ export default function App({
       wounds: p.wounds ?? p.wound ?? 0,
       actionUsed: p.action_used ?? p.actionUsed ?? false,
       buyUsed: p.buy_used ?? p.buyUsed ?? false,
+      extendUsed: p.extend_used ?? p.extendUsed ?? false,
       upgrades: p.upgrades || [],
       weapons: p.weapons || [],
       upgradeSlots: p.upgrade_slots ?? p.upgradeSlots ?? 1,
@@ -149,6 +150,7 @@ export default function App({
   const me = players.find((p) => p.id === userId);
   const mainActionUsed = !!me?.actionUsed;
   const buyUsed = !!me?.buyUsed;
+  const extendUsed = !!me?.extendUsed;
   const threatRows = gameData?.threat_rows || gameData?.threatRows;
   const boss = gameData?.boss;
   const market = gameData?.market;
@@ -589,8 +591,8 @@ export default function App({
       onLocalToast?.("You can extend slots only on your turn.", "amber");
       return;
     }
-    if (me?.actionUsed) {
-      onLocalToast?.("Main action already used this turn.", "amber");
+    if (me?.extendUsed) {
+      onLocalToast?.("Extend slot already used this turn.", "amber");
       return;
     }
     const key = slotType === "weapon" ? "weaponSlots" : "upgradeSlots";
@@ -601,7 +603,7 @@ export default function App({
     }
     setPromptSafe({
       type: "extend",
-      message: `Extend ${slotType} slot for ${activePlayer.name}?`,
+      message: `Spend 1 Wild token to extend ${slotType} slot for ${activePlayer.name}?`,
       onConfirm: () => {
         if (onExtendSlot) {
           onExtendSlot(slotType);
@@ -611,7 +613,15 @@ export default function App({
               if (p.id !== activePlayerId) return p;
               const key = slotType === "weapon" ? "weaponSlots" : "upgradeSlots";
               const current = p[key] ?? 1;
-              return { ...p, [key]: Math.min(4, current + 1) };
+              const tokens = p.tokens || {};
+              const currentWild = tokens.wild ?? tokens.WILD ?? 0;
+              const nextWild = Math.max(0, currentWild - 1);
+              return {
+                ...p,
+                [key]: Math.min(4, current + 1),
+                tokens: { ...tokens, wild: nextWild, WILD: nextWild },
+                extendUsed: true,
+              };
             })
           );
         }
@@ -626,7 +636,7 @@ export default function App({
       return;
     }
     if (me?.buyUsed) {
-      onLocalToast?.("Optional buy already used this turn.", "amber");
+      onLocalToast?.("Market buy already used this turn.", "amber");
       return;
     }
     setPromptSafe(null);
@@ -664,7 +674,7 @@ export default function App({
     if (!selectedCard?.card) return;
     if (!isMyTurn) return;
     if (me?.buyUsed) {
-      onLocalToast?.("Optional buy already used this turn.", "amber");
+      onLocalToast?.("Market buy already used this turn.", "amber");
       return;
     }
     if (!canAfford(selectedCard.card)) return;
@@ -787,6 +797,7 @@ export default function App({
           canPickToken={isMyTurn && activePlayerId === userId && !mainActionUsed}
           mainActionUsed={mainActionUsed}
           buyUsed={buyUsed}
+          extendUsed={extendUsed}
           onEndTurn={handleEndTurnClick}
           isMyBoard={activePlayerId === userId}
           stagedFightCards={
