@@ -1,11 +1,11 @@
 {
-  "name": "Nightfall Dev Environment",
+  "name": "pigsattack Dev Environment",
   // This tells VS Code to use our docker-compose.yml file.
   "dockerComposeFile": "../docker-compose.yml",
   // We want to attach to the 'backend' service as our primary workspace.
   "service": "backend",
   // The folder inside the container where our project will be mounted.
-  "workspaceFolder": "/workspaces/nightfall",
+  "workspaceFolder": "/workspaces/pigsattack",
   // Forward necessary ports from the container to the local machine.
   "forwardPorts": [8000, 5173, 6379],
   // VS Code settings to apply inside the container.

@@ -749,6 +749,14 @@ class GameSession:
 
         # Apply tag-driven fight effects
         applied_effects: List = []
+        # Optional stance choice for Balanced (Precision Optics)
+        stance_choice_raw = payload.get("stance_choice")
+        stance_choice_res: Optional[ResourceType] = None
+        if stance_choice_raw:
+            try:
+                stance_choice_res = parse_resource_key(stance_choice_raw, InvalidActionError)
+            except InvalidActionError:
+                stance_choice_res = None
         for eff in active_effects:
             if eff.kind == "fight_cost_reduction" and eff.value and eff.amount:
                 if eff.context:
@@ -772,9 +780,12 @@ class GameSession:
                 if stance in stance_map:
                     target_res = stance_map[stance]
                 else:
-                    # Balanced: choose the highest current cost to maximize value
-                    ranked = sorted(cost.items(), key=lambda kv: kv[1], reverse=True)
-                    target_res = ranked[0][0] if ranked else ResourceType.RED
+                    # Balanced: choose provided stance choice if valid, otherwise the highest current cost
+                    if stance_choice_res:
+                        target_res = stance_choice_res
+                    else:
+                        ranked = sorted(cost.items(), key=lambda kv: kv[1], reverse=True)
+                        target_res = ranked[0][0] if ranked else ResourceType.RED
                 cost[target_res] = max(0, cost.get(target_res, 0) - eff.amount)
                 applied_effects.append(
                     CardEffect(

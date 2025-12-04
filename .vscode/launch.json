@@ -12,7 +12,7 @@
       "pathMappings": [
         {
           "localRoot": "${workspaceFolder}",
-          "remoteRoot": "/workspaces/nightfall"
+          "remoteRoot": "/workspaces/pigsattack"
         }
       ],
       // This requires you to install the 'debugpy' package.

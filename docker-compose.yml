@@ -15,12 +15,12 @@ services:
       sh -c "pip install -r backend/requirements.txt &&
              uvicorn backend.app.main:app --reload --workers 1 --host 0.0.0.0 --port 8000"
     volumes:
-      - .:/workspaces/nightfall
+      - .:/workspaces/pigsattack
     ports:
       - "8000:8000"
     # Set the working directory to the project root.
     # This makes Python imports consistent.
-    working_dir: /workspaces/nightfall
+    working_dir: /workspaces/pigsattack
     depends_on:
       - redis
     tty: true

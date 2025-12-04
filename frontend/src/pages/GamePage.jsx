@@ -20,6 +20,7 @@ export default function GamePage() {
   const isMyTurn = activePlayerId === user?.id;
   const [toastLogs, setToastLogs] = useState([]);
   const [isLogOpen, setIsLogOpen] = useState(false);
+  const [isBotLogOpen, setIsBotLogOpen] = useState(false);
   const prevLogLength = useRef(0);
   const toastTimers = useRef([]);
   const prevActivePlayer = useRef(activePlayerId);
@@ -98,6 +99,29 @@ export default function GamePage() {
   );
 
   const logMessages = useMemo(() => gameState?.log || [], [gameState?.log]);
+  const botLogMessages = useMemo(
+    () => gameState?.bot_logs || gameState?.botLogs || [],
+    [gameState?.bot_logs, gameState?.botLogs]
+  );
+  const botRuns = useMemo(
+    () => gameState?.bot_runs || gameState?.botRuns || [],
+    [gameState?.bot_runs, gameState?.botRuns]
+  );
+  const [selectedRunId, setSelectedRunId] = useState(null);
+  const [selectedRoundFilter, setSelectedRoundFilter] = useState(null);
+
+  const availableRounds = useMemo(() => {
+    const set = new Set();
+    botRuns.forEach((run) => {
+      if (run?.round !== undefined && run?.round !== null) set.add(run.round);
+    });
+    return Array.from(set).sort((a, b) => a - b);
+  }, [botRuns]);
+
+  const filteredRuns = useMemo(() => {
+    if (!selectedRoundFilter) return botRuns;
+    return botRuns.filter((run) => run?.round === selectedRoundFilter);
+  }, [botRuns, selectedRoundFilter]);
 
   const pushToast = useCallback((text, color = "amber") => {
     const id = `${Date.now()}-${Math.random()}`;
@@ -130,6 +154,26 @@ export default function GamePage() {
       toastTimers.current.forEach((t) => clearTimeout(t));
     };
   }, []);
+
+  useEffect(() => {
+    // Reset selection when new simulations arrive
+    const pool = filteredRuns?.length ? filteredRuns : botRuns;
+    if (pool?.length) {
+      setSelectedRunId(pool[0].id || 1);
+    } else {
+      setSelectedRunId(null);
+    }
+  }, [botRuns, filteredRuns, isBotLogOpen]);
+
+  useEffect(() => {
+    if (!availableRounds.length) {
+      setSelectedRoundFilter(null);
+      return;
+    }
+    if (selectedRoundFilter === null) {
+      setSelectedRoundFilter(availableRounds[availableRounds.length - 1]);
+    }
+  }, [availableRounds, selectedRoundFilter]);
 
   // Notify when my turn starts
   useEffect(() => {
@@ -169,6 +213,13 @@ export default function GamePage() {
           <div>
             {gameState?.game_id ? `ID: ${gameState.game_id}` : "Waiting for game to start"}
           </div>
+          <button
+            type="button"
+            onClick={() => setIsBotLogOpen(true)}
+            className="px-3 py-1 rounded-lg border border-slate-700 uppercase tracking-[0.12em] text-slate-100 hover:border-emerald-400"
+          >
+            Bot Log
+          </button>
           <button
             type="button"
             onClick={() => setIsLogOpen(true)}
@@ -227,6 +278,161 @@ export default function GamePage() {
                   {entry}
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isBotLogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"
+            onClick={() => setIsBotLogOpen(false)}
+          />
+          <div className="relative w-[min(1080px,92vw)] h-[84vh] bg-slate-950 border border-slate-800 shadow-2xl rounded-xl flex flex-col z-50">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
+              <div className="text-xs uppercase tracking-[0.25em] text-slate-500">Bot Log</div>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 text-[10px] text-slate-400">
+                  <span>Round</span>
+                  <select
+                    className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[10px] text-slate-200"
+                    value={selectedRoundFilter ?? ""}
+                    onChange={(e) =>
+                      setSelectedRoundFilter(e.target.value === "" ? null : Number(e.target.value))
+                    }
+                  >
+                    <option value="">All</option>
+                    {availableRounds.map((r) => (
+                      <option key={r} value={r}>
+                        {r}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsBotLogOpen(false)}
+                  className="text-xs text-slate-300 hover:text-amber-200"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-hidden text-[11px] text-slate-200 font-mono flex flex-col">
+              {filteredRuns && filteredRuns.length > 0 ? (
+                <>
+                  <div className="px-4 py-3 border-b border-slate-800">
+                    <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500 mb-2">
+                      Simulations
+                    </div>
+                    <div className="flex gap-3 overflow-x-auto pb-1">
+                      {filteredRuns.map((run) => {
+                        const isActive = selectedRunId === run.id;
+                        return (
+                          <button
+                            key={run.id}
+                            onClick={() => setSelectedRunId(isActive ? null : run.id)}
+                            className={`min-w-[160px] px-3 py-2 rounded-lg border transition-all text-left ${
+                              isActive
+                                ? "border-emerald-400 bg-slate-900 shadow-emerald-500/10"
+                                : "border-slate-700 bg-slate-900/60 hover:border-emerald-300"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] uppercase tracking-[0.14em] text-slate-400">
+                                Sim {run.id}
+                              </span>
+                              <span className="text-[10px] text-slate-400">
+                                R{run.round} • {run.era}
+                              </span>
+                            </div>
+                            <div className="text-sm text-emerald-300 font-semibold">
+                              {typeof run.score === "number" ? run.score.toFixed(2) : run.score}
+                            </div>
+                            <div className="text-[10px] text-slate-400">
+                              Start {run.start_score !== undefined ? Number(run.start_score).toFixed(2) : "?"}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-4">
+                    {selectedRunId ? (
+                      filteredRuns
+                        .filter((run) => run.id === selectedRunId)
+                        .map((run) => (
+                          <div
+                            key={run.id}
+                            className="transition-all duration-200 ease-in-out bg-slate-900/60 border border-slate-800 rounded-lg p-4"
+                          >
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="text-xs text-slate-400">
+                                Sim {run.id} • Round {run.round} • Era {run.era}
+                              </div>
+                              <div className="text-sm text-emerald-300 font-semibold">
+                                Final score {typeof run.score === "number" ? run.score.toFixed(2) : run.score}
+                              </div>
+                            </div>
+                            <div className="text-[10px] text-slate-400 mb-2">
+                              Start score {run.start_score !== undefined ? Number(run.start_score).toFixed(2) : "?"}
+                            </div>
+                            <div className="space-y-2">
+                              {(run.steps || []).length === 0 ? (
+                                <div className="text-slate-500 text-xs">No steps recorded.</div>
+                              ) : (
+                                run.steps.map((step, idx) => (
+                                  <div
+                                    key={idx}
+                                    className="p-3 rounded-md border border-slate-800 bg-slate-900/70"
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <div className="text-slate-200">
+                                        Step {idx + 1}: {step?.action?.type}
+                                      </div>
+                                      <div className="text-emerald-300">
+                                        {typeof step?.score === "number" ? step.score.toFixed(2) : step?.score}
+                                      </div>
+                                    </div>
+                                    <div className="text-[10px] text-slate-400">
+                                      Round {step?.round} • Era {step?.era}
+                                    </div>
+                                    {step?.action?.payload && Object.keys(step.action.payload).length > 0 && (
+                                      <div className="text-[10px] text-slate-500 mt-1">
+                                        {JSON.stringify(step.action.payload)}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          </div>
+                        ))
+                    ) : (
+                      <div className="text-slate-500 text-xs">Select a simulation to inspect steps.</div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                  {botLogMessages.length === 0 ? (
+                    <div className="text-slate-500 text-xs">No bot simulations recorded yet.</div>
+                  ) : (
+                    botLogMessages
+                      .slice()
+                      .reverse()
+                      .map((entry, idx) => (
+                        <div
+                          key={`${entry}-${idx}`}
+                          className="px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 whitespace-pre-wrap"
+                        >
+                          {entry}
+                        </div>
+                      ))
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>

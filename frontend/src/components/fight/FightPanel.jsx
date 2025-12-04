@@ -52,6 +52,7 @@ export default function FightPanel({
   const [preview, setPreview] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [precisionChoice, setPrecisionChoice] = useState(null);
 
   const tokenCount = (type) => {
     if (!player?.tokens) return 0;
@@ -118,6 +119,32 @@ export default function FightPanel({
     [safePlayedWeapons]
   );
 
+  const resolveCard = (entry) => {
+    if (!entry) return null;
+    if (typeof entry === "string") return { id: entry, name: entry };
+    return entry;
+  };
+
+  const upgradeCards = (player?.upgrades || []).map(resolveCard).filter(Boolean);
+  const weaponCards = (player?.weapons || []).map(resolveCard).filter(Boolean);
+  const hasPrecisionChoice = useMemo(() => {
+    if (!player || player.stance !== "BALANCED") return false;
+    return (upgradeCards || []).some((card) =>
+      (card?.tags || []).some((t) => String(t || "").startsWith("fight:cost_reduction:stance"))
+    );
+  }, [player, upgradeCards]);
+
+  useEffect(() => {
+    if (!hasPrecisionChoice) {
+      setPrecisionChoice(null);
+      return;
+    }
+    if (!precisionChoice) {
+      const ranked = Object.entries(baseCost).sort((a, b) => (b[1] || 0) - (a[1] || 0));
+      setPrecisionChoice(ranked[0]?.[0] || "R");
+    }
+  }, [hasPrecisionChoice, baseCost, precisionChoice]);
+
   useEffect(() => {
     if (!gameId || !threat || !httpGameRequest) return;
     let cancelled = false;
@@ -134,6 +161,9 @@ export default function FightPanel({
       played_upgrades: Array.from(safePlayedUpgrades),
       played_weapons: Array.from(safePlayedWeapons),
     };
+    if (hasPrecisionChoice && precisionChoice) {
+      payload.stance_choice = precisionChoice;
+    }
 
     httpGameRequest(gameId, "preview_fight", "POST", payload)
       .then((res) => {
@@ -167,6 +197,8 @@ export default function FightPanel({
     rowIndex,
     threat?.id,
     wildAlloc,
+    hasPrecisionChoice,
+    precisionChoice,
   ]);
 
   const adjustedCost = useMemo(
@@ -210,15 +242,6 @@ export default function FightPanel({
 
   const wildRemaining = Math.max(0, availableWild - sumValues(wildAlloc));
 
-  const resolveCard = (entry) => {
-    if (!entry) return null;
-    if (typeof entry === "string") return { id: entry, name: entry };
-    return entry;
-  };
-
-  const upgradeCards = (player?.upgrades || []).map(resolveCard).filter(Boolean);
-  const weaponCards = (player?.weapons || []).map(resolveCard).filter(Boolean);
-
   const toggleUpgrade = (id) => {
     setPlayedUpgrades((prev) => {
       const next = new Set(prev);
@@ -260,6 +283,9 @@ export default function FightPanel({
       played_upgrades: Array.from(safePlayedUpgrades),
       played_weapons: Array.from(safePlayedWeapons),
     };
+    if (hasPrecisionChoice && precisionChoice) {
+      payload.stance_choice = precisionChoice;
+    }
     onSubmit?.(payload);
   };
 
@@ -499,6 +525,28 @@ export default function FightPanel({
             {enrageTokens > 0 && (
               <div className="text-[11px] text-rose-300">
                 Enraged +{2 * enrageTokens}R: added to Red cost.
+              </div>
+            )}
+            {hasPrecisionChoice && (
+              <div className="text-[11px] text-slate-200">
+                Precision Optics: choose a color to reduce.
+                <div className="flex gap-2 mt-1">
+                  {RESOURCE_KEYS.map((key) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setPrecisionChoice(key)}
+                      className={`px-2 py-1 rounded-md border text-[11px] flex items-center gap-1 transition ${
+                        precisionChoice === key
+                          ? "border-emerald-400 text-emerald-200 bg-emerald-900/40"
+                          : "border-slate-700 text-slate-300 bg-slate-900/60 hover:border-emerald-300"
+                      }`}
+                    >
+                      {iconFor(key)}
+                      <span>{key}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
             {renderCostLine("Original cost", baseCost, "text-slate-400")}

@@ -299,6 +299,8 @@ class GameState:
     turn_order: List[str] = field(default_factory=list)
     active_player_index: int = 0
     log: List[str] = field(default_factory=list)
+    bot_logs: List[str] = field(default_factory=list)
+    bot_runs: List[Dict[str, Any]] = field(default_factory=list)
     winner_id: Optional[str] = None
 
     def add_log(self, message: str):
@@ -326,6 +328,8 @@ class GameState:
             "era": self.era,
             "market": self.market.to_public_dict(),
             "log": self.log[-50:],
+            "bot_logs": self.bot_logs[-200:],
+            "bot_runs": self.bot_runs[-10:],
             "winner_id": self.winner_id,
             "viewer": viewer_id,
         }

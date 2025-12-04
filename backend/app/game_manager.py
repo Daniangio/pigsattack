@@ -9,10 +9,10 @@ if TYPE_CHECKING:
     from .room_manager import RoomManager
 
 from .server_models import User, Room, GameParticipant, PlayerStatus as ServerPlayerStatus
-from game_core import GameSession, GamePhase, PlayerStatus, Stance, TokenType
+from game_core import GameSession, GamePhase, PlayerStatus
 from game_core.session import InvalidActionError
 from .routers import fake_games_db 
-import random
+from .bot_planner import BotPlanner
 
 class GameManager:
     """Manages the lifecycle of all active game instances."""
@@ -22,6 +22,8 @@ class GameManager:
         self.conn_manager = conn_manager
         self.room_manager: Optional['RoomManager'] = None
         self.bot_lookup: Dict[str, List[str]] = {} # game_id -> bot ids
+        self.bot_planner = BotPlanner()
+        self._bot_running: bool = False
         print("GameManager initialized.")
         
     def set_room_manager(self, room_manager: 'RoomManager'):
@@ -312,6 +314,8 @@ class GameManager:
         game = self.active_games.get(game_id)
         if not game:
             return
+        if self._bot_running:
+            return
         bot_ids = self.bot_lookup.get(game_id, [])
         guard = 0
         while True:
@@ -321,94 +325,56 @@ class GameManager:
             active_id = game.state.get_active_player_id()
             if not active_id or active_id not in bot_ids:
                 break
+            self._bot_running = True
             try:
-                # 1) Optional buy/extend if available
-                buy_action = self._sample_bot_buy(game, active_id)
-                if buy_action:
-                    await self.player_action(game_id, active_id, buy_action["type"], buy_action["payload"])
-                    continue
-
-                # 2) Main action (stance change or token pick)
-                main_action = self._sample_bot_main_action(game, active_id)
-                if main_action:
-                    await self.player_action(game_id, active_id, main_action["type"], main_action["payload"])
-                    continue
-
-                # 3) Nothing else to do, end turn
-                await self.player_action(game_id, active_id, "end_turn", {})
-                break
+                plan = await self.bot_planner.plan(game, active_id)
+                if plan.get("logs"):
+                    game.state.bot_logs.extend(plan["logs"])
+                    game.state.bot_logs = game.state.bot_logs[-500:]
+                if plan.get("simulations") is not None:
+                    game.state.bot_runs = plan["simulations"][-10:]
+                actions = plan.get("actions") or []
+                if not actions:
+                    actions = [{"type": "end_turn", "payload": {}}]
+                end_seen = any(a.get("type") == "end_turn" for a in actions)
+                for action in actions:
+                    try:
+                        state_changed = await game.player_action(
+                            active_id, action["type"], action.get("payload") or {}, None
+                        )
+                    except InvalidActionError as e:
+                        game.state.bot_logs.append(f"[planner] Invalid {action['type']}: {e}")
+                        game.state.bot_logs = game.state.bot_logs[-500:]
+                        continue
+                    except Exception as e:
+                        game.state.bot_logs.append(f"[planner] Error {action['type']}: {e}")
+                        game.state.bot_logs = game.state.bot_logs[-500:]
+                        break
+                    if state_changed:
+                        if game.state.phase == GamePhase.GAME_OVER:
+                            await self._handle_game_over(game_id, game.state)
+                            self._bot_running = False
+                            return
+                        await self.broadcast_game_state(game_id)
+                    if action["type"] == "end_turn":
+                        break
+                if not end_seen:
+                    try:
+                        state_changed = await game.player_action(active_id, "end_turn", {}, None)
+                        game.state.bot_logs.append("[planner] Forced end_turn fallback.")
+                        game.state.bot_logs = game.state.bot_logs[-500:]
+                        if state_changed:
+                            if game.state.phase == GamePhase.GAME_OVER:
+                                await self._handle_game_over(game_id, game.state)
+                                self._bot_running = False
+                                return
+                            await self.broadcast_game_state(game_id)
+                    except Exception as e:
+                        game.state.bot_logs.append(f"[planner] Error end_turn fallback: {e}")
+                        game.state.bot_logs = game.state.bot_logs[-500:]
+                        break
             except Exception as e:
                 print(f"Bot error in game {game_id}: {e}")
                 break
-
-    def _sample_bot_buy(self, game: GameSession, bot_id: str) -> Optional[Dict[str, Any]]:
-        state = game.state
-        player = state.players.get(bot_id)
-        if not player or (getattr(player, "buy_used", False) and getattr(player, "extend_used", False)):
-            return None
-
-        def can_afford(cost):
-            for k, v in cost.items():
-                if player.resources.get(k, 0) < v:
-                    return False
-            return True
-
-        def has_slot(card_type: str):
-            if card_type == "Upgrade":
-                return len(player.upgrades) < player.upgrade_slots
-            if card_type == "Weapon":
-                return len(player.weapons) < player.weapon_slots
-            return True
-
-        extendable: List[Dict[str, Any]] = []
-        purchasable: List[Dict[str, Any]] = []
-        for card in state.market.upgrades:
-            if not player.buy_used and can_afford(card.cost) and has_slot("Upgrade"):
-                purchasable.append({"type": "buy_upgrade", "payload": {"card_id": card.id}})
-        for card in state.market.weapons:
-            if not player.buy_used and can_afford(card.cost) and has_slot("Weapon"):
-                purchasable.append({"type": "buy_weapon", "payload": {"card_id": card.id}})
-        wild_tokens = player.tokens.get(TokenType.WILD, 0)
-        if wild_tokens > 0 and not player.extend_used:
-            # Extend only when current slots are filled and there is room to grow
-            if len(player.upgrades) >= player.upgrade_slots and player.upgrade_slots < 4:
-                extendable.append({"type": "extend_slot", "payload": {"slot_type": "upgrade"}})
-            if len(player.weapons) >= player.weapon_slots and player.weapon_slots < 4:
-                extendable.append({"type": "extend_slot", "payload": {"slot_type": "weapon"}})
-
-        # Prefer extending slots before attempting to buy, then fall back to buys
-        if extendable:
-            return random.choice(extendable)
-        if not purchasable:
-            return None
-        return random.choice(purchasable)
-
-    def _sample_bot_main_action(self, game: GameSession, bot_id: str) -> Optional[Dict[str, Any]]:
-        state = game.state
-        player = state.players.get(bot_id)
-        if not player or getattr(player, "action_used", False):
-            return None
-
-        actions: List[Dict[str, Any]] = []
-
-        # Random stance change
-        stance_choices = [s for s in Stance if s != player.stance]
-        if stance_choices:
-            target = random.choice(stance_choices)
-            actions.append({"type": "realign", "payload": {"stance": target.value}})
-
-        # Token pick if below cap
-        token_choices = []
-        if player.tokens.get(TokenType.ATTACK, 0) < 3:
-            token_choices.append("attack")
-        if player.tokens.get(TokenType.CONVERSION, 0) < 3:
-            token_choices.append("conversion")
-        if player.tokens.get(TokenType.WILD, 0) < 3:
-            token_choices.append("wild")
-        if token_choices:
-            token = random.choice(token_choices)
-            actions.append({"type": "pick_token", "payload": {"token": token}})
-
-        if not actions:
-            return None
-        return random.choice(actions)
+            finally:
+                self._bot_running = False
