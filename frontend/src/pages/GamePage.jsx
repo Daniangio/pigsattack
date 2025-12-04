@@ -108,7 +108,7 @@ export default function GamePage() {
     [gameState?.bot_runs, gameState?.botRuns]
   );
   const [selectedRunId, setSelectedRunId] = useState(null);
-  const [selectedRoundFilter, setSelectedRoundFilter] = useState(null);
+  const [selectedRoundFilter, setSelectedRoundFilter] = useState(undefined);
 
   const availableRounds = useMemo(() => {
     const set = new Set();
@@ -119,7 +119,7 @@ export default function GamePage() {
   }, [botRuns]);
 
   const filteredRuns = useMemo(() => {
-    if (!selectedRoundFilter) return botRuns;
+    if (selectedRoundFilter === null || selectedRoundFilter === undefined) return botRuns;
     return botRuns.filter((run) => run?.round === selectedRoundFilter);
   }, [botRuns, selectedRoundFilter]);
 
@@ -167,10 +167,10 @@ export default function GamePage() {
 
   useEffect(() => {
     if (!availableRounds.length) {
-      setSelectedRoundFilter(null);
+      setSelectedRoundFilter(undefined);
       return;
     }
-    if (selectedRoundFilter === null) {
+    if (selectedRoundFilter === undefined) {
       setSelectedRoundFilter(availableRounds[availableRounds.length - 1]);
     }
   }, [availableRounds, selectedRoundFilter]);
@@ -297,10 +297,15 @@ export default function GamePage() {
                   <span>Round</span>
                   <select
                     className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[10px] text-slate-200"
-                    value={selectedRoundFilter ?? ""}
-                    onChange={(e) =>
-                      setSelectedRoundFilter(e.target.value === "" ? null : Number(e.target.value))
-                    }
+                    value={selectedRoundFilter === null || selectedRoundFilter === undefined ? "" : selectedRoundFilter}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === "") {
+                        setSelectedRoundFilter(null); // All
+                      } else {
+                        setSelectedRoundFilter(Number(val));
+                      }
+                    }}
                   >
                     <option value="">All</option>
                     {availableRounds.map((r) => (

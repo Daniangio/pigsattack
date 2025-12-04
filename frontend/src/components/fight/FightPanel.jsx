@@ -53,6 +53,7 @@ export default function FightPanel({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [precisionChoice, setPrecisionChoice] = useState(null);
+  const isBossFight = !!(threat && (threat.boss_threshold !== undefined && threat.boss_threshold !== null));
 
   const tokenCount = (type) => {
     if (!player?.tokens) return 0;
@@ -161,6 +162,9 @@ export default function FightPanel({
       played_upgrades: Array.from(safePlayedUpgrades),
       played_weapons: Array.from(safePlayedWeapons),
     };
+    if (isBossFight && threat?.boss_threshold !== undefined) {
+      payload.boss_threshold = threat.boss_threshold;
+    }
     if (hasPrecisionChoice && precisionChoice) {
       payload.stance_choice = precisionChoice;
     }
@@ -196,6 +200,7 @@ export default function FightPanel({
     playedWeaponsKey,
     rowIndex,
     threat?.id,
+    threat?.boss_threshold,
     wildAlloc,
     hasPrecisionChoice,
     precisionChoice,
@@ -283,6 +288,9 @@ export default function FightPanel({
       played_upgrades: Array.from(safePlayedUpgrades),
       played_weapons: Array.from(safePlayedWeapons),
     };
+    if (isBossFight && threat?.boss_threshold !== undefined) {
+      payload.boss_threshold = threat.boss_threshold;
+    }
     if (hasPrecisionChoice && precisionChoice) {
       payload.stance_choice = precisionChoice;
     }

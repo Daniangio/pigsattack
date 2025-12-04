@@ -18,9 +18,16 @@ def score_state(session: GameSession, player_id: str) -> float:
 
 
 class BotPlanner:
-    def __init__(self, max_depth: int = 5, top_n: int = 5, rng: Optional[random.Random] = None):
+    def __init__(
+        self,
+        max_depth: int = 5,
+        top_n: int = 5,
+        max_branches: int = 150,
+        rng: Optional[random.Random] = None,
+    ):
         self.max_depth = max_depth
         self.top_n = top_n
+        self.max_branches = max_branches
         self.rng = rng or random.Random()
 
     async def plan(self, game: GameSession, player_id: str) -> Dict[str, Any]:
@@ -38,6 +45,8 @@ class BotPlanner:
 
         async def dfs(session: GameSession, steps: List[Dict[str, Any]], depth: int):
             nonlocal explored
+            if explored >= self.max_branches:
+                return
             if depth >= self.max_depth:
                 await push_result(
                     {
@@ -68,6 +77,8 @@ class BotPlanner:
                 return
 
             for action in possible:
+                if explored >= self.max_branches:
+                    break
                 gs = copy.deepcopy(session)
                 try:
                     await gs.player_action(player_id, action["type"], action.get("payload") or {}, None)

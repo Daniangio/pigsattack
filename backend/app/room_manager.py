@@ -245,7 +245,7 @@ class RoomManager:
         record.ended_at = datetime.now(timezone.utc)
         record.status = "completed"
 
-        all_involved_ids = [p.id for p in record.participants] + [s.id for s in room.spectators]
+        all_involved_ids = [p.user.id for p in record.participants] + [s.id for s in room.spectators]
         
         if room.id in self.rooms:
             del self.rooms[room.id]

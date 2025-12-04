@@ -36,6 +36,7 @@ class GamePhase(str, Enum):
     ROUND_START = "ROUND_START"
     PLAYER_TURN = "PLAYER_TURN"
     ROUND_END = "ROUND_END"
+    BOSS = "BOSS"
     GAME_OVER = "GAME_OVER"
 
 
@@ -87,6 +88,8 @@ class Reward:
     def apply(self, player: "PlayerBoard"):
         if self.kind == "vp":
             player.vp += self.amount
+        elif self.kind == "heal_wound":
+            player.wounds = max(0, player.wounds - self.amount)
         elif self.kind == "token" and self.token:
             player.tokens[self.token] = player.tokens.get(self.token, 0) + self.amount
         elif self.kind == "slot" and self.slot_type:
@@ -108,6 +111,8 @@ class Reward:
     def label(self) -> str:
         if self.kind == "vp":
             return f"{self.amount} VP"
+        if self.kind == "heal_wound":
+            return f"Heal {self.amount} wound(s)"
         if self.kind == "slot" and self.slot_type:
             return f"{self.slot_type.capitalize()} Slot"
         if self.kind == "token" and self.token:
@@ -224,6 +229,7 @@ class PlayerBoard:
     weapons: List[MarketCard] = field(default_factory=list)
     vp: int = 0
     wounds: int = 0
+    threats_defeated: int = 0
     action_used: bool = False
     buy_used: bool = False
     extend_used: bool = False
@@ -276,6 +282,7 @@ class PlayerBoard:
             "weapons": [w.to_public_dict() for w in self.weapons],
             "vp": self.vp,
             "wounds": self.wounds,
+            "threats_defeated": self.threats_defeated,
             "action_used": self.action_used,
             "buy_used": self.buy_used,
             "extend_used": self.extend_used,
@@ -296,6 +303,10 @@ class GameState:
     phase: GamePhase = GamePhase.SETUP
     era: str = "day"
     round: int = 0
+    boss_mode: bool = False
+    boss_stage: str = "day"
+    boss_thresholds_state: List[Dict[str, Any]] = field(default_factory=list)
+    boss_index: int = 0
     turn_order: List[str] = field(default_factory=list)
     active_player_index: int = 0
     log: List[str] = field(default_factory=list)
@@ -324,12 +335,16 @@ class GameState:
             "threat_rows": [[t.to_public_dict() for t in row] for row in self.threat_rows],
             "boss": self.boss.to_public_dict() if self.boss else None,
             "bosses": [b.to_public_dict() for b in self.bosses],
+            "boss_mode": self.boss_mode,
+            "boss_stage": self.boss_stage,
+            "boss_thresholds": self.boss_thresholds_state,
+            "boss_index": self.boss_index,
             "threat_deck_remaining": self.threat_deck_remaining,
             "era": self.era,
             "market": self.market.to_public_dict(),
             "log": self.log[-50:],
             "bot_logs": self.bot_logs[-200:],
-            "bot_runs": self.bot_runs[-10:],
+            "bot_runs": self.bot_runs[-50:],
             "winner_id": self.winner_id,
             "viewer": viewer_id,
         }

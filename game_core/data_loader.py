@@ -46,6 +46,10 @@ def parse_reward_text(raw: str) -> List[Reward]:
                 amount = int(digits)
             except ValueError:
                 amount = 1
+        # Wound removal
+        if "wound" in lower_part and ("ignore" in lower_part or "remove" in lower_part or "heal" in lower_part):
+            rewards.append(Reward(kind="heal_wound", amount=amount))
+            continue
         for key, token in token_map.items():
             if key in lower_part:
                 rewards.append(Reward(kind="token", token=token, amount=amount))

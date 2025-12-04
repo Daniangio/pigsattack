@@ -48,7 +48,7 @@ const PostGamePage = ({ onReturnToLobby }) => {
           <strong className="block mb-2">Participants:</strong>
           <ul className="space-y-1">
             {participants.map((p) => (
-              <li key={p.id}>
+              <li key={p.user?.id || p.id || p.username}>
                 {p.username} -{" "}
                 <span className="text-slate-400 capitalize">
                   {p.status.toLowerCase()}
@@ -59,7 +59,20 @@ const PostGamePage = ({ onReturnToLobby }) => {
         </div>
       </div>
       <div className="flex justify-center space-x-4 mt-8">
-        <button onClick={onReturnToLobby} className="btn btn-primary">
+        <button
+          onClick={() => {
+            if (onReturnToLobby) {
+              onReturnToLobby();
+              return;
+            }
+            // Fallback: clear game state and request lobby refresh
+            if (sendMessage) {
+              sendMessage({ action: "leave_game" });
+            }
+            window.location.href = "/";
+          }}
+          className="btn btn-primary"
+        >
           Return to Lobby
         </button>
       </div>

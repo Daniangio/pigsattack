@@ -675,6 +675,22 @@ After all players have taken 1 turn:
 
 ---
 
+## 10.5 Boss Phase (Day & Night)
+
+- After **Round 6 of each Era**, a **Boss Phase** begins.
+- Clear the threat rows and reveal the current **Boss card** (Day Boss after the Day Era, Night Boss after the Night Era).
+- Each Boss has multiple **thresholds**; each threshold:
+  - Lists a **cost** (pay like a normal fight; tokens may reduce costs).
+  - Grants its **spoil** immediately when defeated.
+- On your turn during the Boss Phase:
+  - You may fight any undefeated threshold; if you win, you may attempt another threshold in the same turn.
+  - End your turn when done.
+- When all players have taken a turn in the Boss Phase *or* all thresholds are defeated:
+  - After the **Day Boss**, set up the **Night deck**, draw 3 threats, and begin **Night Round 1**.
+  - After the **Night Boss**, the game ends; total VP to determine the winner.
+
+---
+
 ## 11. Glossary
 
 * **Front / Mid / Back Lane** — A horizontal row of threats

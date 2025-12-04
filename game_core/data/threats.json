@@ -7,8 +7,8 @@
       "era": "day",
       "thresholds": [
         { "label": "6R Tribute", "cost": { "R": 6, "B": 0, "G": 0 }, "reward": "3 VP" },
-        { "label": "8B Tribute", "cost": { "R": 0, "B": 8, "G": 0 }, "reward": "Draw 2 weapons for free" },
-        { "label": "10G Tribute", "cost": { "R": 0, "B": 0, "G": 10 }, "reward": "Weapon Slot +3 VP + Wild token x1" }
+        { "label": "8B Tribute", "cost": { "R": 0, "B": 8, "G": 0 }, "reward": "Weapon Slot + Draw 1 weapon for free" },
+        { "label": "10G Tribute", "cost": { "R": 0, "B": 0, "G": 10 }, "reward": "4 VP + Wild token x2" }
       ]
     },
     {
@@ -18,8 +18,8 @@
       "era": "night",
       "thresholds": [
         { "label": "10R", "cost": { "R": 10, "B": 0, "G": 0 }, "reward": "4 VP" },
-        { "label": "10B", "cost": { "R": 0, "B": 10, "G": 0 }, "reward": "Ignore 2 wounds" },
-        { "label": "12G", "cost": { "R": 0, "B": 0, "G": 12 }, "reward": "4 VP + Mass token x1" }
+        { "label": "10B", "cost": { "R": 0, "B": 8, "G": 0 }, "reward": "Ignore 2 wounds" },
+        { "label": "12G", "cost": { "R": 0, "B": 0, "G": 12 }, "reward": "6 VP" }
       ]
     }
   ],

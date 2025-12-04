@@ -1,9 +1,10 @@
 from typing import Any, Dict, List, Optional
+from types import SimpleNamespace
 
 import random
 
 from .data_loader import GameDataLoader
-from .models import CardType, GamePhase, GameState, MarketCard, PlayerBoard, PlayerStatus, ResourceType, Stance, TokenType, clamp_cost, STANCE_PROFILES
+from .models import BossCard, BossThreshold, CardType, GamePhase, GameState, MarketCard, PlayerBoard, PlayerStatus, ResourceType, Reward, Stance, TokenType, clamp_cost, resource_to_wire, STANCE_PROFILES
 from .effects import CardEffect, parse_effect_tags, effect_to_wire
 from .threats import ThreatManager
 from .utils import parse_resource_key
@@ -98,6 +99,7 @@ class GameSession:
         self.threat_manager = ThreatManager(threat_data, len(self.state.players))
         self.state.bosses = threat_data.bosses
         self.state.boss = threat_data.bosses[0] if threat_data.bosses else None
+        self.state.boss_stage = "day"
         self.state.market = self.data_loader.load_market()
         self._init_market()
         self._sync_era_from_deck()
@@ -169,9 +171,86 @@ class GameSession:
         await self._skip_inactive_players()
         self._begin_player_turn()
 
+    def _boss_card_for_stage(self, stage: str) -> Optional[BossCard]:
+        if not self.state.bosses:
+            return None
+        stage_lower = (stage or "day").lower()
+        if stage_lower == "night" and len(self.state.bosses) > 1:
+            return self.state.bosses[1]
+        return self.state.bosses[0]
+
+    def _build_boss_threshold_state(self, boss: BossCard) -> List[Dict[str, Any]]:
+        thresholds: List[Dict[str, Any]] = []
+        for idx, th in enumerate(boss.thresholds):
+            thresholds.append(
+                {
+                    "index": idx,
+                    "label": th.label,
+                    "cost": resource_to_wire(clamp_cost(th.cost)),
+                    "reward": th.reward,
+                    "spoils": [r.to_public_dict() for r in th.spoils],
+                    "defeated": False,
+                }
+            )
+        return thresholds
+
+    async def _start_boss_phase(self, stage: str):
+        boss = self._boss_card_for_stage(stage)
+        self.state.boss_stage = stage or "day"
+        if not boss:
+            # No boss: proceed directly to next stage
+            if stage == "day":
+                await self._start_night_after_boss()
+            else:
+                await self._check_game_over(force=True)
+            return
+        self.state.boss = boss
+        self.state.boss_mode = True
+        self.state.phase = GamePhase.BOSS
+        self.state.boss_thresholds_state = self._build_boss_threshold_state(boss)
+        self.state.add_log(f"{stage.capitalize()} boss {boss.name} emerges!")
+        self.state.active_player_index = 0
+        # Clear threats display during boss
+        self.state.threat_rows = []
+        await self._skip_inactive_players()
+        self._begin_player_turn()
+
+    async def _complete_boss_phase(self):
+        stage = self.state.boss_stage or "day"
+        self.state.boss_mode = False
+        self.state.phase = GamePhase.ROUND_START
+        self.state.boss_thresholds_state = []
+        if stage == "day":
+            await self._start_night_after_boss()
+        else:
+            # Night boss ends the game
+            self.state.phase = GamePhase.GAME_OVER
+            winner = self._determine_winner()
+            self.state.winner_id = winner.user_id if winner else None
+            if winner:
+                self.state.add_log(f"Game over. Winner: {winner.username}")
+            else:
+                self.state.add_log("Game over. No winner determined.")
+
+    async def _start_night_after_boss(self):
+        # Initialize night deck and draw first threats
+        if self.threat_manager and self.threat_manager.deck:
+            self.threat_manager.board.reset()
+            self.threat_manager.deck.phase = "night"
+            # Draw initial 3 threats into back slots
+            for _ in range(3):
+                self.threat_manager.board.spawn(self.threat_manager.deck.draw_next)
+            self._sync_threat_rows()
+            self._sync_era_from_deck()
+        self.state.boss_stage = "night"
+        self.state.boss = self._boss_card_for_stage("night")
+        self.state.round = 1
+        await self._start_round()
+
     async def _end_round(self):
         self.state.phase = GamePhase.ROUND_END
         self.state.add_log(f"Round {self.state.round} ended.")
+        current_round = self.state.round
 
         if self.threat_manager:
             logs = self.threat_manager.advance_and_spawn()
@@ -190,6 +269,13 @@ class GameSession:
         await self._check_game_over()
         if self.state.phase == GamePhase.GAME_OVER:
             return
+
+        # Boss phase triggers after round 6 for day/night respectively
+        if not self.state.boss_mode:
+            if (self.state.era == "day" and current_round >= 6) or (self.state.era == "night" and current_round >= 6):
+                await self._start_boss_phase(self.state.era)
+                return
+
         await self._start_round()
 
     async def _skip_inactive_players(self):
@@ -259,7 +345,7 @@ class GameSession:
 
     def _assert_turn(self, player: PlayerBoard):
         active_id = self.state.get_active_player_id()
-        if self.state.phase != GamePhase.PLAYER_TURN or not active_id:
+        if self.state.phase not in {GamePhase.PLAYER_TURN, GamePhase.BOSS} or not active_id:
             raise InvalidActionError("It is not time to act.")
         if player.user_id != active_id:
             raise InvalidActionError("It is not your turn.")
@@ -269,7 +355,9 @@ class GameSession:
         result = self._compute_fight_cost(player, payload)
         if not result["can_afford"]:
             raise InvalidActionError(result["message"])
-        self._consume_main_action(player)
+        is_boss_fight = self.state.boss_mode or self.state.phase == GamePhase.BOSS or result.get("boss_threshold") is not None
+        if not is_boss_fight:
+            self._consume_main_action(player)
 
         threat = result["threat"]
         cost = result["adjusted_cost"]
@@ -301,32 +389,47 @@ class GameSession:
           player.weapons = remaining_weapons
 
         # Resolve fight
-        player.vp += threat.vp
-        if getattr(threat, "spoils", None):
-            for reward in threat.spoils:
-                reward.apply(player)
-                self.state.add_log(f"{player.username} gains {reward.label}.")
+        if is_boss_fight:
+            if getattr(threat, "spoils", None):
+                for reward in threat.spoils:
+                    reward.apply(player)
+                    self.state.add_log(f"{player.username} gains {reward.label}.")
+            else:
+                self._apply_reward(player, getattr(threat, "reward", ""))
+            self.state.add_log(f"{player.username} cleared boss threshold {getattr(threat, 'label', 'Boss')}.")
+            idx = result.get("boss_threshold")
+            for entry in self.state.boss_thresholds_state:
+                if int(entry.get("index", -1)) == idx:
+                    entry["defeated"] = True
+            player.threats_defeated += 1
         else:
-            self._apply_reward(player, threat.reward)
-        if not self.threat_manager:
-            raise InvalidActionError("Threat manager unavailable.")
-        self.threat_manager.remove_threat(result["row_index"], threat.id)
-        # On-kill upgrade effects (e.g., Catalyst Array)
-        kill_effects = []
-        for card in player.upgrades or []:
-            for eff in self._card_effects(card):
-                if eff.kind == "on_kill_conversion" and eff.amount:
-                    kill_effects.append(eff)
-        for eff in kill_effects:
-            current = player.tokens.get(TokenType.CONVERSION, 0)
-            gained = min(eff.amount, max(0, 3 - current))
-            if gained:
-                player.tokens[TokenType.CONVERSION] = current + gained
-                self.state.add_log(f"{player.username} gained {gained} conversion token(s) from {eff.source_name or 'an upgrade'}.")
+            player.vp += threat.vp
+            if getattr(threat, "spoils", None):
+                for reward in threat.spoils:
+                    reward.apply(player)
+                    self.state.add_log(f"{player.username} gains {reward.label}.")
+            else:
+                self._apply_reward(player, threat.reward)
+            player.threats_defeated += 1
+            if not self.threat_manager:
+                raise InvalidActionError("Threat manager unavailable.")
+            self.threat_manager.remove_threat(result["row_index"], threat.id)
+            # On-kill upgrade effects (e.g., Catalyst Array)
+            kill_effects = []
+            for card in player.upgrades or []:
+                for eff in self._card_effects(card):
+                    if eff.kind == "on_kill_conversion" and eff.amount:
+                        kill_effects.append(eff)
+            for eff in kill_effects:
+                current = player.tokens.get(TokenType.CONVERSION, 0)
+                gained = min(eff.amount, max(0, 3 - current))
+                if gained:
+                    player.tokens[TokenType.CONVERSION] = current + gained
+                    self.state.add_log(f"{player.username} gained {gained} conversion token(s) from {eff.source_name or 'an upgrade'}.")
 
-        self._sync_threat_rows()
-        self.state.add_log(f"{player.username} defeated {threat.name} for {threat.vp} VP.")
-        await self._check_game_over()
+            self._sync_threat_rows()
+            self.state.add_log(f"{player.username} defeated {threat.name} for {threat.vp} VP.")
+            await self._check_game_over()
 
     async def _handle_buy_upgrade(self, player: PlayerBoard, payload: Dict[str, Any]):
         self._assert_turn(player)
@@ -519,7 +622,7 @@ class GameSession:
         self._assert_turn(player)
         # Players can optionally pass a steal_allocation payload to choose which resources a Cunning attack steals.
         steal_pref = payload.get("steal_allocation") or payload.get("steal") or payload.get("cunning_allocation")
-        if self.threat_manager:
+        if self.threat_manager and not self.state.boss_mode:
             for msg in self.threat_manager.resolve_end_of_turn(player, steal_pref):
                 self.state.add_log(msg)
             self._sync_threat_rows()
@@ -533,12 +636,19 @@ class GameSession:
         await self._check_game_over()
         if self.state.phase == GamePhase.GAME_OVER:
             return
+        if self.state.boss_mode and self.state.boss_thresholds_state and all(e.get("defeated") for e in self.state.boss_thresholds_state):
+            self.state.add_log(f"{self.state.boss.name if self.state.boss else 'Boss'} is defeated!")
+            await self._complete_boss_phase()
+            return
         # Advance to next player
         total_players = len(self.state.turn_order)
         next_index = (self.state.active_player_index + 1) % total_players if total_players else 0
         # If we looped back, the round is done
         if next_index == 0:
-            await self._end_round()
+            if self.state.boss_mode:
+                await self._complete_boss_phase()
+            else:
+                await self._end_round()
         else:
             self.state.active_player_index = next_index
             await self._skip_inactive_players()
@@ -656,6 +766,8 @@ class GameSession:
         return next((c for c in cards if c.id == card_id), None)
 
     async def _check_game_over(self, force: bool = False):
+        if self.state.boss_mode:
+            return
         if self.threat_manager:
             all_threats_defeated = self.threat_manager.is_cleared()
         else:
@@ -672,13 +784,84 @@ class GameSession:
                 self.state.add_log("Game over. No winner determined.")
 
     def _determine_winner(self) -> Optional[PlayerBoard]:
-        scored_players = sorted(self.state.players.values(), key=lambda p: p.vp, reverse=True)
+        def score_tuple(p: PlayerBoard):
+            resources_total = sum(p.resources.values())
+            return (-p.vp, p.wounds, -p.threats_defeated, -resources_total)
+
+        scored_players = sorted(self.state.players.values(), key=score_tuple)
         return scored_players[0] if scored_players else None
+
+    def _compute_boss_fight_cost(self, player: PlayerBoard, payload: Dict[str, Any]) -> Dict[str, Any]:
+        idx_raw = payload.get("boss_threshold")
+        if idx_raw is None:
+            raise InvalidActionError("Select a boss threshold to fight.")
+        try:
+            idx = int(idx_raw)
+        except Exception:
+            raise InvalidActionError("Invalid boss threshold.")
+        thresholds_state = self.state.boss_thresholds_state or []
+        state_entry = next((t for t in thresholds_state if int(t.get("index", -1)) == idx), None)
+        if not state_entry or state_entry.get("defeated"):
+            raise InvalidActionError("That threshold is already defeated.")
+        boss = self._boss_card_for_stage(self.state.boss_stage)
+        if not boss or idx < 0 or idx >= len(boss.thresholds):
+            raise InvalidActionError("Boss threshold not found.")
+        threshold: BossThreshold = boss.thresholds[idx]
+        cost = dict(threshold.cost)
+        use_tokens = payload.get("use_tokens", {}) or {}
+        attack_used = int(use_tokens.get("attack", 0))
+        if attack_used > player.tokens.get(TokenType.ATTACK, 0):
+            raise InvalidActionError("Not enough attack tokens.")
+        if attack_used:
+            cost[ResourceType.RED] = max(0, cost.get(ResourceType.RED, 0) - 2 * attack_used)
+        wild_allocation_raw = use_tokens.get("wild_allocation", {}) or {}
+        wild_allocated = 0
+        for key, amount in wild_allocation_raw.items():
+            res_type = parse_resource_key(key, InvalidActionError)
+            wild_allocated += int(amount)
+            cost[res_type] = max(0, cost.get(res_type, 0) - int(amount))
+        if wild_allocated > player.tokens.get(TokenType.WILD, 0):
+            raise InvalidActionError("Not enough wild tokens.")
+
+        adjusted_cost = clamp_cost(cost)
+        can_afford = player.can_pay(adjusted_cost)
+        remaining = dict(player.resources)
+        if can_afford:
+            for res, val in adjusted_cost.items():
+                remaining[res] = max(0, remaining.get(res, 0) - val)
+
+        threat_like = SimpleNamespace(
+            id=f"boss-{idx}",
+            name=f"{boss.name} • {threshold.label}",
+            label=threshold.label,
+            cost=resource_to_wire(threshold.cost),
+            reward=threshold.reward,
+            spoils=threshold.spoils,
+            vp=0,
+            type="Boss",
+            boss_threshold=idx,
+        )
+        # Leverage existing spoils handling and fight panel display
+        return {
+            "can_afford": can_afford,
+            "message": "ok" if can_afford else "Not enough resources to fight the boss threshold.",
+            "threat": threat_like,
+            "row_index": 0,
+            "adjusted_cost": adjusted_cost,
+            "attack_used": attack_used,
+            "wild_used": wild_allocated,
+            "remaining_resources": remaining,
+            "effects": [],
+            "applied_effects": [],
+            "boss_threshold": idx,
+        }
 
     def _compute_fight_cost(self, player: PlayerBoard, payload: Dict[str, Any]) -> Dict[str, Any]:
         """
         Shared logic for computing fight costs. Does not mutate state.
         """
+        if self.state.boss_mode or self.state.phase == GamePhase.BOSS:
+            return self._compute_boss_fight_cost(player, payload)
         row_index = int(payload.get("row", 0))
         if not self.threat_manager:
             raise InvalidActionError("Threats not initialized.")
@@ -697,6 +880,11 @@ class GameSession:
         active_effects = []
         for card in active_weapons:
             active_effects.extend(self._card_effects(card))
+        # Passive range weapons (e.g., Snipe Scope) always grant fight_range:any
+        for card in (player.weapons or []):
+            for eff in self._card_effects(card):
+                if eff.kind == "fight_range" and eff.value == "any":
+                    active_effects.append(eff)
 
         # Include played upgrades that have fight tags (e.g., stance-based reductions)
         active_upgrades: List[MarketCard] = player.upgrades or []
@@ -825,12 +1013,27 @@ class GameSession:
             return {"can_afford": False, "message": "Player not found."}
         try:
             result = self._compute_fight_cost(player, payload)
+            threat_obj = result.get("threat")
+            if hasattr(threat_obj, "to_public_dict"):
+                threat_pub = threat_obj.to_public_dict()
+            elif isinstance(threat_obj, dict):
+                threat_pub = threat_obj
+            else:
+                threat_pub = {
+                    "id": getattr(threat_obj, "id", "boss-threshold"),
+                    "name": getattr(threat_obj, "name", "Boss Threshold"),
+                    "cost": getattr(threat_obj, "cost", {}),
+                    "vp": getattr(threat_obj, "vp", 0),
+                    "reward": getattr(threat_obj, "reward", ""),
+                    "type": getattr(threat_obj, "type", "Boss"),
+                    "boss_threshold": getattr(threat_obj, "boss_threshold", None),
+                }
             return {
                 "can_afford": result["can_afford"],
                 "message": result["message"],
                 "adjusted_cost": result["adjusted_cost"],
                 "remaining_resources": result["remaining_resources"],
-                "threat": result["threat"].to_public_dict(),
+                "threat": threat_pub,
                 "effects": result.get("effects", []),
                 "applied_effects": result.get("applied_effects", []),
             }

@@ -2,6 +2,7 @@
 The GameManager singleton.
 """
 
+import asyncio
 from typing import Dict, List, Optional, Any
 from .connection_manager import ConnectionManager
 from typing import TYPE_CHECKING
@@ -327,12 +328,21 @@ class GameManager:
                 break
             self._bot_running = True
             try:
+                # Yield to event loop so recent broadcasts flush before heavy planning
+                await asyncio.sleep(0)
                 plan = await self.bot_planner.plan(game, active_id)
                 if plan.get("logs"):
                     game.state.bot_logs.extend(plan["logs"])
                     game.state.bot_logs = game.state.bot_logs[-500:]
                 if plan.get("simulations") is not None:
-                    game.state.bot_runs = plan["simulations"][-10:]
+                    base_id = len(game.state.bot_runs) + 1
+                    sims_with_ids = []
+                    for idx, sim in enumerate(plan["simulations"], start=0):
+                        sim = dict(sim)
+                        sim["id"] = base_id + idx
+                        sims_with_ids.append(sim)
+                    game.state.bot_runs.extend(sims_with_ids)
+                    game.state.bot_runs = game.state.bot_runs[-50:]
                 actions = plan.get("actions") or []
                 if not actions:
                     actions = [{"type": "end_turn", "payload": {}}]

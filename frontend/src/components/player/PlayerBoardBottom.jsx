@@ -64,7 +64,9 @@ export default function PlayerBoardBottom({
   const previewCard = (cardName, lock = false) => {
     const card = cardLookup[cardName];
     if (!card) return;
-    const hasActive = Array.isArray(card.tags) && card.tags.some((t) => t.startsWith("active:mass_token"));
+    const hasActive =
+      Array.isArray(card.tags) &&
+      card.tags.some((t) => t.startsWith("active:mass_token") || t.startsWith("active:convert_split"));
     const alreadyUsed = activeUsedMap?.[card.id] || false;
     const canUseActive = hasActive && isMyBoard && !alreadyUsed;
     setHoverPreview({
@@ -80,6 +82,7 @@ export default function PlayerBoardBottom({
               setHoverPreview(null);
               setActiveCard(card);
               setSelectedActiveToken(null);
+              setSelectedActiveResource(null);
             },
           }
         : undefined,
@@ -354,7 +357,7 @@ export default function PlayerBoardBottom({
           </div>
           <button
             type="button"
-            onClick={() => { setActiveCard(null); setSelectedActiveToken(null); }}
+            onClick={() => { setActiveCard(null); setSelectedActiveToken(null); setSelectedActiveResource(null); }}
             className="text-slate-400 hover:text-amber-200 text-sm px-2"
           >
             Close

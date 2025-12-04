@@ -154,10 +154,20 @@ export default function App({
   const buyUsed = !!me?.buyUsed;
   const extendUsed = !!me?.extendUsed;
   const threatRows = gameData?.threat_rows || gameData?.threatRows;
+  const bossMode = gameData?.phase === "BOSS" || gameData?.boss_mode || gameData?.bossMode;
+  const bossThresholds = gameData?.boss_thresholds || gameData?.bossThresholds || gameData?.boss_thresholds_state;
+  const bossStage = gameData?.boss_stage || gameData?.bossStage || "day";
   const boss = gameData?.boss;
   const market = gameData?.market;
   const gameId = gameData?.game_id || gameData?.gameId;
   const deckRemaining = gameData?.threat_deck_remaining ?? gameData?.threatDeckRemaining ?? 0;
+  const hasRangeAny = useMemo(
+    () =>
+      (me?.weapons || []).some((w) =>
+        (w?.tags || []).some((t) => String(t || "").toLowerCase().startsWith("fight:range:any"))
+      ),
+    [me?.weapons]
+  );
   const threatPanelFlex = zoomedPanel === 'market' ? 0 : zoomedPanel === 'threats' ? 1 : 0.5;
   const marketPanelFlex = zoomedPanel === 'threats' ? 0 : zoomedPanel === 'market' ? 1 : 0.5;
   const threatsCollapsed = zoomedPanel === 'market';
@@ -278,12 +288,14 @@ export default function App({
       setActiveFight(null);
       return;
     }
-    const row = threatRows?.[activeFight.rowIndex] || [];
-    const front = row[0];
-    if (!front || front.id !== activeFight.threat?.id) {
-      setActiveFight(null);
+    if (!bossMode) {
+      const row = threatRows?.[activeFight.rowIndex] || [];
+      const front = row[0];
+      if (!front || front.id !== activeFight.threat?.id) {
+        setActiveFight(null);
+      }
     }
-  }, [activeFight, activePlayerId, isMyTurn, threatRows, userId]);
+  }, [activeFight, activePlayerId, bossMode, isMyTurn, threatRows, userId]);
 
   const updatePlayerStance = (stance) => {
     setStanceOverrides((prev) => ({ ...prev, [activePlayerId]: stance }));
@@ -352,21 +364,23 @@ export default function App({
 
   const handleStartFight = (rowIndex, threat) => {
     if (!threat) return;
-    if (!threatRows?.[rowIndex]?.length) return;
     if (!isMyTurn || activePlayerId !== userId) {
       onLocalToast?.("You can only fight during your turn with your board selected.", "amber");
       return;
     }
-    if (me?.actionUsed) {
+    if (!bossMode && me?.actionUsed) {
       onLocalToast?.("Main action already used this turn.", "amber");
       return;
     }
-    const row = threatRows?.[rowIndex] || [];
-    const { slots, first } = resolveRowSlots(row);
-    const fightable = first ? slots[first] : null;
-    if (!fightable || fightable.id !== threat.id) {
-      onLocalToast?.("Only the first available threat in a column can be fought right now.", "amber");
-      return;
+    if (!bossMode) {
+      if (!threatRows?.[rowIndex]?.length) return;
+      const row = threatRows?.[rowIndex] || [];
+      const { slots, first } = resolveRowSlots(row);
+      const fightable = first ? slots[first] : null;
+      if (!fightable || (fightable.id !== threat.id && !hasRangeAny)) {
+        onLocalToast?.("Only the first available threat in a column can be fought right now.", "amber");
+        return;
+      }
     }
     clearBuySelection();
     setPromptSafe(null);
@@ -745,9 +759,13 @@ export default function App({
                       compact
                       rows={threatRows}
                       boss={boss}
+                      bossMode={bossMode}
+                      bossThresholds={bossThresholds}
+                      bossStage={bossStage}
+                      canFightAny={hasRangeAny}
                       onFightRow={handleStartFight}
                       activeStance={activePlayer?.stance}
-                      deckCount={deckRemaining}
+                      deckCount={bossMode ? 0 : deckRemaining}
                       onGoToMarket={() => setZoomedPanel('market')}
                       showMarketTransition={zoomedPanel === 'threats'}
                       onZoom={() => setZoomedPanel(zoomedPanel === 'threats' ? null : 'threats')}

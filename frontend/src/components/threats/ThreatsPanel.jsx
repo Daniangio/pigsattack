@@ -9,6 +9,10 @@ export default function ThreatsPanel({
   compact,
   rows,
   boss,
+  bossMode = false,
+  bossThresholds = [],
+  bossStage = "day",
+  canFightAny = false,
   onFightRow,
   onZoom,
   onGoToMarket,
@@ -34,6 +38,71 @@ export default function ThreatsPanel({
     };
     return weakMap[s]?.has(type);
   };
+
+  if (bossMode) {
+    return (
+      <div className="w-full h-full bg-slate-950/60 border border-slate-800 rounded-3xl p-4 flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-xs uppercase tracking-[0.35em] text-slate-400">
+            Boss • {String(bossStage || "day").toUpperCase()}
+          </h3>
+          <div className="flex items-center gap-2">
+            {onZoom && (
+              <button
+                onClick={onZoom}
+                className="p-1 rounded-full border border-slate-700 text-slate-200 hover:bg-slate-800"
+              >
+                <Maximize2 size={14} />
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="flex-1 flex flex-col gap-3 overflow-auto">
+          <BossCard boss={bossCard} enablePreview compact />
+          <div className="grid gap-2 sm:grid-cols-2">
+            {(bossThresholds || []).map((th, idx) => {
+              const cost = th.cost || {};
+              const defeated = th.defeated;
+              return (
+                <button
+                  key={th.index ?? idx}
+                  disabled={defeated}
+                  onClick={() =>
+                    onFightRow?.(0, {
+                      id: `boss-${th.index ?? idx}`,
+                      name: `${bossCard?.name || "Boss"} • ${th.label}`,
+                      cost,
+                      reward: th.reward,
+                      type: "Boss",
+                      boss_threshold: th.index ?? idx,
+                    })
+                  }
+                  className={`w-full text-left p-3 rounded-lg border transition ${
+                    defeated
+                      ? "border-slate-800 bg-slate-900/40 text-slate-500 cursor-not-allowed"
+                      : "border-amber-400/60 bg-amber-400/5 hover:border-amber-300"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs text-slate-200">{th.label || `Threshold ${idx + 1}`}</div>
+                    {defeated ? (
+                      <span className="text-[10px] text-emerald-300 uppercase">Cleared</span>
+                    ) : (
+                      <ArrowRightCircle size={14} className="text-amber-300" />
+                    )}
+                  </div>
+                  <div className="text-[11px] text-amber-200 mt-1">
+                    Cost: {["R", "B", "G"].map((k) => (cost?.[k] ? `${k}${cost[k]} ` : ""))}
+                  </div>
+                  {th.reward && <div className="text-[11px] text-slate-300">Reward: {th.reward}</div>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full h-full bg-slate-950/60 border border-slate-800 rounded-3xl p-4 flex flex-col overflow-hidden">
@@ -105,7 +174,7 @@ export default function ThreatsPanel({
                     const sharedProps = {
                       rowIndex: rowIdx,
                       isFront: isVisible,
-                      canFight: isVisible,
+                      canFight: isVisible || bossMode || canFightAny,
                       isAttacking,
                       weight: threat?.weight || 0,
                       position: pos,
