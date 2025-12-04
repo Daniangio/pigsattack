@@ -199,6 +199,7 @@ export default function PlayerBoardBottom({
   const [conversionAmounts, setConversionAmounts] = useState({});
   const [activeCard, setActiveCard] = useState(null);
   const [selectedActiveToken, setSelectedActiveToken] = useState(null);
+  const [selectedActiveResource, setSelectedActiveResource] = useState(null);
   const conversionOptions = useMemo(() => {
     const keys = [
       { key: "R", icon: <Flame size={14} className="text-red-400" /> },
@@ -330,12 +331,19 @@ export default function PlayerBoardBottom({
   const ActiveAbilityPanel = ({ card }) => {
     const massCount = player.tokens?.mass ?? player.tokens?.MASS ?? 0;
     const gAvailable = player.resources?.G ?? 0;
+    const hasMassActive = Array.isArray(card.tags) && card.tags.some((t) => t.startsWith("active:mass_token"));
+    const hasSplitActive = Array.isArray(card.tags) && card.tags.some((t) => t.startsWith("active:convert_split"));
     const canConfirm =
-      !!selectedActiveToken &&
-      tokenCount(selectedActiveToken) > 0 &&
-      gAvailable >= 2 &&
-      massCount < 3 &&
-      !activeUsedMap?.[card.id];
+      (hasMassActive &&
+        !!selectedActiveToken &&
+        tokenCount(selectedActiveToken) > 0 &&
+        gAvailable >= 2 &&
+        massCount < 3 &&
+        !activeUsedMap?.[card.id]) ||
+      (hasSplitActive &&
+        !!selectedActiveResource &&
+        (player.resources?.[selectedActiveResource] ?? 0) > 0 &&
+        !activeUsedMap?.[card.id]);
 
     return (
       <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3 flex flex-col gap-3">
@@ -360,44 +368,82 @@ export default function PlayerBoardBottom({
             <div className="px-2 py-1 rounded-md border border-slate-700 bg-slate-800/50 text-slate-200 text-xs">
               G Available: {gAvailable}
             </div>
-            <div className="text-[11px] text-slate-400">
-              Spend any 1 token + 2G to forge 1 Mass token (once per turn).
-            </div>
-            <div className="text-[11px] text-slate-300">
-              Mass tokens: {massCount} / 3 {activeUsedMap?.[card.id] ? "(used)" : ""}
-            </div>
-          </div>
+                      <div className="text-[11px] text-slate-400">
+                        {hasMassActive
+                          ? "Spend any 1 token + 2G to forge 1 Mass token (once per turn)."
+                          : "Convert 1 cube into 1 of each other color (once per turn)."}
+                      </div>
+                      {hasMassActive && (
+                        <div className="text-[11px] text-slate-300">
+                          Mass tokens: {massCount} / 3 {activeUsedMap?.[card.id] ? "(used)" : ""}
+                        </div>
+                      )}
+                    </div>
           <div className="flex-1 min-w-[200px]">
-            <div className="grid grid-cols-2 sm:grid-cols-2 gap-1">
-              {tokenOptions.map((opt) => {
-                const count = tokenCount(opt.key);
-                const isSelected = selectedActiveToken === opt.key;
-                const disabled = count <= 0;
-                return (
-                  <button
-                    key={opt.key}
-                    type="button"
-                    disabled={disabled}
-                    onClick={() => {
-                      if (disabled) return;
-                      setSelectedActiveToken((prev) => (prev === opt.key ? null : opt.key));
-                    }}
-                    className={`flex items-center justify-between px-2 py-2 rounded-lg border text-[11px] transition ${
-                      disabled
-                        ? "border-slate-800 text-slate-600 cursor-not-allowed"
-                        : `${opt.color} hover:border-amber-400`
-                    } ${isSelected ? "ring-2 ring-amber-400" : ""}`}
-                  >
-                    <span>{opt.label}</span>
-                    <span className="text-slate-200">{count}</span>
-                  </button>
-                );
-              })}
-            </div>
+            {hasMassActive && (
+              <div className="grid grid-cols-2 sm:grid-cols-2 gap-1">
+                {tokenOptions.map((opt) => {
+                  const count = tokenCount(opt.key);
+                  const isSelected = selectedActiveToken === opt.key;
+                  const disabled = count <= 0;
+                  return (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => {
+                        if (disabled) return;
+                        setSelectedActiveToken((prev) => (prev === opt.key ? null : opt.key));
+                      }}
+                      className={`flex items-center justify-between px-2 py-2 rounded-lg border text-[11px] transition ${
+                        disabled
+                          ? "border-slate-800 text-slate-600 cursor-not-allowed"
+                          : `${opt.color} hover:border-amber-400`
+                      } ${isSelected ? "ring-2 ring-amber-400" : ""}`}
+                    >
+                      <span>{opt.label}</span>
+                      <span className="text-slate-200">{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {hasSplitActive && (
+              <div className="grid grid-cols-3 gap-1">
+                {[
+                  { key: "R", label: "Red", icon: <Flame size={14} className="text-red-400" /> },
+                  { key: "B", label: "Blue", icon: <Zap size={14} className="text-blue-400" /> },
+                  { key: "G", label: "Green", icon: <Shield size={14} className="text-green-400" /> },
+                ].map((opt) => {
+                  const count = player.resources?.[opt.key] || 0;
+                  const isSelected = selectedActiveResource === opt.key;
+                  const disabled = count <= 0;
+                  return (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => {
+                        if (disabled) return;
+                        setSelectedActiveResource((prev) => (prev === opt.key ? null : opt.key));
+                      }}
+                      className={`flex flex-col items-center gap-1 px-2 py-2 rounded-lg border text-[11px] transition ${
+                        disabled
+                          ? "border-slate-800 text-slate-600 cursor-not-allowed"
+                          : "border-slate-700 text-slate-200 hover:border-amber-400"
+                      } ${isSelected ? "ring-2 ring-amber-400" : ""}`}
+                    >
+                      <span className="text-slate-200 flex items-center gap-1">{opt.icon}{opt.label}</span>
+                      <span className="text-slate-300">Have: {count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             <div className="flex justify-end gap-2 mt-3">
               <button
                 type="button"
-                onClick={() => { setActiveCard(null); setSelectedActiveToken(null); }}
+                onClick={() => { setActiveCard(null); setSelectedActiveToken(null); setSelectedActiveResource(null); }}
                 className="px-3 py-1 rounded-full border border-slate-700 text-slate-300 hover:bg-slate-800 text-[11px]"
               >
                 Cancel
@@ -406,9 +452,10 @@ export default function PlayerBoardBottom({
                 type="button"
                 disabled={!canConfirm}
                 onClick={() => {
-                  onActivateCard?.(card.id, selectedActiveToken);
+                  onActivateCard?.(card.id, selectedActiveToken, selectedActiveResource);
                   setActiveCard(null);
                   setSelectedActiveToken(null);
+                  setSelectedActiveResource(null);
                 }}
                 className="px-3 py-1 rounded-full border border-emerald-500 text-emerald-200 hover:bg-emerald-500/10 text-[11px] disabled:opacity-50 disabled:cursor-not-allowed"
               >

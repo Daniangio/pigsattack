@@ -37,6 +37,7 @@ def parse_effect_tags(card: Dict) -> List[CardEffect]:
       - "production:lowest:1"              -> +1 to lowest resource (custom tie-break)
       - "mass_token:defense_boost:3"       -> Mass tokens reduce G by 3 instead of 2
       - "active:mass_token:once_per_turn"  -> Action: spend any token + 2G to gain 1 Mass token (once/turn)
+      - "active:convert_split"             -> Action: convert 1 cube into 1 of each other color
       - "on_kill:conversion:1"             -> Gain 1 conversion token when defeating a threat
       - "spec:red"                         -> thematic specialization hint
     """
@@ -90,6 +91,8 @@ def parse_effect_tags(card: Dict) -> List[CardEffect]:
             parsed.append(CardEffect(kind="mass_token_defense", amount=boost, source_id=source_id, source_name=source_name))
         elif raw.startswith("active:mass_token:once_per_turn"):
             parsed.append(CardEffect(kind="active_mass_token", source_id=source_id, source_name=source_name))
+        elif raw.startswith("active:convert_split"):
+            parsed.append(CardEffect(kind="active_convert_split", source_id=source_id, source_name=source_name))
         elif raw.startswith("on_kill:conversion:"):
             payload = raw.split("on_kill:conversion:")[-1]
             try:

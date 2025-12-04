@@ -82,8 +82,10 @@ class ThreatLane:
         enraged = False
         if self.front:
             # Cannot move further; becomes enraged.
-            self.front.enrage_tokens = max(0, getattr(self.front, "enrage_tokens", 0)) + 1
-            enraged = True
+            current = max(0, getattr(self.front, "enrage_tokens", 0))
+            if current < 1:
+                self.front.enrage_tokens = 1
+                enraged = True
         if not self.front and self.mid:
             self.front = self.mid
             self.mid = None
@@ -139,10 +141,11 @@ class ThreatBoard:
             lane_moved, lane_enraged = lane.advance()
             moved = lane_moved or moved
             if lane_enraged and lane.front:
-                # Enrage only once
-                if getattr(lane.front, "enrage_tokens", 0) <= 0:
-                    lane.front.position = "front"
-                    enraged.append(lane.front)
+                # Enrage only once; cap tokens at 1
+                if getattr(lane.front, "enrage_tokens", 0) <= 1:
+                    lane.front.enrage_tokens = min(1, getattr(lane.front, "enrage_tokens", 0))
+                lane.front.position = "front"
+                enraged.append(lane.front)
         return moved, enraged
 
     def spawn(self, draw: Callable[[], Optional[ThreatInstance]]) -> int:

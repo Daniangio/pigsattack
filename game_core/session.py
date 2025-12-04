@@ -311,6 +311,19 @@ class GameSession:
         if not self.threat_manager:
             raise InvalidActionError("Threat manager unavailable.")
         self.threat_manager.remove_threat(result["row_index"], threat.id)
+        # On-kill upgrade effects (e.g., Catalyst Array)
+        kill_effects = []
+        for card in player.upgrades or []:
+            for eff in self._card_effects(card):
+                if eff.kind == "on_kill_conversion" and eff.amount:
+                    kill_effects.append(eff)
+        for eff in kill_effects:
+            current = player.tokens.get(TokenType.CONVERSION, 0)
+            gained = min(eff.amount, max(0, 3 - current))
+            if gained:
+                player.tokens[TokenType.CONVERSION] = current + gained
+                self.state.add_log(f"{player.username} gained {gained} conversion token(s) from {eff.source_name or 'an upgrade'}.")
+
         self._sync_threat_rows()
         self.state.add_log(f"{player.username} defeated {threat.name} for {threat.vp} VP.")
         await self._check_game_over()
@@ -407,35 +420,56 @@ class GameSession:
         if not card:
             raise InvalidActionError("Upgrade not found.")
         effects = self._card_effects(card)
-        if not any(eff.kind == "active_mass_token" for eff in effects):
+        has_mass_active = any(eff.kind == "active_mass_token" for eff in effects)
+        has_split_active = any(eff.kind == "active_convert_split" for eff in effects)
+        if not (has_mass_active or has_split_active):
             raise InvalidActionError("This card has no active ability.")
         self._assert_active_available(player, card.id)
 
-        token_raw = (payload.get("token") or payload.get("token_type") or "").lower()
-        token_map = {
-            "attack": TokenType.ATTACK,
-            "conversion": TokenType.CONVERSION,
-            "wild": TokenType.WILD,
-            "mass": TokenType.MASS,
-            "boss": TokenType.BOSS,
-        }
-        token_type = token_map.get(token_raw)
-        if not token_type:
-            raise InvalidActionError("A token type is required to activate this card.")
-        if player.tokens.get(token_type, 0) <= 0:
-            raise InvalidActionError("Selected token not available.")
-        if player.resources.get(ResourceType.GREEN, 0) < 2:
-            raise InvalidActionError("Not enough green resources (need 2G).")
-        if player.tokens.get(TokenType.MASS, 0) >= 3:
-            raise InvalidActionError("You already have the maximum Mass tokens.")
+        if has_mass_active:
+            token_raw = (payload.get("token") or payload.get("token_type") or "").lower()
+            token_map = {
+                "attack": TokenType.ATTACK,
+                "conversion": TokenType.CONVERSION,
+                "wild": TokenType.WILD,
+                "mass": TokenType.MASS,
+                "boss": TokenType.BOSS,
+            }
+            token_type = token_map.get(token_raw)
+            if not token_type:
+                raise InvalidActionError("A token type is required to activate this card.")
+            if player.tokens.get(token_type, 0) <= 0:
+                raise InvalidActionError("Selected token not available.")
+            if player.resources.get(ResourceType.GREEN, 0) < 2:
+                raise InvalidActionError("Not enough green resources (need 2G).")
+            if player.tokens.get(TokenType.MASS, 0) >= 3:
+                raise InvalidActionError("You already have the maximum Mass tokens.")
 
-        # Consume costs
-        player.tokens[token_type] = max(0, player.tokens.get(token_type, 0) - 1)
-        player.resources[ResourceType.GREEN] = max(0, player.resources.get(ResourceType.GREEN, 0) - 2)
-        player.tokens[TokenType.MASS] = min(3, player.tokens.get(TokenType.MASS, 0) + 1)
+            # Consume costs
+            player.tokens[token_type] = max(0, player.tokens.get(token_type, 0) - 1)
+            player.resources[ResourceType.GREEN] = max(0, player.resources.get(ResourceType.GREEN, 0) - 2)
+            player.tokens[TokenType.MASS] = min(3, player.tokens.get(TokenType.MASS, 0) + 1)
+            self.state.add_log(f"{player.username} activated {self._card_name(card)} to forge a Mass token (spent 1 token and 2G).")
+
+        elif has_split_active:
+            res_key = payload.get("resource") or payload.get("from")
+            if not res_key:
+                raise InvalidActionError("Choose a resource to convert.")
+            res = parse_resource_key(res_key, InvalidActionError)
+            if player.resources.get(res, 0) <= 0:
+                raise InvalidActionError("Not enough of that resource to convert.")
+            # Determine other resources
+            others = [r for r in ResourceType if r != res]
+            if len(others) < 2:
+                raise InvalidActionError("Conversion failed.")
+            player.resources[res] = max(0, player.resources.get(res, 0) - 1)
+            player.resources[others[0]] = player.resources.get(others[0], 0) + 1
+            player.resources[others[1]] = player.resources.get(others[1], 0) + 1
+            self.state.add_log(
+                f"{player.username} activated {self._card_name(card)} to split 1 {res.value} into 1 {others[0].value} and 1 {others[1].value}."
+            )
+
         player.active_used[card.id] = True
-
-        self.state.add_log(f"{player.username} activated {self._card_name(card)} to forge a Mass token (spent 1 token and 2G).")
 
     async def _handle_realign(self, player: PlayerBoard, payload: Dict[str, Any]):
         self._assert_turn(player)
@@ -686,7 +720,7 @@ class GameSession:
             cost[ResourceType.GREEN] = cost.get(ResourceType.GREEN, 0) + weight_cost
         enrage_tokens = getattr(threat, "enrage_tokens", 0) or 0
         if enrage_tokens:
-            cost[ResourceType.RED] = cost.get(ResourceType.RED, 0) + 2 * enrage_tokens
+            cost[ResourceType.RED] = cost.get(ResourceType.RED, 0) + 2 * min(1, enrage_tokens)
 
         # Mass tokens are permanent reductions on green
         mass_tokens = player.tokens.get(TokenType.MASS, 0)

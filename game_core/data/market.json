@@ -2,7 +2,7 @@
   "upgrades": [
     { "id": "u1", "type": "Upgrade", "name": "Ferocity Modulator v1.0", "cost": { "R": 1, "B": 2, "G": 0 }, "vp": 1, "effect": "Start of turn: gain +1R", "tags": ["production:R1"], "copies": 3 },
     { "id": "u2", "type": "Upgrade", "name": "Ferocity Modulator v2.0", "cost": { "R": 5, "B": 2, "G": 0 }, "vp": 2, "effect": "Start of turn: gain +2R", "tags": ["production:R2"], "copies": 1 },
-    { "id": "u3", "type": "Upgrade", "name": "Ferocity Modulator v2.0", "cost": { "R": 9, "B": 1, "G": 0 }, "vp": 2, "effect": "Start of turn: gain +3R", "tags": ["production:R3"], "copies": 1 },
+    { "id": "u3", "type": "Upgrade", "name": "Ferocity Modulator v3.0", "cost": { "R": 9, "B": 1, "G": 0 }, "vp": 2, "effect": "Start of turn: gain +3R", "tags": ["production:R3"], "copies": 1 },
     { "id": "u4", "type": "Upgrade", "name": "Cunning Modulator v1.0", "cost": { "R": 0, "B": 3, "G": 0 }, "vp": 1, "effect": "Start of turn: gain +1 in your stance color (Balanced gains +1B)", "tags": ["production:stance:1"], "copies": 3 },
     { "id": "u5", "type": "Upgrade", "name": "Cunning Modulator v2.0", "cost": { "R": 0, "B": 7, "G": 0 }, "vp": 2, "effect": "Start of turn: gain +2 in your stance color (Balanced gains +2B)", "tags": ["production:stance:2"], "copies": 1 },
     { "id": "u6", "type": "Upgrade", "name": "Mass Modulator v1.0", "cost": { "R": 0, "B": 2, "G": 3 }, "vp": 1, "effect": "Day: gain +1G per turn. Night: gain +2G per turn", "tags": ["production:G1:day", "production:G2:night"], "copies": 3 },
@@ -10,13 +10,13 @@
     { "id": "u8", "type": "Upgrade", "name": "Precision Optics v1.0", "cost": { "R": 0, "B": 3, "G": 0 }, "vp": 1, "effect": "In a fight: reduce cost by your stance color (1). Balanced chooses the color.", "tags": ["fight:cost_reduction:stance:1"], "copies": 3 },
     { "id": "u9", "type": "Upgrade", "name": "Precision Optics v2.0", "cost": { "R": 1, "B": 5, "G": 0 }, "vp": 2, "effect": "In a fight: reduce cost by your stance color (2). Balanced chooses the color.", "tags": ["fight:cost_reduction:stance:2"], "copies": 3 },
     { "id": "u10", "type": "Upgrade", "name": "Precision Optics v3.0", "cost": { "R": 3, "B": 3, "G": 0 }, "vp": 2, "effect": "In a fight: reduce cost by your stance color (3). Balanced chooses the color.", "tags": ["fight:cost_reduction:stance:3"], "copies": 1 },
-    { "id": "u11", "type": "Upgrade", "name": "Mass Factory", "cost": { "R": 0, "B": 1, "G": 3 }, "vp": 1, "effect": "Spend 1 Token (of any type) + 2G: Create a Mass Token. Use only once per turn.", "tags": ["active:mass_token:once_per_turn"], "copies": 300 },
+    { "id": "u11", "type": "Upgrade", "name": "Mass Factory", "cost": { "R": 0, "B": 1, "G": 3 }, "vp": 1, "effect": "Spend 1 Token (of any type) + 2G: Create a Mass Token. Use only once per turn.", "tags": ["active:mass_token:once_per_turn"], "copies": 3 },
     { "id": "u12", "type": "Upgrade", "name": "Mass Core", "cost": { "R": 0, "B": 0, "G": 3 }, "vp": 1, "effect": "Mass Tokens defend for 3G", "tags": ["mass_token:defense_boost:3"], "copies": 2 },
     { "id": "u13", "type": "Upgrade", "name": "Catalyst Array", "cost": { "R": 2, "B": 4, "G": 0 }, "vp": 2, "effect": "When killing a threat, gain 1 Conversion Token", "tags": ["on_kill:conversion:1"], "copies": 3 },
     { "id": "u14", "type": "Upgrade", "name": "Equalizer Relay", "cost": { "R": 0, "B": 2, "G": 2 }, "vp": 1, "effect": "Start of turn: gain +1 of your lowest resource (Blue on tie)", "tags": ["production:lowest:1"], "copies": 2 },
-    { "id": "u15", "type": "Upgrade", "name": "Harmonic Converter", "cost": { "R": 3, "B": 3, "G": 1 }, "vp": 2, "effect": "Once per turn: convert 1 cube into 2 cubes split between the other colors (1 each)", "tags": ["production:lowest:1"], "copies": 1 },
+    { "id": "u15", "type": "Upgrade", "name": "Harmonic Converter", "cost": { "R": 0, "B": 4, "G": 0 }, "vp": 1, "effect": "Once per turn: convert 1 cube into 2 cubes split between the other colors (1 each)", "tags": ["active:convert_split"], "copies": 1 },
     { "id": "u16", "type": "Upgrade", "name": "Verdant Capacitor (GR)", "cost": { "R": 2, "B": 0, "G": 4 }, "vp": 1, "effect": "Day: gain +1G per turn. Night: gain +2R per turn", "tags": ["production:G1:day", "production:R2:night"], "copies": 2 },
-    { "id": "u17", "type": "Upgrade", "name": "Azure Dynamo (GB)", "cost": { "R": 0, "B": 4, "G": 3 }, "vp": 1, "effect": "Day: gain +1B per turn. Night: gain +2G per turn", "tags": ["production:B1:day", "production:G2:night"], "copies": 2 }
+    { "id": "u17", "type": "Upgrade", "name": "Azure Dynamo (GB)", "cost": { "R": 0, "B": 2, "G": 4 }, "vp": 1, "effect": "Day: gain +1B per turn. Night: gain +2G per turn", "tags": ["production:B1:day", "production:G2:night"], "copies": 2 }
   ],
   "weapons": [
     { "id": "w1", "type": "Weapon", "name": "Shockblade", "cost": { "R": 5, "B": 0, "G": 0 }, "vp": 0, "uses": 3, "effect": "In a fight: reduce cost by R3", "tags": ["fight:cost_reduction:R3", "spec:red"], "copies": 3 },

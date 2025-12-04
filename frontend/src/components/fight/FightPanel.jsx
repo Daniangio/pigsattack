@@ -69,6 +69,7 @@ export default function FightPanel({
   const attackValue = attackUsed || 0;
   const wildAlloc = wildAllocation || { R: 0, B: 0, G: 0 };
   const threatWeight = Number(threat?.weight || 0);
+  const enrageTokens = Number(threat?.enrage_tokens || 0);
 
   useEffect(() => {
     if (!setAttackUsed || !setWildAllocation) return;
@@ -493,6 +494,11 @@ export default function FightPanel({
             {threatWeight > 0 && (
               <div className="text-[11px] text-amber-200">
                 Weight +{threatWeight}: added to Green cost.
+              </div>
+            )}
+            {enrageTokens > 0 && (
+              <div className="text-[11px] text-rose-300">
+                Enraged +{2 * enrageTokens}R: added to Red cost.
               </div>
             )}
             {renderCostLine("Original cost", baseCost, "text-slate-400")}

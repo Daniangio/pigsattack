@@ -77,10 +77,11 @@ export default function GamePage() {
   );
 
   const handleActivateCard = useCallback(
-    (cardId, token) => {
+    (cardId, token, resource) => {
       if (!cardId) return;
       const payload = { card_id: cardId };
       if (token) payload.token = token;
+      if (resource) payload.resource = resource;
       handleGameAction("activate_card", payload);
     },
     [handleGameAction]
