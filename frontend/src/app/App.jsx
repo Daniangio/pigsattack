@@ -24,11 +24,26 @@ import PostGamePage from "../pages/PostGamePage.jsx";
  */
 const StateGuard = ({ children }) => {
   // --- REFACTOR: Added roomState ---
-  const { gameState, gameResult, token, roomState } = useStore();
+  const { gameState, gameResult, token, roomState, user } = useStore();
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
+    const resolveMyStatus = () => {
+      if (!gameState?.players || !user?.id) return null;
+      const list = Array.isArray(gameState.players)
+        ? gameState.players
+        : Object.values(gameState.players);
+      const me = list.find(
+        (p) => p.id === user.id || p.user_id === user.id || p.userId === user.id
+      );
+      return me?.status ? String(me.status).toUpperCase() : null;
+    };
+    const myStatus = resolveMyStatus();
+    const isActiveStatus = myStatus === "ACTIVE";
+    const onGamePage = location.pathname.startsWith("/game/");
+    const onPostGamePage = location.pathname.startsWith("/post-game/");
+
     // 1. Auth Rules (Unchanged)
     if (!token && location.pathname !== "/auth") {
       // If logged out, force to auth page.
@@ -44,10 +59,8 @@ const StateGuard = ({ children }) => {
     // 2. The "Active Game" Rule (Unchanged)
     // If we have an active game, we MUST be on the game page.
     const activeGameId = gameState?.game_id;
-    if (activeGameId && location.pathname !== `/game/${activeGameId}`) {
-      console.log(
-        "StateGuard: Active game detected, forcing navigation to game."
-      );
+    if (activeGameId && !onGamePage && !onPostGamePage) {
+      // Always route to the game if we have state and are not already on game/postgame.
       navigate(`/game/${activeGameId}`, { replace: true });
       return;
     }
@@ -73,6 +86,19 @@ const StateGuard = ({ children }) => {
     if (!activeGameId && location.pathname.startsWith("/game/")) {
       console.log("StateGuard: No game state, redirecting from game page.");
       navigate("/lobby", { replace: true });
+    }
+
+    // 6. If user belongs to an active game (per room state) and is not surrendered, force them to the game page.
+    if (!activeGameId && roomState && roomState.status === "in_game" && roomState.game_record_id && user?.id) {
+      const activePlayer = (roomState.players || []).find((p) => p.id === user.id);
+      const activeParticipant = (roomState.game_details?.participants || []).find((p) => p.user?.id === user.id);
+      const status = activePlayer?.status || activeParticipant?.status;
+      if (status && String(status).toUpperCase() !== "ACTIVE") {
+        // Spectators or surrendered users can stay on other pages
+      } else {
+        navigate(`/game/${roomState.game_record_id}`, { replace: true });
+        return;
+      }
     }
 
     // The RoomPage.jsx component now handles its own loading state.

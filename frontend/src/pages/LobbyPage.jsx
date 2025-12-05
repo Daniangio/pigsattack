@@ -64,8 +64,7 @@ const LobbyPage = ({ onLogout }) => { // --- REFACTOR: Added roomState ---
         action: "spectate_game",
         payload: { game_record_id: gameRecordId },
       });
-      // We don't navigate here. The server's game_state response
-      // will trigger the StateGuard.
+      navigate(`/game/${gameRecordId}`);
     }
   };
   

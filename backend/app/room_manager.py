@@ -325,6 +325,8 @@ class RoomManager:
     async def return_to_lobby(self, user: User, manager: ConnectionManager):
         """ Acknowledges post-game and returns to lobby."""
         print(f"User {user.username} is returning to the lobby.")
+        # Remove the user from any room (players or spectators) first.
+        self.remove_user_from_any_room(user.id)
         # This will remove them from any (now-defunct) room refs
         # and add them to the lobby.
         await self.add_user_to_lobby(user, manager)
@@ -365,6 +367,39 @@ class RoomManager:
             if include_spectators and any(spectator.id == user_id for spectator in room.spectators):
                 return room_id, room
         return None, None
+
+    async def detach_player_from_game(self, user_id: str, game_id: str, manager: ConnectionManager):
+        """
+        Remove a surrendered player from the active game room so they can start/join other games.
+        They are not kept as spectators; they can rejoin via spectate if desired.
+        """
+        room = next((r for r in self.rooms.values() if r.game_record_id == game_id), None)
+        if not room:
+            return
+        before_players = len(room.players)
+        room.players = [p for p in room.players if p.id != user_id]
+        room.spectators = [s for s in room.spectators if s.id != user_id]
+        if len(room.players) != before_players:
+            # Update lobby state to include the detached user
+            if user_id in fake_users_db:
+                await self.add_user_to_lobby(fake_users_db[user_id], manager)
+            # Optionally broadcast room state to remaining participants
+            await self.broadcast_room_state(room.id, manager, exclude_user_id=user_id)
+
+    async def mark_player_as_spectator(self, user_id: str, game_id: str, manager: ConnectionManager):
+        """
+        Move a surrendered player to spectators for the given game room.
+        """
+        room = next((r for r in self.rooms.values() if r.game_record_id == game_id), None)
+        if not room:
+            return
+        # Remove from players
+        room.players = [p for p in room.players if p.id != user_id]
+        # Add to spectators if not already
+        if not any(s.id == user_id for s in room.spectators):
+            if user_id in fake_users_db:
+                room.spectators.append(fake_users_db[user_id])
+        await self.broadcast_room_state(room.id, manager, exclude_user_id=user_id)
         
     def find_game_by_user(self, user_id: str) -> Optional[str]:
         """Finds the game_record_id for a user in an 'in_game' room."""

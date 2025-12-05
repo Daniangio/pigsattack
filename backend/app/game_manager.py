@@ -124,6 +124,10 @@ class GameManager:
             state_changed = await game.player_action(player_id, action, payload)
 
             if state_changed:
+                if action == "surrender":
+                    # Mark as spectator but keep in room; broadcast the state so client navigates to postgame.
+                    if self.room_manager:
+                        await self.room_manager.mark_player_as_spectator(player_id, game_id, self.conn_manager)
                 if game.state.phase == GamePhase.GAME_OVER:
                     await self._handle_game_over(game_id, game.state)
                 else:

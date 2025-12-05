@@ -648,28 +648,25 @@ export default function PlayerBoardBottom({
               </div>
 
               {/* Tokens */}
-              <div className="relative flex flex-col justify-center gap-2 min-w-[240px]">
+              <div className="relative flex items-center gap-2 min-w-[280px]">
                 {onPickToken && (
-                  <div className="flex">
-                    <button
-                      type="button"
-                      onClick={() => onPickToken?.()}
-                      disabled={!canPickToken}
-                      className={`relative rounded-xl border  shadow-lg ${
-                        canPickToken ? "border-emerald-400" : "border-slate-700 grayscale opacity-70 cursor-not-allowed"
-                      }`}
-                      style={{ width: 100, height: 90 }}
-                    >
-                      <img src={scavengeCard} alt="Pick Token" className="w-full h-full object-contain bg-slate-900/40" />
-                      {!canPickToken && <div className="absolute inset-0 bg-slate-900/50" />}
-                      {canPickToken && <div className="absolute inset-0 ring-2 rounded-xl ring-emerald-300 animate-pulse" />}
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onPickToken?.()}
+                    disabled={!canPickToken}
+                    className={`relative rounded-xl border shadow-lg ${
+                      canPickToken ? "border-emerald-400" : "border-slate-700 grayscale opacity-70 cursor-not-allowed"
+                    }`}
+                    style={{ width: 100, height: 90 }}
+                  >
+                    <img src={scavengeCard} alt="Pick Token" className="w-full h-full object-contain bg-slate-900/40" />
+                    {!canPickToken && <div className="absolute inset-0 bg-slate-900/50" />}
+                    {canPickToken && <div className="absolute inset-0 ring-2 rounded-xl ring-emerald-300 animate-pulse" />}
+                  </button>
                 )}
-                <div className="flex items-start gap-3">
+                <div className="grid grid-cols-2 gap-1 flex-1 min-w-[160px]">
                   {["attack", "wild", "mass", "conversion"].some((k) => (player.tokens?.[k] ?? player.tokens?.[k?.toUpperCase?.()] ?? 0) > 0) ? (
-                  <div className="grid grid-cols-2 gap-2 flex-1">
-                    {["attack", "wild", "mass", "conversion"].map((key) => {
+                    ["attack", "wild", "mass", "conversion"].map((key) => {
                       const total =
                         player.tokens?.[key] ??
                         player.tokens?.[key?.toUpperCase?.()] ??
@@ -682,22 +679,19 @@ export default function PlayerBoardBottom({
                           : key === "wild"
                             ? Math.max(0, total - stagedWildTotal)
                             : total;
-                      
-                      // Display token even if remaining is 0, just disable
                       const displayTotal = total;
                       const isDisabled = remaining <= 0 && key !== "conversion";
 
                       const isConversion = key === "conversion";
                       const isConversionActive = isConversion && displayTotal > 0;
-                      
+
                       return (
                         <button
                           key={key}
                           type="button"
-                          className={`${tokenChipClass} ${style.bg || "bg-slate-900"} ${style.border || "border-slate-700"} ${style.text || "text-slate-200"}
-                                     ${isDisabled ? "opacity-50 cursor-not-allowed" : "hover:border-amber-400"}
-                                     ${isConversionActive ? "relative" : ""}
-                                    `}
+                          className={`flex items-center gap-0 px-0 py-0 rounded transition w-full justify-start ${
+                            isDisabled ? "opacity-50 cursor-not-allowed" : "hover:bg-slate-800/80"
+                          } ${isConversionActive ? "relative" : ""}`}
                           onClick={() => {
                             if (isConversionActive) {
                               setConversionOpen(true);
@@ -715,20 +709,18 @@ export default function PlayerBoardBottom({
                           title={
                             isConversionActive ? "Click to convert resources" : (isDisabled ? "No tokens remaining" : `${remaining} available`)
                           }
-                        >
-                          <span className="flex items-center gap-2">
+                          >
                             {style.img ? (
                               <img
                                 src={style.img}
                                 alt={`${tokenLabels[key] || key} token`}
                                 title={`${tokenLabels[key] || key} token`}
-                                className="w-8 h-8 rounded-full border border-slate-700"
+                                className="w-16 h-16 rounded-full"
                               />
                             ) : (
                               tokenLabels[key] || key
                             )}
-                            <span>× {displayTotal}</span>
-                          </span>
+                          <span className={`${style.text || "text-slate-200"} text-sm font-semibold`}>×{displayTotal}</span>
                           {/* Correctly position the overlay anchor on the Conversion Token button */}
                           {isConversionActive && conversionOpen && (
                             <>
@@ -800,11 +792,10 @@ export default function PlayerBoardBottom({
                           )}
                         </button>
                       );
-                    })}
-                  </div>
-                ) : (
-                  <div className="text-[11px] text-slate-500">No tokens</div>
-                )}
+                    })
+                  ) : (
+                    <div className="text-[11px] text-slate-500">No tokens</div>
+                  )}
                 </div>
               </div>
 

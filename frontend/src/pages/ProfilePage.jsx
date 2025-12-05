@@ -195,13 +195,6 @@ const ProfilePage = ({ onLogout }) => {
               </button>
             );
           })}
-          <button
-            onClick={() => setAvatarChoice(null)}
-            className={`${btnGhost} text-sm col-span-5 md:col-span-1`}
-            title="Clear avatar"
-          >
-            Clear
-          </button>
         </div>
       </div>
 

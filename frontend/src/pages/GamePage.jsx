@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import GameApp from "../app/GameApp.jsx";
 import { useStore } from "../store.js";
+import { useParams, useNavigate } from "react-router-dom";
 
 const bannerText = (gameState) => {
   if (!gameState) return "Connecting to game...";
@@ -10,11 +11,14 @@ const bannerText = (gameState) => {
 };
 
 export default function GamePage() {
+  const { gameId: routeGameId } = useParams();
+  const navigate = useNavigate();
   const { gameState, user } = useStore((state) => ({
     gameState: state.gameState,
     user: state.user,
   }));
   const sendMessage = useStore((state) => state.sendMessage);
+  const token = useStore((state) => state.token);
 
   const activePlayerId = gameState?.active_player_id || gameState?.activePlayerId;
   const isMyTurn = activePlayerId === user?.id;
@@ -24,6 +28,12 @@ export default function GamePage() {
   const prevLogLength = useRef(0);
   const toastTimers = useRef([]);
   const prevActivePlayer = useRef(activePlayerId);
+  const apiBase = import.meta.env.VITE_API_URL || "http://localhost:8000";
+  const recordCheckRef = useRef(false);
+
+  useEffect(() => {
+    recordCheckRef.current = false;
+  }, [routeGameId]);
 
   const handleGameAction = useCallback(
     (action, data = {}) => {
@@ -100,6 +110,21 @@ export default function GamePage() {
   const handleSurrender = useCallback(() => handleGameAction("surrender", {}), [handleGameAction]);
 
   const logMessages = useMemo(() => gameState?.log || [], [gameState?.log]);
+  const playersArr = useMemo(() => {
+    if (Array.isArray(gameState?.players)) return gameState.players;
+    if (gameState?.players && typeof gameState.players === "object") {
+      return Object.values(gameState.players);
+    }
+    return [];
+  }, [gameState?.players]);
+
+  const meState = useMemo(
+    () => playersArr.find((p) => p.id === user?.id || p.user_id === user?.id),
+    [playersArr, user?.id]
+  );
+  const myStatus = meState?.status || "ACTIVE";
+  const isSpectating = !meState || myStatus !== "ACTIVE";
+  const gameOver = (gameState?.phase || "").toUpperCase() === "GAME_OVER";
   const botLogMessages = useMemo(
     () => gameState?.bot_logs || gameState?.botLogs || [],
     [gameState?.bot_logs, gameState?.botLogs]
@@ -155,6 +180,29 @@ export default function GamePage() {
       toastTimers.current.forEach((t) => clearTimeout(t));
     };
   }, []);
+
+  useEffect(() => {
+    // If user navigates directly to a game route and the game is already completed, redirect to postgame.
+    if (recordCheckRef.current) return;
+    if (!routeGameId) return;
+    if (gameState && (gameState.game_id === routeGameId || gameState.gameId === routeGameId)) return;
+    recordCheckRef.current = true;
+    (async () => {
+      try {
+        const res = await fetch(`${apiBase}/api/results/${routeGameId}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.status === "completed") {
+            navigate(`/post-game/${routeGameId}`, { replace: true });
+          }
+        }
+      } catch (err) {
+        console.warn("Record check failed", err);
+      }
+    })();
+  }, [routeGameId, gameState, apiBase, token, navigate]);
 
   useEffect(() => {
     // Reset selection when new simulations arrive
@@ -214,13 +262,24 @@ export default function GamePage() {
           <div>
             {gameState?.game_id ? `ID: ${gameState.game_id}` : "Waiting for game to start"}
           </div>
-          <button
-            type="button"
-            onClick={handleSurrender}
-            className="px-3 py-1 rounded-lg border border-rose-500 uppercase tracking-[0.12em] text-rose-100 hover:border-rose-300"
-          >
-            Surrender
-          </button>
+          {!isSpectating && !gameOver && (
+            <button
+              type="button"
+              onClick={handleSurrender}
+              className="px-3 py-1 rounded-lg border border-rose-500 uppercase tracking-[0.12em] text-rose-100 hover:border-rose-300"
+            >
+              Surrender
+            </button>
+          )}
+          {routeGameId && (isSpectating || gameOver) && (
+            <button
+              type="button"
+              onClick={() => navigate(`/post-game/${routeGameId}`)}
+              className="px-3 py-1 rounded-lg border border-slate-700 uppercase tracking-[0.12em] text-slate-100 hover:border-amber-400"
+            >
+              Postgame
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setIsBotLogOpen(true)}

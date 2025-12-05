@@ -55,7 +55,7 @@ export default function MarketPanel({
   return (
     <div
       className="w-full h-full bg-slate-950/60 border border-slate-800
-                 rounded-3xl p-3 flex flex-col relative"
+                 rounded-3xl p-3 flex flex-col relative overflow-hidden"
     >
       {/* top right controls */}
       <div className="flex justify-end items-center mb-2">
@@ -81,7 +81,7 @@ export default function MarketPanel({
       {/* main content grid (no overflow here, to avoid clipping the header images) */}
       <div className={`flex-1 ${panelGridClasses}`}>
         {/* Upgrades panel */}
-        <div className="relative flex flex-col h-full bg-slate-900/60 border border-slate-800 rounded-2xl p-3 ">
+        <div className="relative flex flex-col h-full bg-slate-900/60 border border-slate-800 rounded-2xl p-3">
           {/* header row: image + deck count */}
           <div className="flex items-end gap-3 mb-3 -mt-10">
             <div className={`w-32 h-24 rounded-xl border ${optionalBorderClasses} `}>
