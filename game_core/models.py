@@ -219,6 +219,7 @@ class MarketState:
 class PlayerBoard:
     user_id: str
     username: str
+    is_bot: bool = False
     stance: Stance = Stance.BALANCED
     turn_initial_stance: Stance = Stance.BALANCED
     resources: Dict[ResourceType, int] = field(default_factory=empty_resources)
@@ -272,6 +273,7 @@ class PlayerBoard:
         return {
             "user_id": self.user_id,
             "username": self.username,
+            "is_bot": self.is_bot,
             "stance": self.stance.value,
             "turn_initial_stance": self.turn_initial_stance.value,
             "resources": resource_to_wire(self.resources),

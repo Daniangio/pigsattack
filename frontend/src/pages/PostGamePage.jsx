@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useStore } from "../store";
 
@@ -7,6 +7,7 @@ const PostGamePage = ({ onReturnToLobby }) => {
   const { gameId: routeGameId } = useParams();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const hasFetched = useRef(false);
   const { user, gameRecord, sendMessage, token, setGameResult, clearGameResult } = useStore(
     (state) => ({
       user: state.user,
@@ -20,7 +21,7 @@ const PostGamePage = ({ onReturnToLobby }) => {
 
   useEffect(() => {
     const needsFetch = !gameRecord || (routeGameId && gameRecord?.id !== routeGameId);
-    if (!needsFetch || !routeGameId) return;
+    if (!needsFetch || !routeGameId || hasFetched.current) return;
     const fetchResult = async () => {
       setLoading(true);
       setError("");
@@ -40,6 +41,7 @@ const PostGamePage = ({ onReturnToLobby }) => {
         setError(err.message || "Failed to load game result.");
       } finally {
         setLoading(false);
+        hasFetched.current = true;
       }
     };
     fetchResult();
@@ -107,16 +109,11 @@ const PostGamePage = ({ onReturnToLobby }) => {
       <div className="flex justify-center space-x-4 mt-8">
         <button
           onClick={() => {
-            if (sendMessage) {
-              sendMessage({ action: "return_to_lobby" });
-            }
             if (clearGameResult) {
               clearGameResult();
             }
-            if (onReturnToLobby) {
-              onReturnToLobby();
-              return;
-            }
+            hasFetched.current = false;
+            onReturnToLobby?.();
             navigate("/lobby");
           }}
           className="btn btn-primary"

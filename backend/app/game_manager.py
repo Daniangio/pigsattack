@@ -14,6 +14,7 @@ from game_core import GameSession, GamePhase, PlayerStatus
 from game_core.session import InvalidActionError
 from .routers import fake_games_db 
 from .bot_planner import BotPlanner
+from asyncio import Task
 
 class GameManager:
     """Manages the lifecycle of all active game instances."""
@@ -25,6 +26,7 @@ class GameManager:
         self.bot_lookup: Dict[str, List[str]] = {} # game_id -> bot ids
         self.bot_planner = BotPlanner()
         self._bot_running: bool = False
+        self._disconnect_tasks: Dict[str, Task] = {}
         print("GameManager initialized.")
         
     def set_room_manager(self, room_manager: 'RoomManager'):
@@ -49,7 +51,7 @@ class GameManager:
             
         try:
             # 1. Create the instance (synchronous)
-            session_players = [{"id": p.user.id, "username": p.user.username} for p in participants]
+            session_players = [{"id": p.user.id, "username": p.user.username, "is_bot": getattr(p.user, "is_bot", False)} for p in participants]
             game = GameSession(game_id, session_players)
             # 2. Perform async setup (draw resources, start first round)
             await game.async_setup()
@@ -170,13 +172,30 @@ class GameManager:
         if player_state and player_state.status == PlayerStatus.ACTIVE:
             action_to_take = ""
             if status == ServerPlayerStatus.DISCONNECTED:
-                action_to_take = "disconnect"
+                # Start a delayed surrender timer
+                task_key = f"{game_id}:{user.id}"
+                if task_key in self._disconnect_tasks:
+                    self._disconnect_tasks[task_key].cancel()
+                self._disconnect_tasks[task_key] = asyncio.create_task(self._disconnect_timeout(game_id, user.id))
+                return
             elif status == ServerPlayerStatus.SURRENDERED:
                  action_to_take = "surrender"
             
             if action_to_take:
                 # Use the main player_action flow
                 await self.player_action(game_id, user.id, action_to_take, {})
+
+    async def _disconnect_timeout(self, game_id: str, user_id: str, timeout: int = 10):
+        try:
+            await asyncio.sleep(timeout)
+            game = self.active_games.get(game_id)
+            if not game:
+                return
+            player_state = game.state.players.get(user_id)
+            if player_state and player_state.status == PlayerStatus.DISCONNECTED:
+                await self.player_action(game_id, user_id, "surrender", {})
+        finally:
+            self._disconnect_tasks.pop(f"{game_id}:{user_id}", None)
 
     async def preview_defense(
         self, game_id: str, player_id: str, payload: Dict[str, Any]

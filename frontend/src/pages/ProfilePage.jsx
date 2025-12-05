@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useStore } from "../store";
 import { useParams, useNavigate } from "react-router-dom"; // Import hooks
+import { playerIcons as availablePlayerIcons } from "./game/GameConstants";
 
 const CurrentRoomBanner = () => {
   const { roomState, gameState } = useStore();
@@ -30,7 +31,7 @@ const CurrentRoomBanner = () => {
 
 // This component no longer needs props for navigation
 const ProfilePage = ({ onLogout }) => {
-  const { user, token, roomState } = useStore();
+  const { user, token, roomState, avatarChoice, setAvatarChoice } = useStore();
   const { userId } = useParams(); // Get user ID from URL
   const navigate = useNavigate(); // Get navigation function
 
@@ -41,39 +42,60 @@ const ProfilePage = ({ onLogout }) => {
     "py-2 px-4 font-semibold rounded-md shadow-md transition duration-200 ease-in-out disabled:opacity-50";
   const btnSecondary = `${btn} bg-gray-600 hover:bg-gray-500 text-white`;
   const btnDanger = `${btn} bg-red-700 hover:bg-red-800 text-white`;
+  const btnGhost = `${btn} bg-gray-700 hover:bg-gray-600 text-white border border-gray-600`;
+  const apiBase = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
   useEffect(() => {
-    // Use the userId from the URL param, not from the store
-    if (!userId) return;
+    // Use the userId from the URL param, fall back to current user if missing
+    const targetUserId = userId || user?.id;
+    if (!targetUserId) {
+      setError("No user selected.");
+      setLoading(false);
+      return;
+    }
+
+    let timeoutId;
+    let cancelled = false;
 
     const fetchProfile = async () => {
+      console.log("[ProfilePage] Fetching profile", {
+        targetUserId,
+        apiBase,
+        hasToken: !!token,
+      });
       setLoading(true);
       setError(null);
+      timeoutId = setTimeout(() => {
+        setError("Profile request timed out. Please try again.");
+        setLoading(false);
+      }, 8000);
       try {
         // Fetch profile for the user in the URL
-        const response = await fetch(
-          `http://localhost:8000/api/players/${userId}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`, // Still need our own token for auth
-            },
-          }
-        );
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+        const response = await fetch(`${apiBase}/api/players/${targetUserId}`, {
+          headers,
+        });
         if (!response.ok) {
           const errData = await response.json();
           throw new Error(errData.detail || "Failed to fetch player profile.");
         }
         const data = await response.json();
-        setProfileData(data);
+        if (!cancelled) setProfileData(data);
       } catch (err) {
-        setError(err.message);
+        console.error("Failed to load profile", err);
+        if (!cancelled) setError(err.message);
       } finally {
-        setLoading(false);
+        clearTimeout(timeoutId);
+        if (!cancelled) setLoading(false);
       }
     };
 
     fetchProfile();
-  }, [userId, token]); // Effect depends on URL param
+    return () => {
+      cancelled = true;
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [userId, user?.id, token, apiBase]); // Effect depends on URL param
 
   const handleViewGame = (gameId) => {
     // Simply navigate. The PostGamePage will be responsible
@@ -103,6 +125,7 @@ const ProfilePage = ({ onLogout }) => {
   }
 
   const { games_played, wins, game_history } = profileData;
+  const currentAvatar = avatarChoice;
 
   return (
     <div className="bg-gray-800 p-6 rounded-lg border border-gray-700 max-w-3xl mx-auto animate-fade-in">
@@ -135,6 +158,52 @@ const ProfilePage = ({ onLogout }) => {
       </header>
 
       <CurrentRoomBanner />
+
+      <div className="mb-6 bg-gray-900 p-4 rounded-md border border-gray-700">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-100">Avatar</h3>
+            <p className="text-sm text-gray-400">Choose the icon shown for you in game.</p>
+          </div>
+          {currentAvatar ? (
+            <div
+              className="w-12 h-12 rounded-full border-2 border-orange-400 bg-gray-800 overflow-hidden"
+              title="Current avatar"
+            >
+              <img src={currentAvatar} alt="Selected avatar" className="w-full h-full object-cover" />
+            </div>
+          ) : (
+            <div className="text-xs text-gray-400">No avatar selected</div>
+          )}
+        </div>
+        <div className="grid grid-cols-5 gap-3">
+          {availablePlayerIcons.map((icon, idx) => {
+            const selected = currentAvatar === icon;
+            return (
+              <button
+                key={idx}
+                onClick={() => setAvatarChoice(icon)}
+                className={`relative rounded-full overflow-hidden border-2 transition ${
+                  selected ? "border-orange-400 shadow-[0_0_0_3px_rgba(251,146,60,0.25)]" : "border-gray-700 hover:border-orange-300"
+                }`}
+                title="Set as avatar"
+              >
+                <img src={icon} alt={`Avatar ${idx + 1}`} className="w-14 h-14 object-cover" />
+                {selected && (
+                  <span className="absolute inset-0 rounded-full ring-2 ring-orange-400/70 pointer-events-none" />
+                )}
+              </button>
+            );
+          })}
+          <button
+            onClick={() => setAvatarChoice(null)}
+            className={`${btnGhost} text-sm col-span-5 md:col-span-1`}
+            title="Clear avatar"
+          >
+            Clear
+          </button>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 text-lg bg-gray-900 p-4 rounded-md border border-gray-700">
         <p>

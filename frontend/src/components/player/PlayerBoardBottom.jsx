@@ -7,6 +7,32 @@ import { setHoverPreview } from "../hover/HoverPreviewPortal";
 import { stanceColorRing } from "../../utils/stanceColorRing";
 import { STANCE_CONFIG } from "../../utils/stanceConfig";
 import { normalizeStance } from "../../utils/formatters";
+import {
+  playerIcon1,
+  playerIcon2,
+  playerIcon3,
+  playerIcon4,
+  playerIcon5,
+  scavengeCard,
+  schemeCard,
+} from "../../pages/game/GameConstants";
+import ferocityToken from "../../images/icons/ferocity-token.png";
+import cunningToken from "../../images/icons/cunning-token.png";
+import massToken from "../../images/icons/mass-token.png";
+import wildToken from "../../images/icons/wild-token.png";
+
+const resolveDefaultIcon = (id, idx = 0, pool = []) => {
+  if (!pool?.length) return null;
+  if (id) {
+    const str = String(id);
+    let sum = 0;
+    for (let i = 0; i < str.length; i += 1) {
+      sum += str.charCodeAt(i);
+    }
+    return pool[sum % pool.length];
+  }
+  return pool[idx % pool.length];
+};
 
 export default function PlayerBoardBottom({
   player,
@@ -32,6 +58,7 @@ export default function PlayerBoardBottom({
   buyUsed = false,
   extendUsed = false,
   onEndTurn,
+  onSurrender,
   isMyBoard = false,
   activeUsedMap = {},
   stagedFightCards,
@@ -45,6 +72,13 @@ export default function PlayerBoardBottom({
   const stanceInfo = STANCE_CONFIG[currentStance] || STANCE_CONFIG[normalizeStance(currentStance)];
   const wildTokens = player?.tokens?.wild ?? player?.tokens?.WILD ?? 0;
   const canExtendThisTurn = isMyBoard && !extendUsed && wildTokens > 0;
+  const playerIndex = useMemo(
+    () => (players || []).findIndex((p) => p.id === player.id),
+    [players, player.id]
+  );
+  const playerIcons = [playerIcon1, playerIcon2, playerIcon3, playerIcon4, playerIcon5];
+  const playerIconImg =
+    player.icon || resolveDefaultIcon(player.id, playerIndex >= 0 ? playerIndex : 0, playerIcons);
   const cardLookup = useMemo(() => {
     const source = (cardCatalog && cardCatalog.length ? cardCatalog : [...MarketData.upgrades, ...MarketData.weapons]);
     // Also include the player's owned cards so preview works even if not in market catalog
@@ -96,10 +130,10 @@ export default function PlayerBoardBottom({
     wild: "Wild",
   };
   const tokenStyles = {
-    attack: { bg: "bg-red-900/60", border: "border-red-800", text: "text-red-200" },
-    conversion: { bg: "bg-blue-900/60", border: "border-blue-800", text: "text-blue-200" },
-    mass: { bg: "bg-green-900/60", border: "border-green-800", text: "text-green-200" },
-    wild: { bg: "bg-amber-900/60", border: "border-amber-700", text: "text-amber-200" },
+    attack: { bg: "bg-red-900/60", border: "border-red-800", text: "text-red-200", img: ferocityToken },
+    conversion: { bg: "bg-blue-900/60", border: "border-blue-800", text: "text-blue-200", img: cunningToken },
+    mass: { bg: "bg-green-900/60", border: "border-green-800", text: "text-green-200", img: massToken },
+    wild: { bg: "bg-amber-900/60", border: "border-amber-700", text: "text-amber-200", img: wildToken },
   };
   const resolveCard = (entry) => {
     if (!entry) return null;
@@ -323,10 +357,10 @@ export default function PlayerBoardBottom({
 
   const tokenChipClass = "px-2 py-1 text-[11px] rounded-md border cursor-pointer";
   const tokenOptions = [
-    { key: "attack", label: "Attack", color: "border-red-400 text-red-200 bg-red-400/10" },
-    { key: "conversion", label: "Conversion", color: "border-blue-400 text-blue-200 bg-blue-400/10" },
-    { key: "wild", label: "Wild", color: "border-amber-400 text-amber-200 bg-amber-400/10" },
-    { key: "mass", label: "Mass", color: "border-green-400 text-green-200 bg-green-400/10" },
+    { key: "attack", label: "Attack", color: "border-red-400 text-red-200 bg-red-400/10", img: ferocityToken },
+    { key: "conversion", label: "Conversion", color: "border-blue-400 text-blue-200 bg-blue-400/10", img: cunningToken },
+    { key: "wild", label: "Wild", color: "border-amber-400 text-amber-200 bg-amber-400/10", img: wildToken },
+    { key: "mass", label: "Mass", color: "border-green-400 text-green-200 bg-green-400/10", img: massToken },
     { key: "boss", label: "Boss", color: "border-purple-400 text-purple-200 bg-purple-400/10" },
   ];
 
@@ -501,11 +535,9 @@ export default function PlayerBoardBottom({
         {collapsed ? (
           <div className="h-full flex items-center gap-4 overflow-visible">
             <div
-              onClick={onToggleStance}
-              className={`w-10 h-10 rounded-full border-2 ${stanceColorRing(currentStance)} bg-slate-900 flex items-center justify-center text-[10px] uppercase tracking-[0.2em] text-slate-200 cursor-pointer`}
-            >
-              {(currentStance || "?")[0]}
-            </div>
+              className={`w-10 h-10 rounded-full border-2 ${stanceColorRing(currentStance)} bg-slate-900 flex items-center justify-center `}
+              style={{ backgroundImage: `url(${playerIconImg})`, backgroundSize: "cover", backgroundPosition: "center" }}
+            />
             <div className="flex items-center gap-3 min-w-0">
               <span className="text-sm font-semibold text-slate-50 truncate">{player.name}</span>
               <div className="flex items-center gap-3 text-sm text-slate-300 shrink-0">
@@ -526,42 +558,23 @@ export default function PlayerBoardBottom({
                 {/* Player icon */}
                 <div className="flex flex-col items-center gap-2 min-w-[72px]">
                   <div
-                    onClick={() => {
-                      if (!canChangeStance) return;
-                      onToggleStance();
-                    }}
-                    className={`w-16 h-16 rounded-full border-4 ${stanceColorRing(currentStance)}
-                                  bg-slate-900 flex items-center justify-center text-xs uppercase tracking-[0.2em] text-slate-200 ${
-                                    canChangeStance ? "cursor-pointer" : "opacity-50 cursor-not-allowed"
-                                  }`}
-                  >
-                    {currentStance}
-                  </div>
+                    className={`w-16 h-16 rounded-full border-4 ${stanceColorRing(currentStance)}  bg-slate-900`}
+                    style={{ backgroundImage: `url(${playerIconImg})`, backgroundSize: "cover", backgroundPosition: "center" }}
+                  />
                   {isMyBoard && (
-                    <div className="flex flex-col items-center gap-2 w-full">
-                      <div className="grid grid-cols-[1fr,1fr] grid-rows-2 gap-1 w-full">
-                        <div
-                          className={`row-span-2 px-2 py-1 rounded-md border text-[10px] uppercase tracking-[0.12em] text-center flex items-center justify-center ${
-                            mainActionUsed ? "border-slate-700 text-slate-500" : "border-emerald-400 text-emerald-200"
-                          }`}
-                        >
-                          Main Action
-                        </div>
-                        <div
-                          className={`px-2 py-1 rounded-md border text-[10px] uppercase tracking-[0.12em] text-center ${
-                            buyUsed ? "border-slate-700 text-slate-500" : "border-sky-400 text-sky-200"
-                          }`}
-                        >
-                          Market Buy
-                        </div>
-                        <div
-                          className={`px-2 py-1 rounded-md border text-[10px] uppercase tracking-[0.12em] text-center ${
-                            extendUsed ? "border-slate-700 text-slate-500" : "border-sky-400 text-sky-200"
-                          }`}
-                        >
-                          Extend Slot
-                        </div>
-                      </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!canChangeStance) return;
+                          onToggleStance();
+                        }}
+                        className={`w-16 h-20 rounded-xl border ${
+                          canChangeStance ? "border-amber-400 hover:border-emerald-300" : "border-slate-700 opacity-50 cursor-not-allowed"
+                        }  shadow-lg`}
+                      >
+                        <img src={schemeCard} alt="Scheme" className="w-full h-full object-cover" />
+                      </button>
                     </div>
                   )}
               </div>
@@ -642,13 +655,14 @@ export default function PlayerBoardBottom({
                       type="button"
                       onClick={() => onPickToken?.()}
                       disabled={!canPickToken}
-                      className={`px-2 py-1 rounded-md border text-[10px] uppercase tracking-[0.14em] ${
-                        canPickToken
-                          ? "border-emerald-400 text-emerald-200 hover:bg-emerald-400/10"
-                          : "border-slate-700 text-slate-500 cursor-not-allowed"
+                      className={`relative rounded-xl border  shadow-lg ${
+                        canPickToken ? "border-emerald-400" : "border-slate-700 grayscale opacity-70 cursor-not-allowed"
                       }`}
+                      style={{ width: 100, height: 90 }}
                     >
-                      Pick Token
+                      <img src={scavengeCard} alt="Pick Token" className="w-full h-full object-contain bg-slate-900/40" />
+                      {!canPickToken && <div className="absolute inset-0 bg-slate-900/50" />}
+                      {canPickToken && <div className="absolute inset-0 ring-2 rounded-xl ring-emerald-300 animate-pulse" />}
                     </button>
                   </div>
                 )}
@@ -702,7 +716,19 @@ export default function PlayerBoardBottom({
                             isConversionActive ? "Click to convert resources" : (isDisabled ? "No tokens remaining" : `${remaining} available`)
                           }
                         >
-                          {tokenLabels[key] || key} × {displayTotal}
+                          <span className="flex items-center gap-2">
+                            {style.img ? (
+                              <img
+                                src={style.img}
+                                alt={`${tokenLabels[key] || key} token`}
+                                title={`${tokenLabels[key] || key} token`}
+                                className="w-8 h-8 rounded-full border border-slate-700"
+                              />
+                            ) : (
+                              tokenLabels[key] || key
+                            )}
+                            <span>× {displayTotal}</span>
+                          </span>
                           {/* Correctly position the overlay anchor on the Conversion Token button */}
                           {isConversionActive && conversionOpen && (
                             <>
@@ -783,7 +809,7 @@ export default function PlayerBoardBottom({
               </div>
 
               {/* Upgrades + Weapons OR Active Panel */}
-              <div className="flex-1 flex flex-col gap-1 min-w-[320px] overflow-hidden relative">
+              <div className="flex-1 flex flex-col gap-1 min-w-[320px]  relative">
                 {!activeCard ? (
                   <>
                     <div>

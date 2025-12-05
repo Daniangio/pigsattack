@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useStore } from "../store.js";
 import { useNavigate, Link } from "react-router-dom";
+import { playerIcons as defaultPlayerIcons } from "./game/GameConstants";
 
 const CurrentRoomBanner = () => {
   const { roomState, gameState } = useStore();
@@ -28,7 +29,7 @@ const CurrentRoomBanner = () => {
 };
 
 const LobbyPage = ({ onLogout }) => { // --- REFACTOR: Added roomState ---
-  const { user, lobbyState, roomState } = useStore();
+  const { user, lobbyState, roomState, avatarChoice } = useStore();
   const sendMessage = useStore((state) => state.sendMessage);
   const [newRoomName, setNewRoomName] = useState("");
   const navigate = useNavigate();
@@ -78,6 +79,20 @@ const LobbyPage = ({ onLogout }) => { // --- REFACTOR: Added roomState ---
   const btnDanger = `${btn} bg-red-700 hover:bg-red-800 text-white`;
   const btnInfoAlt = `${btn} bg-blue-800 hover:bg-blue-700 text-white`;
   const btnInfo = `${btn} bg-blue-600 hover:bg-blue-700 text-white`;
+  const resolveIcon = (lobbyUser, idx) => {
+    if (lobbyUser?.icon) return lobbyUser.icon;
+    if (lobbyUser?.id === user?.id && avatarChoice) return avatarChoice;
+    if (!defaultPlayerIcons?.length) return null;
+    if (lobbyUser?.id) {
+      const str = String(lobbyUser.id);
+      let sum = 0;
+      for (let i = 0; i < str.length; i += 1) {
+        sum += str.charCodeAt(i);
+      }
+      return defaultPlayerIcons[sum % defaultPlayerIcons.length];
+    }
+    return defaultPlayerIcons[idx % defaultPlayerIcons.length];
+  };
 
   return (
     <div className="animate-fade-in">
@@ -175,12 +190,19 @@ const LobbyPage = ({ onLogout }) => { // --- REFACTOR: Added roomState ---
         <div className="p-6 bg-gray-800 rounded-lg border border-gray-700">
           <h2 className="text-2xl font-semibold mb-4 text-gray-100">Players in Lobby</h2>
           <ul className="space-y-2 max-h-[28rem] overflow-y-auto pr-2">
-            {lobbyState.users.map((lobbyUser) => (
+            {lobbyState.users.map((lobbyUser, idx) => (
               <li
                 key={lobbyUser.id}
-                className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-gray-300"
+                className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-gray-300 flex items-center gap-2"
               >
-                <Link to={`/profile/${lobbyUser.id}`} className="hover:text-orange-400">
+                <div className="w-9 h-9 rounded-full overflow-hidden border border-gray-500 shrink-0">
+                  <img
+                    src={resolveIcon(lobbyUser, idx)}
+                    alt={`${lobbyUser.username} avatar`}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <Link to={`/profile/${lobbyUser.id}`} className="hover:text-orange-400 flex-1">
                   {lobbyUser.username}
                 </Link>
                 {lobbyUser.id === user.id && (

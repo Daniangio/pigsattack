@@ -6,6 +6,7 @@ export const useStore = create((set, get) => ({
   // 'view' is removed. Navigation is handled by react-router.
   token: sessionStorage.getItem("authToken") || null,
   user: null,
+  avatarChoice: localStorage.getItem("avatarChoice") || null,
   isConnected: false,
   gameResult: null,
   lobbyState: { users: [], rooms: [] },
@@ -68,6 +69,15 @@ export const useStore = create((set, get) => ({
       username: payload.username,
     };
     set({ user });
+  },
+
+  setAvatarChoice: (avatar) => {
+    if (avatar) {
+      localStorage.setItem("avatarChoice", avatar);
+    } else {
+      localStorage.removeItem("avatarChoice");
+    }
+    set({ avatarChoice: avatar });
   },
 
   handleError: (payload) => {

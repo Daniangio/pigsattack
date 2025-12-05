@@ -1,5 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { X, Swords, Flame, Zap, Shield } from "lucide-react";
+import ferocityToken from "../../images/icons/ferocity-token.png";
+import cunningToken from "../../images/icons/cunning-token.png";
+import massToken from "../../images/icons/mass-token.png";
+import wildToken from "../../images/icons/wild-token.png";
 import { useStore } from "../../store";
 
 const RESOURCE_KEYS = ["R", "B", "G"];
@@ -72,6 +76,12 @@ export default function FightPanel({
   const wildAlloc = wildAllocation || { R: 0, B: 0, G: 0 };
   const threatWeight = Number(threat?.weight || 0);
   const enrageTokens = Number(threat?.enrage_tokens || 0);
+  const tokenImages = {
+    attack: ferocityToken,
+    conversion: cunningToken,
+    mass: massToken,
+    wild: wildToken,
+  };
 
   useEffect(() => {
     if (!setAttackUsed || !setWildAllocation) return;
@@ -337,6 +347,7 @@ export default function FightPanel({
 
   const TokenRow = ({ label, count, maxCount, chipLabel, onAdd, onRemove, disabled, labelClass = "" }) => {
     const canAdd = !disabled && count < maxCount;
+    const img = tokenImages[chipLabel];
     const chipTint =
       chipLabel === "attack"
         ? "border-red-400 text-red-100 bg-red-400/10"
@@ -364,10 +375,18 @@ export default function FightPanel({
                 key={`${label}-chip-${idx}`}
                 type="button"
                 onClick={disabled ? undefined : onRemove}
-                className={`${chipClass} ${chipTint}`}
+                className={`px-2 py-1 rounded-md border cursor-grab ${chipTint}`}
                 title={disabled ? undefined : "Click to remove"}
               >
-                {chipLabel.charAt(0).toUpperCase() + chipLabel.slice(1)}
+                {img ? (
+                  <img
+                    src={img}
+                    alt={`${chipLabel} token`}
+                    className="w-6 h-6 rounded-full border border-slate-700"
+                  />
+                ) : (
+                  chipLabel.charAt(0).toUpperCase() + chipLabel.slice(1)
+                )}
               </button>
             ))}
           </div>
@@ -418,12 +437,22 @@ export default function FightPanel({
         }}
       >
         <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2 text-[11px] text-slate-300">
-            <span className="flex items-center gap-1">
-              {Icon ? <Icon size={14} className={className} /> : tokenIcon("bg-slate-400")}
-            </span>
-            <span className="text-slate-200">{assigned} / {availableWild}</span>
-          </div>
+      <div className="flex items-center gap-2 text-[11px] text-slate-300">
+        <span className="flex items-center gap-1">
+          {resource === "R" && tokenImages.attack ? (
+            <img src={tokenImages.attack} alt="Wild to Red" className="w-6 h-6 rounded-full border border-slate-700" />
+          ) : resource === "B" && tokenImages.conversion ? (
+            <img src={tokenImages.conversion} alt="Wild to Blue" className="w-6 h-6 rounded-full border border-slate-700" />
+          ) : resource === "G" && tokenImages.mass ? (
+            <img src={tokenImages.mass} alt="Wild to Green" className="w-6 h-6 rounded-full border border-slate-700" />
+          ) : Icon ? (
+            <Icon size={14} className={className} />
+          ) : (
+            tokenIcon("bg-slate-400")
+          )}
+        </span>
+        <span className="text-slate-200">{assigned} / {availableWild}</span>
+      </div>
           <div className="flex gap-1 flex-wrap min-h-[30px]">
             {Array.from({ length: assigned }).map((_, idx) => (
               <div
@@ -502,7 +531,7 @@ export default function FightPanel({
     ["R", "B", "G"].sort((a, b) => (missingCost[b] || 0) - (missingCost[a] || 0))[0] || "R";
 
   return (
-    <div className="w-full h-full bg-slate-950/70 border border-slate-800 rounded-3xl p-4 overflow-hidden">
+    <div className="w-full h-full bg-slate-950/70 border border-slate-800 rounded-3xl p-4 ">
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-[11px] uppercase tracking-[0.3em] text-slate-500">Fight</div>

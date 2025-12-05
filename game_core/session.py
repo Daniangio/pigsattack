@@ -25,7 +25,11 @@ class GameSession:
         self.threat_manager: Optional[ThreatManager] = None
         self.rng = random.Random()
         for p in players:
-            board = PlayerBoard(user_id=p["id"], username=p["username"])
+            board = PlayerBoard(
+                user_id=p["id"],
+                username=p["username"],
+                is_bot=bool(p.get("is_bot")),
+            )
             self.state.players[p["id"]] = board
             self.state.turn_order.append(p["id"])
         self._update_deck_remaining()
@@ -619,7 +623,11 @@ class GameSession:
         await self._handle_realign(player, payload)
 
     async def _handle_end_turn(self, player: PlayerBoard, payload: Dict[str, Any]):
-        self._assert_turn(player)
+        await self._process_end_turn(player, payload, allow_inactive=False)
+
+    async def _process_end_turn(self, player: PlayerBoard, payload: Dict[str, Any], allow_inactive: bool = False):
+        if not allow_inactive:
+            self._assert_turn(player)
         # Players can optionally pass a steal_allocation payload to choose which resources a Cunning attack steals.
         steal_pref = payload.get("steal_allocation") or payload.get("steal") or payload.get("cunning_allocation")
         if self.threat_manager and not self.state.boss_mode:
@@ -657,6 +665,11 @@ class GameSession:
     async def _handle_surrender(self, player: PlayerBoard, payload: Dict[str, Any]):
         player.status = PlayerStatus.SURRENDERED
         self.state.add_log(f"{player.username} surrendered.")
+        # Run end-turn effects if this player was active
+        try:
+            await self._process_end_turn(player, payload or {}, allow_inactive=True)
+        except Exception:
+            pass
         await self._check_game_over()
         await self._skip_inactive_players()
 
@@ -766,7 +779,10 @@ class GameSession:
         return next((c for c in cards if c.id == card_id), None)
 
     async def _check_game_over(self, force: bool = False):
-        if self.state.boss_mode:
+        total_humans = [p for p in self.state.players.values() if not getattr(p, "is_bot", False)]
+        active_humans = [p for p in total_humans if p.status == PlayerStatus.ACTIVE]
+        active_bots = [p for p in self.state.players.values() if getattr(p, "is_bot", False) and p.status == PlayerStatus.ACTIVE]
+        if self.state.boss_mode and active_humans and not force:
             return
         if self.threat_manager:
             all_threats_defeated = self.threat_manager.is_cleared()
@@ -774,9 +790,14 @@ class GameSession:
             all_threats_defeated = all(not row for row in self.state.threat_rows)
         active_players = [p for p in self.state.players.values() if p.status == PlayerStatus.ACTIVE]
 
-        if force or all_threats_defeated or len(active_players) <= 1:
+        end_for_humans = len(active_humans) == 0 or (len(active_humans) == 1 and len(active_bots) == 0)
+        if force or all_threats_defeated or len(active_players) <= 1 or end_for_humans:
             self.state.phase = GamePhase.GAME_OVER
-            winner = self._determine_winner()
+            winner = None
+            if len(active_humans) == 1:
+                winner = active_humans[0]
+            else:
+                winner = self._determine_winner()
             self.state.winner_id = winner.user_id if winner else None
             if winner:
                 self.state.add_log(f"Game over. Winner: {winner.username}")
@@ -788,7 +809,10 @@ class GameSession:
             resources_total = sum(p.resources.values())
             return (-p.vp, p.wounds, -p.threats_defeated, -resources_total)
 
-        scored_players = sorted(self.state.players.values(), key=score_tuple)
+        scored_players = sorted(
+            [p for p in self.state.players.values() if p.status == PlayerStatus.ACTIVE],
+            key=score_tuple,
+        )
         return scored_players[0] if scored_players else None
 
     def _compute_boss_fight_cost(self, player: PlayerBoard, payload: Dict[str, Any]) -> Dict[str, Any]:

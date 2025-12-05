@@ -10,8 +10,22 @@ import { setHoverPreview } from '../components/hover/HoverPreviewPortal';
 import MarketCardDetail from '../components/market/MarketCardDetail';
 import FightPanel from '../components/fight/FightPanel';
 import { X } from 'lucide-react';
+import { gameBackground, playerIcons } from '../pages/game/GameConstants';
+import { useStore } from '../store';
 
 const STEAL_AMOUNT = 2;
+const resolveDefaultIcon = (id, idx = 0) => {
+  if (!playerIcons?.length) return null;
+  if (id) {
+    const str = String(id);
+    let sum = 0;
+    for (let i = 0; i < str.length; i += 1) {
+      sum += str.charCodeAt(i);
+    }
+    return playerIcons[sum % playerIcons.length];
+  }
+  return playerIcons[idx % playerIcons.length];
+};
 
 function ConfirmModal({ card, onConfirm, onCancel }) {
   if (!card) return null;
@@ -63,7 +77,9 @@ export default function App({
   onRealign,
   onLocalToast,
   onEndTurn,
+  onSurrender,
 }) {
+  const avatarChoice = useStore((state) => state.avatarChoice);
   const mappedPlayers = useMemo(() => {
     if (!gameData?.players) return [];
     const baseList = Array.isArray(gameData.players)
@@ -82,30 +98,41 @@ export default function App({
           .filter(Boolean)
       : baseList;
 
-    return orderedPlayers.map((p) => ({
-      id: p.user_id || p.id,
-      name: p.username || p.name || p.user_id || p.id,
-      stance: normalizeStance(p.stance),
-      turnInitialStance: normalizeStance(p.turn_initial_stance || p.stance),
-      era: p.era || currentEra,
-      resources: p.resources || { R: 0, B: 0, G: 0 },
-      tokens: p.tokens || {},
-      vp: p.vp ?? 0,
-      wounds: p.wounds ?? p.wound ?? 0,
-      actionUsed: p.action_used ?? p.actionUsed ?? false,
-      buyUsed: p.buy_used ?? p.buyUsed ?? false,
-      extendUsed: p.extend_used ?? p.extendUsed ?? false,
-      activeUsed: p.active_used ?? p.activeUsed ?? {},
-      upgrades: p.upgrades || [],
-      weapons: p.weapons || [],
-      upgradeSlots: p.upgrade_slots ?? p.upgradeSlots ?? 1,
-      weaponSlots: p.weapon_slots ?? p.weaponSlots ?? 1,
-      status: p.status,
-    }));
-  }, [gameData]);
+    return orderedPlayers.map((p, idx) => {
+      const id = p.user_id || p.id;
+      const fallbackIcon = resolveDefaultIcon(id, idx);
+      const icon = p.icon || (id === userId && avatarChoice ? avatarChoice : fallbackIcon);
+      return {
+        id,
+        name: p.username || p.name || p.user_id || p.id,
+        stance: normalizeStance(p.stance),
+        turnInitialStance: normalizeStance(p.turn_initial_stance || p.stance),
+        era: p.era || currentEra,
+        resources: p.resources || { R: 0, B: 0, G: 0 },
+        tokens: p.tokens || {},
+        vp: p.vp ?? 0,
+        wounds: p.wounds ?? p.wound ?? 0,
+        actionUsed: p.action_used ?? p.actionUsed ?? false,
+        buyUsed: p.buy_used ?? p.buyUsed ?? false,
+        extendUsed: p.extend_used ?? p.extendUsed ?? false,
+        activeUsed: p.active_used ?? p.activeUsed ?? {},
+        upgrades: p.upgrades || [],
+        weapons: p.weapons || [],
+        upgradeSlots: p.upgrade_slots ?? p.upgradeSlots ?? 1,
+        weaponSlots: p.weapon_slots ?? p.weaponSlots ?? 1,
+        status: p.status,
+        icon,
+      };
+    });
+  }, [gameData, avatarChoice, userId]);
 
   const remotePlayers = mappedPlayers;
-  const [localPlayers, setLocalPlayers] = useState(INITIAL_PLAYERS);
+  const [localPlayers, setLocalPlayers] = useState(() =>
+    INITIAL_PLAYERS.map((p, idx) => ({
+      ...p,
+      icon: p.icon || resolveDefaultIcon(p.id, idx),
+    }))
+  );
   const [stanceOverrides, setStanceOverrides] = useState({});
   const basePlayers = remotePlayers.length ? remotePlayers : localPlayers;
   const [activePlayerId, setActivePlayerId] = useState(basePlayers[0]?.id || null);
@@ -711,7 +738,14 @@ export default function App({
   };
 
   return (
-    <div className="w-full h-screen bg-slate-950 text-slate-100 flex overflow-hidden">
+    <div
+      className="w-full h-screen text-slate-100 flex"
+      style={{
+        backgroundImage: `url(${gameBackground})`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+      }}
+    >
       
       <InitiativeRail
         players={players}
@@ -723,8 +757,8 @@ export default function App({
       <div className="flex-1 flex flex-col min-w-0">
 
         {/* Main content area */}
-        <div className="flex-1 min-h-0 px-6 py-4 overflow-hidden">
-          <div className="relative w-full h-full overflow-hidden rounded-3xl">
+        <div className="flex-1 min-h-0 px-6 py-4 ">
+          <div className="relative w-full h-full  rounded-3xl">
             {activeFight ? (
               <div className="h-full">
                 <FightPanel
@@ -786,6 +820,7 @@ export default function App({
                       hasSlotForCard={hasSlotForCard}
                       isMyTurn={isMyTurn}
                       highlightBuyables={highlightBuyables}
+                      optionalBuyUsed={buyUsed}
                       onGoToThreats={() => setZoomedPanel('threats')}
                       showThreatsTransition={zoomedPanel === 'market'}
                       onZoom={() => setZoomedPanel(zoomedPanel === 'market' ? null : 'market')}
@@ -821,6 +856,7 @@ export default function App({
           buyUsed={buyUsed}
           extendUsed={extendUsed}
           onEndTurn={handleEndTurnClick}
+          onSurrender={onSurrender}
           isMyBoard={activePlayerId === userId}
           activeUsedMap={activeUsedMap}
           stagedFightCards={

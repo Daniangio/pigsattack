@@ -97,6 +97,7 @@ export default function GamePage() {
     (payload = {}) => handleGameAction("end_turn", payload),
     [handleGameAction]
   );
+  const handleSurrender = useCallback(() => handleGameAction("surrender", {}), [handleGameAction]);
 
   const logMessages = useMemo(() => gameState?.log || [], [gameState?.log]);
   const botLogMessages = useMemo(
@@ -215,6 +216,13 @@ export default function GamePage() {
           </div>
           <button
             type="button"
+            onClick={handleSurrender}
+            className="px-3 py-1 rounded-lg border border-rose-500 uppercase tracking-[0.12em] text-rose-100 hover:border-rose-300"
+          >
+            Surrender
+          </button>
+          <button
+            type="button"
             onClick={() => setIsBotLogOpen(true)}
             className="px-3 py-1 rounded-lg border border-slate-700 uppercase tracking-[0.12em] text-slate-100 hover:border-emerald-400"
           >
@@ -250,6 +258,7 @@ export default function GamePage() {
               onRealign={handleRealign}
               onLocalToast={pushToast}
               onEndTurn={handleEndTurn}
+              onSurrender={handleSurrender}
             />
           </div>
         </div>
