@@ -75,14 +75,6 @@ const StateGuard = ({ children }) => {
       navigate("/lobby", { replace: true });
     }
 
-    // If we are on a post-game page but have no result, go to lobby.
-    if (!gameResultId && location.pathname.startsWith("/post-game/")) {
-      console.log(
-        "StateGuard: No game result, redirecting from post-game page."
-      );
-      navigate("/lobby", { replace: true });
-    }
-
     // The RoomPage.jsx component now handles its own loading state.
     // The StateGuard was redirecting too quickly, causing a race condition
     // when joining a room. The RoomPage will now show "Loading..." until the state arrives.

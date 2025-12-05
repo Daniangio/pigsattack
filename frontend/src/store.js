@@ -113,6 +113,8 @@ export const useStore = create((set, get) => ({
     set({ gameResult: payload, gameState: null, roomState: null });
   },
 
+  clearGameResult: () => set({ gameResult: null }),
+
   // --- Reusable Authenticated Fetch (Unchanged) ---
   httpGameRequest: async (gameId, endpoint, method = "POST", body = {}) => {
     // ... (this logic is fine and remains unchanged) ...

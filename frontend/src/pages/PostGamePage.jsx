@@ -1,18 +1,64 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { useStore } from "../store";
 
 const PostGamePage = ({ onReturnToLobby }) => {
-  const { user, gameRecord } = useStore((state) => ({
-    user: state.user,
-    gameRecord: state.gameResult,
-  }));
-  const sendMessage = useStore((state) => state.sendMessage);
+  const navigate = useNavigate();
+  const { gameId: routeGameId } = useParams();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const { user, gameRecord, sendMessage, token, setGameResult, clearGameResult } = useStore(
+    (state) => ({
+      user: state.user,
+      gameRecord: state.gameResult,
+      sendMessage: state.sendMessage,
+      token: state.token,
+      setGameResult: (payload) => state.handleGameResult(payload),
+      clearGameResult: state.clearGameResult,
+    })
+  );
+
+  useEffect(() => {
+    const needsFetch = !gameRecord || (routeGameId && gameRecord?.id !== routeGameId);
+    if (!needsFetch || !routeGameId) return;
+    const fetchResult = async () => {
+      setLoading(true);
+      setError("");
+      try {
+        const res = await fetch(`http://localhost:8000/api/results/${routeGameId}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!res.ok) {
+          throw new Error("Could not load game result.");
+        }
+        const data = await res.json();
+        if (setGameResult) {
+          setGameResult(data);
+        }
+      } catch (err) {
+        console.error(err);
+        setError(err.message || "Failed to load game result.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchResult();
+  }, [routeGameId, gameRecord, token, setGameResult]);
+
+  if (loading) {
+    return (
+      <div className="text-center p-8">
+        <h2 className="text-2xl font-bold text-slate-100">Loading...</h2>
+        <p>Please wait while we load the game result.</p>
+      </div>
+    );
+  }
 
   if (!gameRecord) {
     return (
       <div className="text-center p-8">
         <h2 className="text-2xl font-bold text-red-500">Error</h2>
-        <p>No game record found.</p>
+        <p>{error || "No game record found."}</p>
         <button onClick={onReturnToLobby} className="btn btn-primary mt-4">
           Return to Lobby
         </button>
@@ -61,15 +107,17 @@ const PostGamePage = ({ onReturnToLobby }) => {
       <div className="flex justify-center space-x-4 mt-8">
         <button
           onClick={() => {
+            if (sendMessage) {
+              sendMessage({ action: "return_to_lobby" });
+            }
+            if (clearGameResult) {
+              clearGameResult();
+            }
             if (onReturnToLobby) {
               onReturnToLobby();
               return;
             }
-            // Fallback: clear game state and request lobby refresh
-            if (sendMessage) {
-              sendMessage({ action: "leave_game" });
-            }
-            window.location.href = "/";
+            navigate("/lobby");
           }}
           className="btn btn-primary"
         >

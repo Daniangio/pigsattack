@@ -78,10 +78,10 @@ export default function MarketPanel({
             Upgrades
           </h4>
           <div className={cardGridClasses}>
-            {upgrades.map((u) =>
+            {upgrades.map((u, idx) =>
               compact ? (
                 <MarketCardCompact
-                  key={u.id}
+                  key={`${u.id}-${idx}`}
                   card={u}
                   onBuy={onCardBuy}
                   buttonState={
@@ -96,7 +96,7 @@ export default function MarketPanel({
                 />
               ) : (
                 <MarketCardMini
-                  key={u.id}
+                  key={`${u.id}-${idx}`}
                   card={u}
                   onBuy={onCardBuy}
                   buttonState={
@@ -120,10 +120,10 @@ export default function MarketPanel({
             Weapons
           </h4>
           <div className={cardGridClasses}>
-            {weapons.map((w) =>
+            {weapons.map((w, idx) =>
               compact ? (
                 <MarketCardCompact
-                  key={w.id}
+                  key={`${w.id}-${idx}`}
                   card={w}
                   onBuy={onCardBuy}
                   buttonState={
@@ -138,7 +138,7 @@ export default function MarketPanel({
                 />
               ) : (
                 <MarketCardMini
-                  key={w.id}
+                  key={`${w.id}-${idx}`}
                   card={w}
                   onBuy={onCardBuy}
                   buttonState={
