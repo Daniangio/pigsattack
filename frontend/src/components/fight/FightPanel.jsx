@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { X, Swords, Flame, Zap, Shield } from "lucide-react";
 import ferocityToken from "../../images/icons/ferocity-token.png";
-import cunningToken from "../../images/icons/cunning-token.png";
+import conversionToken from "../../images/icons/conversion-token.png";
 import massToken from "../../images/icons/mass-token.png";
 import wildToken from "../../images/icons/wild-token.png";
 import { useStore } from "../../store";
@@ -78,7 +78,7 @@ export default function FightPanel({
   const enrageTokens = Number(threat?.enrage_tokens || 0);
   const tokenImages = {
     attack: ferocityToken,
-    conversion: cunningToken,
+    conversion: conversionToken,
     mass: massToken,
     wild: wildToken,
   };

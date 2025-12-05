@@ -17,7 +17,7 @@ import {
   schemeCard,
 } from "../../pages/game/GameConstants";
 import ferocityToken from "../../images/icons/ferocity-token.png";
-import cunningToken from "../../images/icons/cunning-token.png";
+import conversionToken from "../../images/icons/conversion-token.png";
 import massToken from "../../images/icons/mass-token.png";
 import wildToken from "../../images/icons/wild-token.png";
 
@@ -131,7 +131,7 @@ export default function PlayerBoardBottom({
   };
   const tokenStyles = {
     attack: { bg: "bg-red-900/60", border: "border-red-800", text: "text-red-200", img: ferocityToken },
-    conversion: { bg: "bg-blue-900/60", border: "border-blue-800", text: "text-blue-200", img: cunningToken },
+    conversion: { bg: "bg-blue-900/60", border: "border-blue-800", text: "text-blue-200", img: conversionToken },
     mass: { bg: "bg-green-900/60", border: "border-green-800", text: "text-green-200", img: massToken },
     wild: { bg: "bg-amber-900/60", border: "border-amber-700", text: "text-amber-200", img: wildToken },
   };
@@ -358,7 +358,7 @@ export default function PlayerBoardBottom({
   const tokenChipClass = "px-2 py-1 text-[11px] rounded-md border cursor-pointer";
   const tokenOptions = [
     { key: "attack", label: "Attack", color: "border-red-400 text-red-200 bg-red-400/10", img: ferocityToken },
-    { key: "conversion", label: "Conversion", color: "border-blue-400 text-blue-200 bg-blue-400/10", img: cunningToken },
+    { key: "conversion", label: "Conversion", color: "border-blue-400 text-blue-200 bg-blue-400/10", img: conversionToken },
     { key: "wild", label: "Wild", color: "border-amber-400 text-amber-200 bg-amber-400/10", img: wildToken },
     { key: "mass", label: "Mass", color: "border-green-400 text-green-200 bg-green-400/10", img: massToken },
     { key: "boss", label: "Boss", color: "border-purple-400 text-purple-200 bg-purple-400/10" },
