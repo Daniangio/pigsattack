@@ -1,9 +1,10 @@
 import React from "react";
-import { Maximize2, Layers, ArrowRightCircle } from "lucide-react";
+import { Maximize2, ArrowRightCircle, Boxes } from "lucide-react";
 import { ThreatData } from "../../state/threats";
 import ThreatCardMini from "./ThreatCardMini";
 import ThreatCardCompact from "./ThreatCardCompact";
 import BossCard from "./BossCard";
+import { getThreatImage } from "../../utils/threatImages";
 
 export default function ThreatsPanel({
   compact,
@@ -24,6 +25,7 @@ export default function ThreatsPanel({
   const threatRows = rows && rows.length ? rows : ThreatData.rows;
   const laneOrder = ["back", "mid", "front"];
   const frontPriority = ["front", "mid", "back"];
+  const bossImage = bossCard?.image ? getThreatImage(bossCard.image) : null;
 
   const stanceWeakness = (threatType = "", stance = "") => {
     const type = threatType.toLowerCase();
@@ -41,8 +43,8 @@ export default function ThreatsPanel({
 
   if (bossMode) {
     return (
-      <div className="w-full h-full bg-slate-950/60 border border-slate-800 rounded-3xl p-4 flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between mb-3">
+      <div className="w-full h-full bg-slate-950/60 border border-slate-800 rounded-3xl p-3 flex flex-col relative overflow-hidden">
+        <div className="flex justify-end items-center mb-2">
           <h3 className="text-xs uppercase tracking-[0.35em] text-slate-400">
             Boss • {String(bossStage || "day").toUpperCase()}
           </h3>
@@ -57,7 +59,7 @@ export default function ThreatsPanel({
             )}
           </div>
         </div>
-        <div className="flex-1 flex flex-col gap-3 overflow-auto">
+        <div className="flex-1 flex flex-col gap-1 overflow-y-auto">
           <BossCard boss={bossCard} enablePreview compact />
           <div className="grid gap-2 sm:grid-cols-2">
             {(bossThresholds || []).map((th, idx) => {
@@ -105,8 +107,8 @@ export default function ThreatsPanel({
   }
 
   return (
-    <div className="w-full h-full bg-slate-950/60 border border-slate-800 rounded-3xl p-4 flex flex-col overflow-hidden">
-      <div className="flex items-center justify-between mb-3">
+    <div className="w-full h-full bg-slate-950/5 border border-slate-800 rounded-3xl p-3 flex flex-col overflow-hidden">
+      <div className="flex items-center justify-end mb-3 gap-2">
         <h3 className="text-xs uppercase tracking-[0.35em] text-slate-400">Threats</h3>
         <div className="flex items-center gap-2">
           {onGoToMarket && showMarketTransition && (
@@ -129,48 +131,49 @@ export default function ThreatsPanel({
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="flex items-start gap-3 mb-3">
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/50 text-xs text-slate-200">
-            <Layers size={14} className="text-amber-300" />
-            <span>Deck</span>
-            <span className="text-amber-300 font-semibold">{deckCount ?? 0}</span>
-          </div>
-          <BossCard boss={bossCard} enablePreview compact />
-        </div>
-        <div className="flex-1 overflow-auto">
-          <div
-            className="grid gap-3 min-w-[520px]"
-            style={{ gridTemplateColumns: `auto repeat(${threatRows.length || 1}, minmax(0, 1fr))` }}
-          >
-            <div className="grid grid-rows-3 gap-2 text-[10px] uppercase tracking-[0.16em] text-slate-500 pr-2">
-              {laneOrder.map((lane) => (
-                <div key={lane} className="flex items-center pl-1">
-                  {lane.charAt(0).toUpperCase() + lane.slice(1)}
+      <div className="flex-1 flex flex-col">
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-3 relative">
+          {["back", "mid", "front"].map((pos, idx) => (
+            <div
+              key={pos}
+              className="relative flex flex-col h-full bg-slate-900/60 border border-slate-800 rounded-2xl p-3 pt-10"
+            >
+              {pos === "back" && (
+                <div className="absolute -top-10 left-3 flex items-end gap-3 pointer-events-none">
+                  {bossImage && (
+                    <div className="w-32 h-24 rounded-xl overflow-hidden border border-amber-400 shadow-lg shadow-amber-400/30 bg-slate-900/70">
+                      <img src={bossImage} alt={bossCard?.name || "Boss"} className="w-full h-full object-cover" />
+                    </div>
+                  )}
+                  <span className="px-2 py-1 rounded-full border border-slate-700 bg-slate-800/80 flex items-center gap-1 text-[11px]">
+                    <Boxes size={12} className="text-emerald-300" />
+                    <span className="text-slate-100">{deckCount ?? 0}</span>
+                  </span>
                 </div>
-              ))}
-            </div>
-            {threatRows.map((row, rowIdx) => {
-              const slots = { front: null, mid: null, back: null };
-              row.forEach((t) => {
-                const pos = String(t.position || "").toLowerCase();
-                if (pos === "front" || pos === "mid" || pos === "back") {
-                  slots[pos] = t;
-                } else {
-                  if (!slots.front) slots.front = t;
-                  else if (!slots.mid) slots.mid = t;
-                  else slots.back = t;
-                }
-              });
-              const firstVisible = frontPriority.find((p) => slots[p]);
-              return (
-                <div key={`row-${rowIdx}`} className="grid grid-rows-3 gap-2">
-                  {laneOrder.map((pos) => {
+              )}
+              <div className="text-[11px] uppercase tracking-[0.16em] text-slate-400 mb-2 flex items-center gap-2">
+                {pos.charAt(0).toUpperCase() + pos.slice(1)}
+              </div>
+              <div className="flex-1 overflow-y-auto pr-1">
+                <div className="flex flex-col gap-2">
+                  {threatRows.map((row, rowIdx) => {
+                    const slots = { front: null, mid: null, back: null };
+                    row.forEach((t) => {
+                      const p = String(t.position || "").toLowerCase();
+                      if (p === "front" || p === "mid" || p === "back") {
+                        slots[p] = t;
+                      } else {
+                        if (!slots.front) slots.front = t;
+                        else if (!slots.mid) slots.mid = t;
+                        else slots.back = t;
+                      }
+                    });
+                    const firstVisible = frontPriority.find((p) => slots[p]);
                     const threat = slots[pos];
                     const enrageTokens = threat?.enrage_tokens ?? threat?.enrageTokens ?? 0;
                     const isVisible = pos === firstVisible;
-                    const isAttacking = threat && ((pos === "front" && stanceWeakness(threat.type, activeStance)) || enrageTokens > 0);
-                    const componentKey = `${rowIdx}-${pos}`;
+                    const isAttacking =
+                      threat && ((pos === "front" && stanceWeakness(threat.type, activeStance)) || enrageTokens > 0);
                     const sharedProps = {
                       rowIndex: rowIdx,
                       isFront: isVisible,
@@ -181,13 +184,13 @@ export default function ThreatsPanel({
                     };
                     return threat ? (
                       compact ? (
-                        <ThreatCardCompact key={componentKey} threat={threat} onFight={onFightRow} {...sharedProps} />
+                        <ThreatCardCompact key={`${rowIdx}-${pos}`} threat={threat} onFight={onFightRow} {...sharedProps} />
                       ) : (
-                        <ThreatCardMini key={componentKey} threat={threat} onFight={onFightRow} {...sharedProps} />
+                        <ThreatCardMini key={`${rowIdx}-${pos}`} threat={threat} onFight={onFightRow} {...sharedProps} />
                       )
                     ) : (
                       <div
-                        key={componentKey}
+                        key={`${rowIdx}-${pos}`}
                         className="h-full min-h-[120px] rounded-xl border border-dashed border-slate-700 bg-slate-900/30 flex items-center justify-center text-[10px] text-slate-600"
                       >
                         Empty
@@ -195,9 +198,9 @@ export default function ThreatsPanel({
                     );
                   })}
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>

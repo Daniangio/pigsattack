@@ -129,6 +129,7 @@ class ThreatCard:
     reward: str
     copies: int = 1
     spoils: List[Reward] = field(default_factory=list)
+    image: Optional[str] = None
 
     def to_public_dict(self) -> Dict[str, Any]:
         return {
@@ -140,6 +141,7 @@ class ThreatCard:
             "reward": self.reward,
             "spoils": [r.to_public_dict() for r in self.spoils],
             "copies": self.copies,
+            "image": self.image,
         }
 
 
@@ -164,6 +166,7 @@ class BossCard:
     id: str
     name: str
     vp: int
+    image: Optional[str] = None
     thresholds: List[BossThreshold] = field(default_factory=list)
 
     def to_public_dict(self) -> Dict[str, Any]:
@@ -171,6 +174,7 @@ class BossCard:
             "id": self.id,
             "name": self.name,
             "vp": self.vp,
+            "image": self.image,
             "thresholds": [t.to_public_dict() for t in self.thresholds],
         }
 

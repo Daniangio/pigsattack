@@ -50,6 +50,10 @@ class ThreatInstance:
         return getattr(self.card, "spoils", [])
 
     @property
+    def image(self) -> Optional[str]:
+        return getattr(self.card, "image", None)
+
+    @property
     def type_key(self) -> str:
         return (self.type or "").lower()
 

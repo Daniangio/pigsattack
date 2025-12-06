@@ -757,7 +757,7 @@ export default function App({
       <div className="flex-1 flex flex-col min-w-0">
 
         {/* Main content area */}
-        <div className="flex-1 min-h-0 px-6 py-4 ">
+        <div className="flex-1 min-h-0 px-1 py-1 ">
           <div className="relative w-full h-full  rounded-3xl">
             {activeFight ? (
               <div className="h-full">
@@ -782,7 +782,7 @@ export default function App({
               </div>
             ) : (
               <>
-                <div className={`h-full flex transition-all duration-500 relative ${zoomedPanel ? "gap-0" : "gap-3"}`}>
+                <div className={`h-full flex transition-all duration-500 relative ${zoomedPanel ? "gap-0" : "gap-1"}`}>
                   <div
                     className={`h-full transition-all duration-500 ease-in-out ${
                       threatsCollapsed ? "opacity-0 pointer-events-none -translate-x-6 w-0 min-w-0" : "opacity-100 translate-x-0"

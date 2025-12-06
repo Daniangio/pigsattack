@@ -408,6 +408,10 @@ class GameSession:
             player.threats_defeated += 1
         else:
             player.vp += threat.vp
+            enrage_tokens = getattr(threat, "enrage_tokens", 0) or 0
+            if enrage_tokens > 0:
+                player.vp += 1
+                self.state.add_log(f"{player.username} gains +1 VP for defeating an enraged threat.")
             if getattr(threat, "spoils", None):
                 for reward in threat.spoils:
                     reward.apply(player)

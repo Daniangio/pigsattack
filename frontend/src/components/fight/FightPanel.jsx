@@ -5,6 +5,7 @@ import conversionToken from "../../images/icons/conversion-token.png";
 import massToken from "../../images/icons/mass-token.png";
 import wildToken from "../../images/icons/wild-token.png";
 import { useStore } from "../../store";
+import { getThreatImage } from "../../utils/threatImages";
 
 const RESOURCE_KEYS = ["R", "B", "G"];
 
@@ -82,6 +83,7 @@ export default function FightPanel({
     mass: massToken,
     wild: wildToken,
   };
+  const threatImage = getThreatImage(threat?.image);
 
   useEffect(() => {
     if (!setAttackUsed || !setWildAllocation) return;
@@ -533,14 +535,21 @@ export default function FightPanel({
   return (
     <div className="w-full h-full bg-slate-950/70 border border-slate-800 rounded-3xl p-4 ">
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="text-[11px] uppercase tracking-[0.3em] text-slate-500">Fight</div>
-          <div className="text-xl font-bold text-slate-50 flex items-center gap-2">
-            <Swords size={18} className="text-amber-300" />
-            {threat?.name}
-            <span className="text-sm text-amber-300 font-semibold">{threat?.vp} VP</span>
+        <div className="flex items-start gap-3">
+          {threatImage && (
+            <div className="w-12 h-12 rounded-xl overflow-hidden border border-slate-800 bg-slate-900/70">
+              <img src={threatImage} alt={threat?.name} className="w-full h-full object-cover" />
+            </div>
+          )}
+          <div>
+            <div className="text-[11px] uppercase tracking-[0.3em] text-slate-500">Fight</div>
+            <div className="text-xl font-bold text-slate-50 flex items-center gap-2">
+              <Swords size={18} className="text-amber-300" />
+              {threat?.name}
+              <span className="text-sm text-amber-300 font-semibold">{threat?.vp} VP</span>
+            </div>
+            <div className="text-xs text-slate-400">{threat?.type} • Reward: {threat?.reward}</div>
           </div>
-          <div className="text-xs text-slate-400">{threat?.type} • Reward: {threat?.reward}</div>
         </div>
         <button
           type="button"
@@ -761,12 +770,7 @@ export default function FightPanel({
             </div>
           </div>
         </div>
-      </div>
-
-      <div className="mt-4 flex justify-between items-center">
-        <div className="text-[11px] text-slate-400">
-          Resources auto-allocated. Adjust tokens/cards to change costs; preview refreshes on every change.
-        </div>
+        <div className="flex justify-between items-center">
         <div className="flex gap-2">
           <button
             type="button"
@@ -788,6 +792,7 @@ export default function FightPanel({
             {canConfirm ? "Confirm Fight" : "Pay full cost to confirm"}
           </button>
         </div>
+      </div>
       </div>
     </div>
   );

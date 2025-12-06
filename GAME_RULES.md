@@ -100,6 +100,7 @@ Each player board shows:
   - Enraged threats:
     - Have **+2R** added to their cost  
     - **Cannot be avoided** by stance: *all* stances are weak to Enraged threats
+  - **Bonus VP:** Defeating an enraged threat grants **+1 additional VP**
 
 > **Token Limit:**  
 > Each player may hold at most **3** of each positive token type (Wild, Attack, Conversion, Mass).

@@ -87,6 +87,7 @@ class GameDataLoader:
                     id=boss_data["id"],
                     name=boss_data["name"],
                     vp=boss_data.get("vp", 0),
+                    image=boss_data.get("image"),
                     thresholds=thresholds,
                 )
             )
@@ -151,6 +152,7 @@ class GameDataLoader:
                     reward=raw.get("reward", ""),
                     copies=int(raw.get("copies", 1)),
                     spoils=parse_reward_text(raw.get("reward", "")),
+                    image=raw.get("image"),
                 )
             )
         return threats

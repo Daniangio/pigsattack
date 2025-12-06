@@ -29,8 +29,8 @@ export default function MarketPanel({
   const weaponDeckRemaining = market?.weapon_deck_remaining ?? 0;
 
   const panelGridClasses = compact
-    ? "grid grid-cols-1 xl:grid-cols-2 gap-3"
-    : "grid grid-cols-1 xl:grid-cols-2 gap-5";
+    ? "grid grid-cols-2 gap-8"
+    : "grid grid-cols-2 gap-8";
 
   const cardGridClasses = compact
     ? "grid auto-rows-min gap-1.5 grid-cols-[repeat(auto-fit,minmax(80px,1fr))] justify-start items-start"
@@ -54,11 +54,12 @@ export default function MarketPanel({
 
   return (
     <div
-      className="w-full h-full bg-slate-950/60 border border-slate-800
+      className="w-full h-full bg-slate-950/5 border border-slate-800
                  rounded-3xl p-3 flex flex-col relative overflow-hidden"
     >
       {/* top right controls */}
       <div className="flex justify-end items-center mb-2">
+        <h3 className="text-xs uppercase tracking-[0.35em] text-slate-400">Market</h3>
         {onGoToThreats && showThreatsTransition && (
           <button
             onClick={onGoToThreats}
