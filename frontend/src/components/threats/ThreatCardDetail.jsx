@@ -1,6 +1,7 @@
-import React from 'react';
-import { formatCostParts } from '../../utils/formatters';
-import { getThreatImage } from '../../utils/threatImages';
+import React from "react";
+import { Flame, Weight } from "lucide-react";
+import { formatCostParts } from "../../utils/formatters";
+import { getThreatImage } from "../../utils/threatImages";
 
 export default function ThreatCardDetail({ threat, actionLabel, actionDisabled, onAction }) {
   if (!threat) return null;
@@ -8,59 +9,34 @@ export default function ThreatCardDetail({ threat, actionLabel, actionDisabled, 
   const spoils = threat.spoils || [];
   const imageSrc = getThreatImage(threat.image);
   const costParts = formatCostParts(threat.cost || {});
+  const type = String(threat.type || "").toUpperCase();
   const typeColor =
     {
-      feral: "text-red-300",
-      cunning: "text-blue-300",
-      massive: "text-green-300",
-      hybrid: "text-emerald-200",
-    }[String(threat.type || "").toLowerCase()] || "text-slate-200";
+      feral: "text-red-300 border-red-400/50 bg-red-900/40",
+      cunning: "text-blue-300 border-blue-400/50 bg-blue-900/40",
+      massive: "text-emerald-300 border-emerald-400/50 bg-emerald-900/40",
+      hybrid: "text-zinc-200 border-zinc-400/50 bg-zinc-900/40",
+    }[String(threat.type || "").toLowerCase()] || "text-slate-200 border-slate-500/60 bg-slate-800/40";
+  const enrageTokens = threat?.enrage_tokens ?? threat?.enrageTokens ?? 0;
+  const weightTokens = threat?.weight ?? threat?.weight ?? 0;
+  const eraLabel = threat?.era ? `Era ${threat.era}` : null;
+  const laneLabel = threat?.position || threat?.lane || threat?.slot || null;
 
   return (
-    <div className="bg-slate-950/90 border border-slate-800 rounded-2xl p-4 shadow-2xl flex gap-4">
-      <div className="flex flex-col gap-3">
-        <div className="relative w-64 overflow-hidden rounded-xl self-start">
-          {imageSrc && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div
-                className="w-[85%] h-[85%] rounded-xl bg-center bg-no-repeat bg-cover"
-                style={{ backgroundImage: `url(${imageSrc})` }}
-              />
-            </div>
+    <div className="bg-slate-950/95 border border-slate-800 rounded-2xl p-5 shadow-2xl flex flex-col md:flex-row gap-6 w-full max-w-5xl">
+      <div className="w-full md:w-[360px] flex flex-col gap-3 items-center">
+        <div className="relative w-[360px] h-[270px] rounded-2xl overflow-hidden border border-slate-800/70 shadow-xl bg-slate-900">
+          {imageSrc ? (
+            <img src={imageSrc} alt={threat.name} className="absolute inset-0 w-full h-full object-cover" />
+          ) : (
+            <div className="absolute inset-0 bg-slate-800" />
           )}
           <div className="absolute inset-0 bg-gradient-to-b from-black/15 via-black/35 to-black/70" />
-          <div className="absolute top-2 left-2 right-2 flex justify-between items-start gap-2 z-10">
-            <div className="flex-1 min-w-0">
-              <div className="inline-block px-2 py-1 rounded-md border border-slate-200/30 bg-black/70 text-lg font-bold text-slate-50 leading-tight drop-shadow line-clamp-2 max-w-full">
-                {threat.name}
-              </div>
-            </div>
-            <span className="px-2 py-1 rounded-full border border-amber-400/80 bg-amber-500/15 text-amber-200 text-[11px] whitespace-nowrap">
-              {threat.vp} VP
-            </span>
-          </div>
-          <div className="absolute top-2 left-2 z-10">
-            <div className={`flex flex-col items-center justify-center px-1 py-1 rounded-md border ${typeColor} text-[11px] leading-none`}>
-              {String(threat?.type || "").toUpperCase()
-                .split("")
-                .map((ch, idx) => (
-                  <span key={`${ch}-${idx}`} className="block leading-none">
-                    {ch}
-                  </span>
-                ))}
-            </div>
-          </div>
-          <div className="relative z-10 h-full flex flex-col p-1 gap-1">
-            <div className="mt-auto">
-              <div className="w-fit ml-auto bg-black/55 border border-slate-800 rounded-lg px-3 py-2 flex justify-end items-center gap-2 backdrop-blur-sm">
-                {costParts.map((p) => (
-                  <span key={p.key} className={p.className}>{`${p.val}${p.key}`}</span>
-                ))}
-                {!costParts.length && <span className="text-slate-300">0</span>}
-              </div>
-            </div>
+          <div className="absolute top-3 right-3 px-3 py-1 rounded-full border border-amber-400/70 bg-amber-500/15 text-amber-200 text-sm font-semibold">
+            {threat.vp} VP
           </div>
         </div>
+
         {actionLabel && (
           <button
             type="button"
@@ -76,14 +52,66 @@ export default function ThreatCardDetail({ threat, actionLabel, actionDisabled, 
           </button>
         )}
       </div>
-      <div className="flex-1 flex flex-col gap-3">
+
+      <div className="flex-1 flex flex-col gap-2">
+        <div className="flex flex-col gap-2">
+          <div className="text-2xl font-bold text-slate-50 leading-tight break-words">{threat.name}</div>
+          <div className="flex items-center gap-2 text-sm text-slate-300 flex-wrap">
+            <div className={`px-2 py-1 rounded-md border ${typeColor} text-xs uppercase tracking-[0.18em]`}>{type}</div>
+            {eraLabel && <span className="px-2 py-1 rounded-md bg-slate-900/70 border border-slate-800 text-slate-200">{eraLabel}</span>}
+            {laneLabel && <span className="px-2 py-1 rounded-md bg-slate-900/70 border border-slate-800 text-slate-200">Lane: {laneLabel}</span>}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-1">
+          <div className="bg-slate-900/70 border border-slate-800 rounded-xl p-3">
+            <div className="text-[11px] uppercase tracking-[0.18em] text-slate-400 mb-2">Attributes</div>
+            <div className="space-y-1 text-sm text-slate-100">
+              <div className="flex items-center justify-between">
+                <span>Enrage</span>
+                <span className="flex items-center gap-1 text-amber-200">
+                  <Flame size={14} className="text-red-300" />
+                  {enrageTokens > 0 ? `+${2 * enrageTokens} R` : "None"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Weight</span>
+                <span className="flex items-center gap-1 text-green-200">
+                  <Weight size={14} className="text-green-300" />
+                  {weightTokens > 0 ? `+${weightTokens} G` : "None"}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-slate-900/70 border border-slate-800 rounded-xl p-3">
+            <div className="text-[11px] uppercase tracking-[0.18em] text-slate-400 mb-2">Cost</div>
+            <div className="flex items-center gap-2 flex-wrap text-[12px] uppercase tracking-[0.12em] text-slate-100">
+              {costParts.map((p) => (
+                <span key={`detail-${p.key}`} className={p.className}>{`${p.val}${p.key}`}</span>
+              ))}
+              {!costParts.length && <span className="text-slate-300">0</span>}
+              {enrageTokens > 0 && (
+                <span className="flex items-center gap-1 px-2 py-1 rounded border border-amber-500/70 bg-amber-500/15 text-amber-200 whitespace-nowrap">
+                  <Flame size={14} className="text-amber-300" />+{2 * enrageTokens}R
+                </span>
+              )}
+              {weightTokens > 0 && (
+                <span className="px-2 py-1 rounded border border-green-700 bg-green-900/40 text-green-200 whitespace-nowrap">
+                  W+{weightTokens}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
         <div className="bg-slate-900/70 border border-slate-800 rounded-xl p-3">
           <div className="uppercase text-[11px] tracking-[0.18em] text-slate-400 mb-2">Spoils / Rewards</div>
           {spoils.length > 0 ? (
             <ul className="space-y-2 text-[12px] text-slate-100">
               {spoils.map((r, idx) => (
-                <li key={`${r.label}-${idx}`} className="flex justify-between items-center bg-slate-800/60 border border-slate-700 rounded-lg px-2 py-1">
-                  <span>{r.label}</span>
+                <li key={`${r.label || r.kind || "spoil"}-${idx}`} className="flex justify-between items-center bg-slate-800/60 border border-slate-700 rounded-lg px-2 py-1">
+                  <span>{r.label || r.kind || "Reward"}</span>
                   <span className="text-slate-400 text-[11px]">{r.token || r.slot_type || r.kind}</span>
                 </li>
               ))}

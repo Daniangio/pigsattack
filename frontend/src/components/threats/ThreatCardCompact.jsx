@@ -1,8 +1,8 @@
-import React from "react";
+import React, { useState } from "react";
 import { setHoverPreview } from "../hover/HoverPreviewPortal";
 import { formatCostParts } from "../../utils/formatters";
 import { getThreatImage } from "../../utils/threatImages";
-import { Flame } from "lucide-react";
+import { Flame, Weight } from "lucide-react";
 
 export default function ThreatCardCompact({ threat, onFight, rowIndex, isFront, canFight, isAttacking, weight = 0, position }) {
   const fightAllowed = typeof canFight === "boolean" ? canFight : isFront;
@@ -19,13 +19,9 @@ export default function ThreatCardCompact({ threat, onFight, rowIndex, isFront, 
     G: (threat?.cost?.G ?? threat?.cost?.g ?? threat?.cost?.GREEN ?? 0) + (weight || 0),
   };
   const costParts = formatCostParts(effectiveCost);
-  const handleHover = () =>
-    setHoverPreview({
-      type: "threat",
-      data: threat,
-      sourceId: threat.id,
-    });
-  const handleLeave = () => setHoverPreview(null);
+  const [hovered, setHovered] = useState(false);
+  const handleHover = () => setHovered(true);
+  const handleLeave = () => setHovered(false);
   const handleClick = () =>
     setHoverPreview({
       type: "threat",
@@ -74,6 +70,25 @@ export default function ThreatCardCompact({ threat, onFight, rowIndex, isFront, 
           {threat.vp} VP
         </span>
       </div>
+      {hovered && (
+        <div className="absolute bottom-1 left-1 right-1 z-20 pointer-events-none">
+          <div className="bg-slate-900/80 border border-slate-700 rounded-lg p-2 shadow-lg text-[10px] text-slate-100 space-y-1">
+            <div className="uppercase text-[9px] tracking-[0.12em] text-slate-400">Spoils</div>
+            {Array.isArray(threat.spoils) && threat.spoils.length > 0 ? (
+              <ul className="space-y-1">
+                {threat.spoils.map((r, idx) => (
+                  <li key={`${r.label || r.kind || idx}-${idx}`} className="flex items-center justify-between gap-2">
+                    <span className="text-slate-100">{r.label || r.kind || "Reward"}</span>
+                    <span className="text-slate-400 text-[9px]">{r.token || r.slot_type || r.kind}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="text-slate-300">{threat.reward}</div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="absolute top-6 left-1">
         <div className={`flex flex-col items-center justify-center px-1 py-1 rounded-md border ${typeColor} text-[10px] leading-none`}>
@@ -89,19 +104,19 @@ export default function ThreatCardCompact({ threat, onFight, rowIndex, isFront, 
 
       <div className="absolute bottom-1 left-0 right-0 px-1">
         <div className="w-full flex justify-center">
-          <div className="max-w-full bg-black/55 border border-slate-800 rounded-lg px-1.5 py-1 flex items-center gap-1 backdrop-blur-sm flex-nowrap text-[8px] uppercase tracking-[0.08em] text-slate-200">
+          <div className="w-full bg-black/55 border border-slate-800 rounded-lg px-0.5 py-1 flex items-center justify-center gap-0.5 backdrop-blur-sm flex-nowrap whitespace-nowrap overflow-x-auto text-[8px] uppercase tracking-[0.08em] text-slate-200">
             {costParts.map((p) => (
               <span key={p.key} className={p.className}>{`${p.val}${p.key}`}</span>
             ))}
             {!costParts.length && <span className="text-slate-300">0</span>}
             {enrageTokens > 0 && (
-              <span className="flex items-center gap-0.5 px-1 py-0.5 rounded border border-amber-500/70 bg-amber-500/15 text-amber-200 whitespace-nowrap">
-                <Flame size={10} className="text-amber-300" />+{2 * enrageTokens}R
+              <span className="flex text-red-200 whitespace-nowrap">
+                <Flame size={10} className="text-red-300" />+{2 * enrageTokens}R
               </span>
             )}
             {weight > 0 && (
-              <span className="px-1 py-0.5 rounded border border-green-700 bg-green-900/40 text-green-200 whitespace-nowrap">
-                W+{weight}
+              <span className="flex text-green-200 whitespace-nowrap">
+                <Weight size={10} className="text-green-300" />+{weight}G
               </span>
             )}
           </div>
@@ -132,6 +147,10 @@ export default function ThreatCardCompact({ threat, onFight, rowIndex, isFront, 
         <div className="absolute right-0 top-6">
           <button
             type="button"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();
