@@ -569,18 +569,18 @@ export default function PlayerBoardBottom({
                           if (!canChangeStance) return;
                           onToggleStance();
                         }}
-                        className={`w-16 h-20 rounded-xl border ${
-                          canChangeStance ? "border-amber-400 hover:border-emerald-300" : "border-slate-700 opacity-50 cursor-not-allowed"
-                        }  shadow-lg`}
+                        className={`w-16 h-16 rounded-xl border shadow-lg ${
+                          canChangeStance ? "border-amber-400 hover:border-emerald-300" : "border-slate-700 opacity-50"
+                        }`}   
                       >
-                        <img src={schemeCard} alt="Scheme" className="w-full h-full object-cover" />
+                        <img src={schemeCard} alt="Scheme" className="w-full h-full object-contain bg-slate-900/40" />
                       </button>
                     </div>
                   )}
               </div>
 
               {/* Name/VP */}
-              <div className="flex flex-col justify-center min-w-[120px] h-full">
+              <div className="flex flex-col justify-center min-w-[160px] max-w-[160px] h-full">
                 <div className="text-[11px] uppercase tracking-[0.3em] text-slate-500">Active Player</div>
                 <div className="text-xl font-bold text-slate-50 leading-tight">{player.name}</div>
               <div className="flex items-center gap-3">

@@ -9,8 +9,8 @@ export default function ThreatCardCompact({ threat, onFight, rowIndex, isFront, 
   const typeColor = {
     feral: "text-red-300 border-red-400/50 bg-red-900/40",
     cunning: "text-blue-300 border-blue-400/50 bg-blue-900/40",
-    massive: "text-green-300 border-green-400/50 bg-green-900/40",
-    hybrid: "text-emerald-200 border-emerald-400/50 bg-emerald-900/40",
+    massive: "text-emerald-300 border-emerald-400/50 bg-emerald-900/40",
+    hybrid: "text-zinc-200 border-zinc-400/50 bg-zinc-900/40",
   }[String(threat?.type || "").toLowerCase()] || "text-slate-300 border-slate-500/50 bg-slate-800/40";
   const effectiveCost = {
     R: threat?.cost?.R ?? threat?.cost?.r ?? threat?.cost?.RED ?? 0,
@@ -67,7 +67,7 @@ export default function ThreatCardCompact({ threat, onFight, rowIndex, isFront, 
         </span>
       </div>
 
-      <div className="absolute top-7 left-1">
+      <div className="absolute top-6 left-1">
         <div className={`flex flex-col items-center justify-center px-1 py-1 rounded-md border ${typeColor} text-[10px] leading-none`}>
           {String(threat?.type || "").toUpperCase()
             .split("")
@@ -79,7 +79,7 @@ export default function ThreatCardCompact({ threat, onFight, rowIndex, isFront, 
         </div>
       </div>
 
-      <div className="absolute bottom-2 left-0 right-0 px-2 space-y-2">
+      <div className="absolute bottom-1 left-0 right-0 px-1 space-y-1">
         <div className="flex gap-1 text-[9px] text-slate-200 uppercase tracking-[0.08em] flex-wrap">
           {weight > 0 && (
             <span className="px-2 py-1 rounded-full border border-green-700 bg-green-900/40 text-green-200">
@@ -98,7 +98,7 @@ export default function ThreatCardCompact({ threat, onFight, rowIndex, isFront, 
           )}
         </div>
 
-        <div className="bg-black/55 border border-slate-800 rounded-lg p-2 flex justify-end items-center gap-2 backdrop-blur-sm">
+        <div className="w-fit ml-auto bg-black/55 border border-slate-800 rounded-lg px-1 py-1 flex justify-end items-center gap-1 backdrop-blur-sm">
           {costParts.map((p) => (
             <span key={p.key} className={p.className}>{`${p.val}${p.key}`}</span>
           ))}

@@ -5,6 +5,7 @@ import ThreatCardMini from "./ThreatCardMini";
 import ThreatCardCompact from "./ThreatCardCompact";
 import BossCard from "./BossCard";
 import { getThreatImage } from "../../utils/threatImages";
+import { setHoverPreview } from "../hover/HoverPreviewPortal";
 
 export default function ThreatsPanel({
   compact,
@@ -107,55 +108,68 @@ export default function ThreatsPanel({
   }
 
   return (
-    <div className="w-full h-full bg-slate-950/5 border border-slate-800 rounded-3xl p-3 flex flex-col overflow-hidden">
-      <div className="flex items-center justify-end mb-3 gap-2">
+    <div className="w-full h-full bg-slate-950/5 border border-slate-800 rounded-3xl p-1 flex flex-col overflow-hidden relative">
+      <div className="flex items-center justify-end mb-2 gap-2 z-30 pointer-events-auto">
         <h3 className="text-xs uppercase tracking-[0.35em] text-slate-400">Threats</h3>
-        <div className="flex items-center gap-2">
-          {onGoToMarket && showMarketTransition && (
-            <button
-              onClick={onGoToMarket}
-              className="px-2 py-1 rounded-full border border-slate-700 text-slate-200 hover:bg-slate-800 text-[11px] flex items-center gap-1"
-              title="Slide to market view"
-            >
-              Market <ArrowRightCircle size={14} />
-            </button>
-          )}
-          {onZoom && (
-            <button
-              onClick={onZoom}
-              className="p-1 rounded-full border border-slate-700 text-slate-200 hover:bg-slate-800"
-            >
-              <Maximize2 size={14} />
-            </button>
-          )}
-        </div>
+        {onGoToMarket && showMarketTransition && (
+          <button
+            type="button"
+            onClick={onGoToMarket}
+            className="px-2 py-1 rounded-full border border-slate-700 text-slate-200 hover:bg-slate-800 text-[11px] flex items-center gap-1"
+            title="Slide to market view"
+          >
+            Market <ArrowRightCircle size={14} />
+          </button>
+        )}
+        {onZoom && (
+          <button
+            type="button"
+            onClick={onZoom}
+            className="ml-2 p-1 rounded-full border border-slate-700 text-slate-200 hover:bg-slate-800"
+          >
+            <Maximize2 size={14} />
+          </button>
+        )}
       </div>
 
-      <div className="flex-1 flex flex-col">
-        <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-3 relative">
-          {["back", "mid", "front"].map((pos, idx) => (
+      {bossImage && (
+        <div className="relative flex items-end justify-center gap-3 mb-1 z-20 -mt-8">
+          <div
+            className="w-32 h-24 rounded border border-amber-400 shadow-lg shadow-amber-400/30 bg-slate-900/70 cursor-pointer overflow-hidden"
+            onMouseEnter={() => setHoverPreview({ type: "boss", data: bossCard, sourceId: bossCard.id })}
+            onMouseLeave={() => setHoverPreview(null)}
+            onClick={() => setHoverPreview({ type: "boss", data: bossCard, sourceId: bossCard.id, lock: true })}
+          >
+            <img src={bossImage} alt={bossCard?.name || "Boss"} className="w-full h-full object-cover" />
+          </div>
+          <span className="px-2 py-1 rounded-full border border-slate-700 bg-slate-800/80 flex items-center gap-1 text-[11px]">
+            <Boxes size={12} className="text-emerald-300" />
+            <span className="text-slate-100">{deckCount ?? 0}</span>
+          </span>
+        </div>
+      )}
+
+      <div className="flex-1 flex flex-col gap-2 min-h-0">
+        <div className="flex-1 flex flex-col gap-2 relative overflow-y-auto pr-1">
+          {["back", "mid", "front"].map((pos) => (
             <div
               key={pos}
-              className="relative flex flex-col h-full bg-slate-900/60 border border-slate-800 rounded-2xl p-3 pt-10"
+              className="relative flex items-start gap-1 bg-slate-900/60 border border-slate-800 rounded-2xl p-1 overflow-visible min-h-[140px]"
             >
-              {pos === "back" && (
-                <div className="absolute -top-10 left-3 flex items-end gap-3 pointer-events-none">
-                  {bossImage && (
-                    <div className="w-32 h-24 rounded-xl overflow-hidden border border-amber-400 shadow-lg shadow-amber-400/30 bg-slate-900/70">
-                      <img src={bossImage} alt={bossCard?.name || "Boss"} className="w-full h-full object-cover" />
-                    </div>
-                  )}
-                  <span className="px-2 py-1 rounded-full border border-slate-700 bg-slate-800/80 flex items-center gap-1 text-[11px]">
-                    <Boxes size={12} className="text-emerald-300" />
-                    <span className="text-slate-100">{deckCount ?? 0}</span>
-                  </span>
+              <div className="flex flex-col items-center justify-center w-10">
+                <div className="px-1 py-1 rounded-md border border-slate-600 bg-slate-800/60 text-[10px] leading-none text-slate-200">
+                  {pos
+                    .toUpperCase()
+                    .split("")
+                    .map((ch, idx) => (
+                      <span key={`${pos}-${ch}-${idx}`} className="block leading-none text-center w-full">
+                        {ch}
+                      </span>
+                    ))}
                 </div>
-              )}
-              <div className="text-[11px] uppercase tracking-[0.16em] text-slate-400 mb-2 flex items-center gap-2">
-                {pos.charAt(0).toUpperCase() + pos.slice(1)}
               </div>
-              <div className="flex-1 overflow-y-auto pr-1">
-                <div className="flex flex-col gap-2">
+              <div className="flex-1 overflow-auto pr-1 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-900">
+                <div className="flex flex-row gap-1 items-start min-w-full overflow-x-auto scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-900">
                   {threatRows.map((row, rowIdx) => {
                     const slots = { front: null, mid: null, back: null };
                     row.forEach((t) => {
@@ -183,19 +197,14 @@ export default function ThreatsPanel({
                       position: pos,
                     };
                     return threat ? (
-                      compact ? (
-                        <ThreatCardCompact key={`${rowIdx}-${pos}`} threat={threat} onFight={onFightRow} {...sharedProps} />
-                      ) : (
-                        <ThreatCardMini key={`${rowIdx}-${pos}`} threat={threat} onFight={onFightRow} {...sharedProps} />
-                      )
-                    ) : (
-                      <div
-                        key={`${rowIdx}-${pos}`}
-                        className="h-full min-h-[120px] rounded-xl border border-dashed border-slate-700 bg-slate-900/30 flex items-center justify-center text-[10px] text-slate-600"
-                      >
-                        Empty
+                      <div key={`${rowIdx}-${pos}`} className="flex-shrink-0">
+                        {compact ? (
+                          <ThreatCardCompact threat={threat} onFight={onFightRow} {...sharedProps} />
+                        ) : (
+                          <ThreatCardMini threat={threat} onFight={onFightRow} {...sharedProps} />
+                        )}
                       </div>
-                    );
+                    ) : null;
                   })}
                 </div>
               </div>

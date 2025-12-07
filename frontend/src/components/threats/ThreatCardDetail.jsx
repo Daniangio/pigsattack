@@ -29,32 +29,35 @@ export default function ThreatCardDetail({ threat, actionLabel, actionDisabled, 
             </div>
           )}
           <div className="absolute inset-0 bg-gradient-to-b from-black/15 via-black/35 to-black/70" />
-          <div className="relative z-10 h-full flex flex-col p-1 gap-1">
-            <div className="flex justify-center">
-              <div className="w-[70%] text-center space-y-2">
-                <div className="inline-block px-2 py-1 rounded-md border border-slate-200/30 bg-black/70 text-lg font-bold text-slate-50 leading-tight drop-shadow line-clamp-2">
-                  {threat.name}
-                </div>
-                <span
-                  className={`px-2 py-1 rounded-full border border-white/10 bg-black/60 uppercase tracking-[0.12em] text-xs ${typeColor}`}
-                >
-                  {threat.type}
-                </span>
+          <div className="absolute top-2 left-2 right-2 flex justify-between items-start gap-2 z-10">
+            <div className="flex-1 min-w-0">
+              <div className="inline-block px-2 py-1 rounded-md border border-slate-200/30 bg-black/70 text-lg font-bold text-slate-50 leading-tight drop-shadow line-clamp-2 max-w-full">
+                {threat.name}
               </div>
             </div>
+            <span className="px-2 py-1 rounded-full border border-amber-400/80 bg-amber-500/15 text-amber-200 text-[11px] whitespace-nowrap">
+              {threat.vp} VP
+            </span>
+          </div>
+          <div className="absolute top-2 left-2 z-10">
+            <div className={`flex flex-col items-center justify-center px-1 py-1 rounded-md border ${typeColor} text-[11px] leading-none`}>
+              {String(threat?.type || "").toUpperCase()
+                .split("")
+                .map((ch, idx) => (
+                  <span key={`${ch}-${idx}`} className="block leading-none">
+                    {ch}
+                  </span>
+                ))}
+            </div>
+          </div>
+          <div className="relative z-10 h-full flex flex-col p-1 gap-1">
             <div className="mt-auto">
-              <div className="bg-black/55 border border-slate-800 rounded-lg p-2 flex justify-between items-center backdrop-blur-sm">
-                <span className="flex gap-2 text-sm items-center">
-                  {costParts.map((p) => (
-                    <span key={p.key} className={p.className}>{`${p.val}${p.key}`}</span>
-                  ))}
-                  {!costParts.length && <span className="text-slate-300">0</span>}
-                </span>
-                <span className="px-2 py-1 rounded-full border border-amber-400/80 bg-amber-500/10 text-amber-200 text-[11px] ml-1">
-                  {threat.vp} VP
-                </span>
+              <div className="w-fit ml-auto bg-black/55 border border-slate-800 rounded-lg px-3 py-2 flex justify-end items-center gap-2 backdrop-blur-sm">
+                {costParts.map((p) => (
+                  <span key={p.key} className={p.className}>{`${p.val}${p.key}`}</span>
+                ))}
+                {!costParts.length && <span className="text-slate-300">0</span>}
               </div>
-              <div className="text-emerald-200 text-[12px] leading-snug mt-2">Reward: {threat.reward}</div>
             </div>
           </div>
         </div>

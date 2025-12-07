@@ -23,7 +23,7 @@ export default function MarketCardCompact({ card, onBuy, buttonState = "ready", 
 
   return (
     <div
-      className={`bg-slate-900 border border-slate-700 rounded-lg p-1 max-w-[100px] w-full
+      className={`bg-slate-900 border border-slate-700 rounded-lg p-1 max-w-[120px] w-full
                  flex flex-col gap-0.5 text-[11px] leading-tight transition hover:border-amber-400 cursor-pointer ${
                    highlight ? "animate-border-pulse border-emerald-400" : ""
                  }`}
