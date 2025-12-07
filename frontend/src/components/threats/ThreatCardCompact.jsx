@@ -40,7 +40,7 @@ export default function ThreatCardCompact({ threat, onFight, rowIndex, isFront, 
 
   return (
     <div
-      className={`relative w-[140px] min-w-[140px] max-w-[140px] overflow-hidden rounded-xl text-[11px] leading-tight cursor-pointer
+      className={`relative w-[130px] min-w-[130px] max-w-[130px] overflow-hidden rounded-xl text-[11px] leading-tight cursor-pointer
         ${isAttacking || enrageTokens > 0 ? "shadow-[0_0_0_2px_rgba(251,191,36,0.4)]" : ""}`}
       onMouseEnter={handleHover}
       onMouseLeave={handleLeave}

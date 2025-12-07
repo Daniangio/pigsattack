@@ -561,22 +561,6 @@ export default function PlayerBoardBottom({
                     className={`w-16 h-16 rounded-full border-4 ${stanceColorRing(currentStance)}  bg-slate-900`}
                     style={{ backgroundImage: `url(${playerIconImg})`, backgroundSize: "cover", backgroundPosition: "center" }}
                   />
-                  {isMyBoard && (
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (!canChangeStance) return;
-                          onToggleStance();
-                        }}
-                        className={`w-16 h-16 rounded-xl border shadow-lg ${
-                          canChangeStance ? "border-amber-400 hover:border-emerald-300" : "border-slate-700 opacity-50"
-                        }`}   
-                      >
-                        <img src={schemeCard} alt="Scheme" className="w-full h-full object-contain bg-slate-900/40" />
-                      </button>
-                    </div>
-                  )}
               </div>
 
               {/* Name/VP */}
@@ -648,23 +632,43 @@ export default function PlayerBoardBottom({
               </div>
 
               {/* Tokens */}
-              <div className="relative flex items-center gap-2 min-w-[280px]">
-                {onPickToken && (
-                  <button
-                    type="button"
-                    onClick={() => onPickToken?.()}
-                    disabled={!canPickToken}
-                    className={`relative rounded-xl border shadow-lg ${
-                      canPickToken ? "border-emerald-400" : "border-slate-700 grayscale opacity-70 cursor-not-allowed"
-                    }`}
-                    style={{ width: 100, height: 90 }}
-                  >
-                    <img src={scavengeCard} alt="Pick Token" className="w-full h-full object-contain bg-slate-900/40" />
-                    {!canPickToken && <div className="absolute inset-0 bg-slate-900/50" />}
-                    {canPickToken && <div className="absolute inset-0 ring-2 rounded-xl ring-emerald-300 animate-pulse" />}
-                  </button>
-                )}
-                <div className="grid grid-cols-2 gap-1 flex-1 min-w-[160px]">
+              {/* Tokens and Actions */}
+              <div className="flex flex-col gap-2 min-w-[280px]">
+                <div className="flex items-center gap-2">
+                  {isMyBoard && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!canChangeStance) return;
+                        onToggleStance();
+                      }}
+                      className={`relative rounded-xl ${
+                        canChangeStance ? "border-amber-400 hover:border-emerald-300" : "border-slate-700 opacity-50 cursor-not-allowed"
+                      }`}
+                      style={{ width: 100, height: 90 }}
+                    >
+                      <img src={schemeCard} alt="Scheme" className="w-full h-full object-contain bg-slate-900/40" />
+                      {!canChangeStance && <div className="absolute inset-0 bg-slate-900/50" />}
+                    </button>
+                  )}
+                  {onPickToken && (
+                    <button
+                      type="button"
+                      onClick={() => onPickToken?.()}
+                      disabled={!canPickToken}
+                      className={`relative rounded-xl ${
+                        canPickToken ? "border-emerald-400" : "border-slate-700 grayscale opacity-70 cursor-not-allowed"
+                      }`}
+                      style={{ width: 100, height: 90 }}
+                    >
+                      <img src={scavengeCard} alt="Pick Token" className="w-full h-full object-contain bg-slate-900/40" />
+                      {!canPickToken && <div className="absolute inset-0 bg-slate-900/50" />}
+                      {canPickToken && <div className="absolute inset-0" />}
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3">
                   {["attack", "wild", "mass", "conversion"].some((k) => (player.tokens?.[k] ?? player.tokens?.[k?.toUpperCase?.()] ?? 0) > 0) ? (
                     ["attack", "wild", "mass", "conversion"].map((key) => {
                       const total =
@@ -689,7 +693,7 @@ export default function PlayerBoardBottom({
                         <button
                           key={key}
                           type="button"
-                          className={`flex items-center gap-0 px-0 py-0 rounded transition w-full justify-start ${
+                          className={`relative flex items-center gap-2 px-2 py-1 rounded transition ${
                             isDisabled ? "opacity-50 cursor-not-allowed" : "hover:bg-slate-800/80"
                           } ${isConversionActive ? "relative" : ""}`}
                           onClick={() => {
@@ -709,86 +713,78 @@ export default function PlayerBoardBottom({
                           title={
                             isConversionActive ? "Click to convert resources" : (isDisabled ? "No tokens remaining" : `${remaining} available`)
                           }
-                          >
-                            {style.img ? (
-                              <img
-                                src={style.img}
-                                alt={`${tokenLabels[key] || key} token`}
-                                title={`${tokenLabels[key] || key} token`}
-                                className="w-16 h-16 rounded-full"
-                              />
-                            ) : (
-                              tokenLabels[key] || key
-                            )}
+                        >
+                          {style.img ? (
+                            <img
+                              src={style.img}
+                              alt={`${tokenLabels[key] || key} token`}
+                              title={`${tokenLabels[key] || key} token`}
+                              className="w-12 h-12 rounded-full"
+                            />
+                          ) : (
+                            tokenLabels[key] || key
+                          )}
                           <span className={`${style.text || "text-slate-200"} text-sm font-semibold`}>×{displayTotal}</span>
-                          {/* Correctly position the overlay anchor on the Conversion Token button */}
                           {isConversionActive && conversionOpen && (
-                            <>
-                              <div className="absolute z-50 bottom-full right-0 mb-2">
-                                <div className="relative bg-slate-900 border border-slate-700 rounded-xl p-3 shadow-xl w-64">
-                                  <div className="absolute -bottom-2 right-4 w-4 h-4 bg-slate-900 border-b border-l border-slate-700 transform rotate-45 z-0"></div>
-                                  <div className="relative z-10">
-                                    <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.16em] text-slate-400 mb-2">
-                                      <span>Use Conversion Token</span>
-                                      <button
-                                        type="button"
-                                        onClick={() => setConversionOpen(false)}
-                                        className="text-slate-300 hover:text-amber-200 text-xs"
-                                        aria-label="Close conversion panel"
-                                      >
-                                        ×
-                                      </button>
-                                    </div>
-                                    <div className="flex flex-col gap-2">
-                                      {conversionOptions.length === 0 && (
-                                        <div className="text-[11px] text-slate-500">Not enough resources to convert.</div>
-                                      )}
-          {conversionOptions.map((opt, idx) => {
-            const key = `${opt.from}-${opt.to}`;
-            const current = conversionAmounts[key] || 1;
-            const amount = Math.max(1, Math.min(opt.maxAmount, current));
-            const cycleAmount = () => {
-                                          const next = amount >= opt.maxAmount ? 1 : amount + 1;
-                                          setConversionAmounts((prev) => ({ ...prev, [key]: next }));
-                                        };
-                                        return (
-                                          <div
-                                            key={key}
-                                            className="w-full px-2 py-2 rounded-lg border border-slate-700 bg-slate-800/60 text-slate-100 text-sm flex items-center justify-between gap-2"
+                            <div className="absolute z-50 bottom-full right-0 mb-2">
+                              <div className="relative bg-slate-900 border border-slate-700 rounded-xl p-3 shadow-xl w-64">
+                                <div className="absolute -bottom-2 right-4 w-4 h-4 bg-slate-900 border-b border-l border-slate-700 transform rotate-45 z-0"></div>
+                                <div className="relative z-10">
+                                  <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.16em] text-slate-400 mb-2">
+                                    <span>Use Conversion Token</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setConversionOpen(false)}
+                                      className="text-slate-300 hover:text-amber-200 text-xs"
+                                      aria-label="Close conversion panel"
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                  <div className="flex flex-col gap-2">
+                                    {conversionOptions.length === 0 && (
+                                      <div className="text-[11px] text-slate-500">Not enough resources to convert.</div>
+                                    )}
+                                    {conversionOptions.map((opt) => {
+                                      const keyConv = `${opt.from}-${opt.to}`;
+                                      const current = conversionAmounts[keyConv] || 1;
+                                      const amount = Math.max(1, Math.min(opt.maxAmount, current));
+                                      const cycleAmount = () => {
+                                        const next = amount >= opt.maxAmount ? 1 : amount + 1;
+                                        setConversionAmounts((prev) => ({ ...prev, [keyConv]: next }));
+                                      };
+                                      return (
+                                        <div
+                                          key={keyConv}
+                                          className="w-full px-2 py-2 rounded-lg border border-slate-700 bg-slate-800/60 text-slate-100 text-sm flex items-center justify-between gap-2"
+                                        >
+                                          <button
+                                            type="button"
+                                            onClick={cycleAmount}
+                                            className="px-2 py-1 rounded-md border border-slate-700 bg-slate-900/60 hover:border-amber-300 text-xs"
                                           >
-                                            <button
-                                              type="button"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                cycleAmount();
-                                              }}
-                                              className="flex items-center gap-2 px-2 py-1 rounded-md border border-slate-700 hover:border-amber-400 transition text-slate-200"
-                                            >
-                                              {opt.fromIcon}
-                                              <span className="text-slate-200">x{amount}</span>
-                                            </button>
-                                            <span className="text-[11px] uppercase tracking-[0.16em] text-slate-400">→</span>
-                                            <button
-                                              type="button"
-                                              onClick={() => {
-                                                onConvertToken?.(opt.from, opt.to, amount);
-                                                setConversionOpen(false);
-                                              }}
-                                              className="flex items-center gap-2 px-3 py-1 rounded-md border border-slate-700 hover:border-amber-400 transition text-slate-200"
-                                            >
-                                              {opt.toIcon}
-                                              <span className="text-slate-200">+{amount}</span>
-                                            </button>
+                                            Amount: {amount}
+                                          </button>
+                                          <div className="flex items-center gap-2 text-xs">
+                                            <span className="text-slate-400">From</span>
+                                            <span className="px-2 py-1 rounded border border-slate-700 bg-slate-900/60">{opt.from}</span>
+                                            <span className="text-slate-400">to</span>
+                                            <span className="px-2 py-1 rounded border border-slate-700 bg-slate-900/60">{opt.to}</span>
                                           </div>
-                                        );
-                                      })}
-                                    </div>
+                                          <button
+                                            type="button"
+                                            className="px-2 py-1 rounded-md border border-emerald-400 text-emerald-200 hover:bg-emerald-400/10 text-xs"
+                                            onClick={() => onConvertToken?.(opt.from, opt.to, amount)}
+                                          >
+                                            Convert
+                                          </button>
+                                        </div>
+                                      );
+                                    })}
                                   </div>
                                 </div>
                               </div>
-                              {/* Backdrop to close when clicking outside */}
-                              <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setConversionOpen(false); }} />
-                            </>
+                            </div>
                           )}
                         </button>
                       );

@@ -37,8 +37,8 @@ export default function MarketPanel({
     : "grid auto-rows-min gap-1 md:gap-2 grid-cols-[repeat(auto-fill,minmax(150px,auto))] justify-start items-start";
 
   const optionalBorderClasses = optionalBuyUsed
-    ? "border-slate-700 grayscale opacity-60"
-    : "border-emerald-400 shadow-lg shadow-amber-400/20";
+    ? "grayscale opacity-60"
+    : "";
 
   const getButtonState = (card) => {
     if (!(canBuyCard?.(card) && hasSlotForCard?.(card))) return "cannot";
@@ -85,11 +85,11 @@ export default function MarketPanel({
         <div className="relative flex flex-col h-full bg-slate-900/60 border border-slate-800 rounded-2xl p-3">
           {/* header row: image + deck count */}
           <div className="flex items-end gap-3 mb-3 -mt-10">
-            <div className={`w-32 h-24 rounded-xl border ${optionalBorderClasses} `}>
+            <div className={`w-32 h-24 rounded-xl overflow-hidden ${optionalBorderClasses}`}>
               <img
                 src={fortifyCard}
                 alt="Optional Buy Upgrades"
-                className="w-full h-full object-contain bg-slate-900/40"
+                className="w-full h-full object-contain"
               />
             </div>
 
@@ -131,11 +131,11 @@ export default function MarketPanel({
         <div className="relative flex flex-col h-full bg-slate-900/60 border border-slate-800 rounded-2xl p-3 ">
           {/* header row: image + deck count */}
           <div className="flex items-end gap-3 mb-3 -mt-10">
-            <div className={`w-32 h-24 rounded-xl border ${optionalBorderClasses} `}>
+            <div className={`w-32 h-24 rounded-xl overflow-hidden ${optionalBorderClasses}`}>
               <img
                 src={armoryRunCard}
                 alt="Optional Buy Weapons"
-                className="w-full h-full object-contain bg-slate-900/40"
+                className="w-full h-full object-contain"
               />
             </div>
 
