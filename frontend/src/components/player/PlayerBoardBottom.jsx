@@ -60,6 +60,10 @@ export default function PlayerBoardBottom({
   onEndTurn,
   onSurrender,
   isMyBoard = false,
+  isMyTurnGlobal = false,
+  isFollowingActive = false,
+  onFollowActivePlayer,
+  onViewMyBoard,
   activeUsedMap = {},
   stagedFightCards,
   stagedFightTokens,
@@ -155,6 +159,8 @@ export default function PlayerBoardBottom({
     Balanced: "text-amber-300",
     BALANCED: "text-amber-300",
   }[currentStance] || "text-slate-200";
+  const showReturnToMyBoard = !!onViewMyBoard && !isMyBoard;
+  const showFollowActive = !!onFollowActivePlayer && !isFollowingActive && !(isMyBoard && isMyTurnGlobal);
 
   const maxSlots = 4;
   const upgradeSlots = Math.min(player.upgradeSlots ?? maxSlots, maxSlots);
@@ -551,17 +557,61 @@ export default function PlayerBoardBottom({
                   <span>Wounds: {player.wounds ?? 0}</span>
                 </div>
               </div>
+              {(showReturnToMyBoard || showFollowActive) && (
+                <div className="flex items-center gap-2">
+                  {showReturnToMyBoard && (
+                    <button
+                      type="button"
+                      onClick={onViewMyBoard}
+                      className="px-2 py-1 text-[10px] uppercase tracking-[0.14em] rounded-md border border-slate-700 text-slate-200 hover:border-amber-400"
+                    >
+                      My Board
+                    </button>
+                  )}
+                  {showFollowActive && (
+                    <button
+                      type="button"
+                      onClick={onFollowActivePlayer}
+                      className="px-2 py-1 text-[10px] uppercase tracking-[0.14em] rounded-md border border-slate-700 text-slate-200 hover:border-emerald-400"
+                    >
+                      Follow Active
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         ) : (
             <div className="flex flex-col gap-3 overflow-visible">
               <div className="flex items-start gap-4">
                 {/* Player icon */}
-                <div className="flex flex-col items-center gap-2 min-w-[72px]">
+              <div className="flex flex-col items-center gap-2 min-w-[72px]">
                   <div
                     className={`w-16 h-16 rounded-full border-4 ${stanceColorRing(currentStance)}  bg-slate-900`}
                     style={{ backgroundImage: `url(${playerIconImg})`, backgroundSize: "cover", backgroundPosition: "center" }}
                   />
+                  {(showReturnToMyBoard || showFollowActive) && (
+                    <div className="flex flex-col gap-2 w-full">
+                      {showReturnToMyBoard && (
+                        <button
+                          type="button"
+                          onClick={onViewMyBoard}
+                          className="px-2 py-1 text-[10px] uppercase tracking-[0.14em] rounded-md border border-slate-700 text-slate-200 hover:border-amber-400 w-full"
+                        >
+                          My Board
+                        </button>
+                      )}
+                      {showFollowActive && (
+                        <button
+                          type="button"
+                          onClick={onFollowActivePlayer}
+                          className="px-2 py-1 text-[10px] uppercase tracking-[0.14em] rounded-md border border-slate-700 text-slate-200 hover:border-emerald-400 w-full"
+                        >
+                          Follow Active
+                        </button>
+                      )}
+                    </div>
+                  )}
               </div>
 
               {/* Name/VP */}
@@ -575,7 +625,10 @@ export default function PlayerBoardBottom({
                 </div>
                 <div className="flex items-center gap-1 text-xs text-rose-200">
                   <Skull size={13} />
-                  <span>Wounds: {player.wounds ?? 0}{player.wounds >= 5 ? " (-10 VP)" : ""}</span>
+                  <span>
+                    Wounds: {player.wounds ?? 0}
+                    {player.wounds >= 10 ? " (-20 VP)" : player.wounds >= 5 ? " (-10 VP)" : ""}
+                  </span>
                 </div>
               </div>
                 {isMyBoard && (

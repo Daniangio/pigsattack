@@ -55,7 +55,7 @@ export default function MarketPanel({
   return (
     <div
       className="w-full h-full bg-slate-950/5 border border-slate-800
-                 rounded-3xl p-1 flex flex-col relative overflow-hidden"
+                 rounded-3xl p-1 flex flex-col relative overflow-hidden min-h-0"
     >
       {/* top right controls */}
       <div className="flex justify-end items-center mb-2 relative z-10 pointer-events-auto">
@@ -80,9 +80,9 @@ export default function MarketPanel({
       </div>
 
       {/* main content grid (no overflow here, to avoid clipping the header images) */}
-      <div className={`flex-1 ${panelGridClasses}`}>
+      <div className={`flex-1 min-h-0 overflow-y-auto pr-1 ${panelGridClasses}`}>
         {/* Upgrades panel */}
-        <div className="relative flex flex-col h-full bg-slate-900/60 border border-slate-800 rounded-2xl p-3">
+        <div className="relative flex flex-col h-full min-h-0 bg-slate-900/60 border border-slate-800 rounded-2xl p-3">
           {/* header row: image + deck count */}
           <div className="flex items-end gap-3 mb-3 -mt-10">
             <div className={`w-32 h-24 rounded-xl overflow-hidden ${optionalBorderClasses}`}>
@@ -100,7 +100,7 @@ export default function MarketPanel({
           </div>
 
           {/* scrollable cards list */}
-          <div className="flex-1 overflow-y-auto pr-1">
+          <div className="flex-1 min-h-0 overflow-y-auto pr-1">
             <div className={cardGridClasses}>
               {upgrades.map((u, idx) =>
                 compact ? (
@@ -128,7 +128,7 @@ export default function MarketPanel({
         </div>
 
         {/* Weapons panel */}
-        <div className="relative flex flex-col h-full bg-slate-900/60 border border-slate-800 rounded-2xl p-3 ">
+        <div className="relative flex flex-col h-full min-h-0 bg-slate-900/60 border border-slate-800 rounded-2xl p-3 ">
           {/* header row: image + deck count */}
           <div className="flex items-end gap-3 mb-3 -mt-10">
             <div className={`w-32 h-24 rounded-xl overflow-hidden ${optionalBorderClasses}`}>
@@ -146,7 +146,7 @@ export default function MarketPanel({
           </div>
 
           {/* scrollable cards list */}
-          <div className="flex-1 overflow-y-auto pr-1">
+          <div className="flex-1 min-h-0 overflow-y-auto pr-1">
             <div className={cardGridClasses}>
               {weapons.map((w, idx) =>
                 compact ? (

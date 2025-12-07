@@ -47,10 +47,10 @@ class PlayerStatus(str, Enum):
 
 
 STANCE_PROFILES: Dict[Stance, Dict[str, Any]] = {
-    Stance.AGGRESSIVE: {"production": {ResourceType.RED: 4, ResourceType.BLUE: 0, ResourceType.GREEN: 1}},
-    Stance.TACTICAL: {"production": {ResourceType.RED: 1, ResourceType.BLUE: 3, ResourceType.GREEN: 1}},
-    Stance.HUNKERED: {"production": {ResourceType.RED: 0, ResourceType.BLUE: 1, ResourceType.GREEN: 4}},
-    Stance.BALANCED: {"production": {ResourceType.RED: 2, ResourceType.BLUE: 2, ResourceType.GREEN: 2}},
+    Stance.AGGRESSIVE: {"production": {ResourceType.RED: 5, ResourceType.BLUE: 0, ResourceType.GREEN: 1}},
+    Stance.TACTICAL:   {"production": {ResourceType.RED: 1, ResourceType.BLUE: 4, ResourceType.GREEN: 1}},
+    Stance.HUNKERED:   {"production": {ResourceType.RED: 0, ResourceType.BLUE: 1, ResourceType.GREEN: 5}},
+    Stance.BALANCED:   {"production": {ResourceType.RED: 2, ResourceType.BLUE: 2, ResourceType.GREEN: 2}},
 }
 
 

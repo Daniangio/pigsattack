@@ -376,8 +376,6 @@ On success:
 
 ---
 
-### 6.2 Extend Slot
-
 * Choose:
 
   * +1 **Upgrade slot**
@@ -388,7 +386,7 @@ Extending does **not** grant tokens or VP directly; it increases your capacity f
 
 ---
 
-### 6.3 Re-Stance
+### 6.2 Re-Stance
 
 * Change your stance to any other stance
 * No additional benefit
@@ -396,7 +394,7 @@ Extending does **not** grant tokens or VP directly; it increases your capacity f
 
 ---
 
-### 6.4 Prepare
+### 6.3 Prepare
 
 * Gain exactly **1 token** from:
   * **Attack**
@@ -598,7 +596,9 @@ The Boss does not occupy lanes and does not gain Weight or Enrage tokens.
 * If you have **5 or more** Wounds:
 
   * You suffer a flat **−10 VP total** from Wounds
-  * Additional Wounds do **not** increase the penalty beyond −10
+* If you have **10 or more** Wounds:
+
+  * The flat Wound penalty becomes **−20 VP total**
 
 You cannot remove Wounds unless an effect explicitly says so.
 
@@ -618,7 +618,8 @@ At the end of the Night Boss Phase:
 2. Apply Wound penalty:
 
    * If Wounds ≤ 4 → subtract that number from VP
-   * If Wounds ≥ 5 → **subtract 10 VP**
+   * If 5–9 Wounds → **subtract 10 VP**
+   * If ≥10 Wounds → **subtract 20 VP**
 
 The player with the highest final VP total wins.
 Use tiebreakers listed in **Section 1** if needed.

@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import random
 
 from .data_loader import GameDataLoader
-from .models import BossCard, BossThreshold, CardType, GamePhase, GameState, MarketCard, PlayerBoard, PlayerStatus, ResourceType, Reward, Stance, TokenType, clamp_cost, resource_to_wire, STANCE_PROFILES
+from .models import BossCard, BossThreshold, CardType, GamePhase, GameState, MarketCard, PlayerBoard, PlayerStatus, ResourceType, Reward, Stance, TokenType, clamp_cost, resource_to_wire
 from .effects import CardEffect, parse_effect_tags, effect_to_wire
 from .threats import ThreatManager
 from .utils import parse_resource_key
@@ -809,9 +809,18 @@ class GameSession:
                 self.state.add_log("Game over. No winner determined.")
 
     def _determine_winner(self) -> Optional[PlayerBoard]:
+        def effective_vp(p: PlayerBoard) -> int:
+            # Wound penalties: -10 VP at 5+, -20 VP at 10+
+            penalty = 0
+            if p.wounds >= 10:
+                penalty = 20
+            elif p.wounds >= 5:
+                penalty = 10
+            return p.vp - penalty
+
         def score_tuple(p: PlayerBoard):
             resources_total = sum(p.resources.values())
-            return (-p.vp, p.wounds, -p.threats_defeated, -resources_total)
+            return (-effective_vp(p), p.wounds, -p.threats_defeated, -resources_total)
 
         scored_players = sorted(
             [p for p in self.state.players.values() if p.status == PlayerStatus.ACTIVE],

@@ -39,7 +39,12 @@ def score_state(session: GameSession, player_id: str) -> float:
         total_cost = sum(int(v or 0) for v in raw_cost.values())
         upgrade_value += total_cost * 1.2 - getattr(upgrade, "vp", 0)
     upgrade_score = upgrade_value
-    wound_penalty = player.wounds * 1.0
+    if player.wounds >= 10:
+        wound_penalty = 20.0
+    elif player.wounds >= 5:
+        wound_penalty = 10.0
+    else:
+        wound_penalty = player.wounds * 1.0
     # Empty slots are worth less than a token; occupied slots approximate the value of a token.
     total_slots = player.upgrade_slots + player.weapon_slots
     occupied = len(player.upgrades or []) + len(player.weapons or [])
@@ -165,6 +170,7 @@ class BotPlanner:
 
         best_future_score = -1e9
         best_future_plan: List[Dict[str, Any]] = best_plan
+        self_turn_target = 4  # current turn (already simulated) + two future turns
         for run in future_candidates:
             sim = copy.deepcopy(game)
             try:
@@ -173,8 +179,8 @@ class BotPlanner:
             except Exception:
                 continue
             self_turns_completed = 1 if run["actions"] and run["actions"][-1]["type"] == "end_turn" else 0
-            # Advance through other players and our next turn (greedy best actions)
-            while self_turns_completed < 2 and sim.state.phase != GamePhase.GAME_OVER:
+            # Advance through other players and our next turns (greedy best actions)
+            while self_turns_completed < self_turn_target and sim.state.phase != GamePhase.GAME_OVER:
                 active_id = sim.state.get_active_player_id()
                 if not active_id:
                     break

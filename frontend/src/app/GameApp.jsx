@@ -166,7 +166,6 @@ export default function App({
   const [selectedCard, setSelectedCard] = useState(null); // selected card for confirmation
   const [highlightBuyables, setHighlightBuyables] = useState(false);
   const [suppressPreview, setSuppressPreview] = useState(false);
-  const [hasTurnRedirected, setHasTurnRedirected] = useState(false);
   const stanceBaselineRef = useRef(null);
   const lastLegalStanceRef = useRef(null);
   const currentTurnPlayerId = gameData?.active_player_id || gameData?.activePlayerId;
@@ -272,28 +271,6 @@ export default function App({
     }
   }, [currentTurnPlayerId, isFollowingTurn]);
 
-  const firstTurnRedirectDone = useRef(false);
-  useEffect(() => {
-    if (
-      isMyTurn &&
-      activePlayerId &&
-      activePlayerId !== userId &&
-      !hasTurnRedirected &&
-      firstTurnRedirectDone.current
-    ) {
-      setActivePlayerId(userId);
-      setIsFollowingTurn(false);
-      setHasTurnRedirected(true);
-      onLocalToast?.("It's your turn!", "emerald");
-    }
-    if (isMyTurn && !firstTurnRedirectDone.current) {
-      firstTurnRedirectDone.current = true;
-    }
-    if (!isMyTurn) {
-      setHasTurnRedirected(false);
-    }
-  }, [isMyTurn, activePlayerId, userId, onLocalToast, hasTurnRedirected]);
-
   useEffect(() => {
     if (stanceMenuOpen && backendBaseline) {
       stanceBaselineRef.current = backendBaseline;
@@ -315,14 +292,14 @@ export default function App({
       setActiveFight(null);
       return;
     }
-    if (!bossMode) {
+    if (!bossMode && !hasRangeAny) {
       const row = threatRows?.[activeFight.rowIndex] || [];
       const front = row[0];
       if (!front || front.id !== activeFight.threat?.id) {
         setActiveFight(null);
       }
     }
-  }, [activeFight, activePlayerId, bossMode, isMyTurn, threatRows, userId]);
+  }, [activeFight, activePlayerId, bossMode, hasRangeAny, isMyTurn, threatRows, userId]);
 
   const updatePlayerStance = (stance) => {
     setStanceOverrides((prev) => ({ ...prev, [activePlayerId]: stance }));
@@ -495,6 +472,7 @@ export default function App({
       return;
     }
     onEndTurn?.({});
+    setIsFollowingTurn(true);
     clearFightPanel();
     setSelectedCard(null);
     setStanceMenuOpen(false);
@@ -592,7 +570,20 @@ export default function App({
 
   const handleSelectPlayer = (id) => {
     setActivePlayerId(id);
-    setIsFollowingTurn(id === currentTurnPlayerId);
+    setIsFollowingTurn(false);
+  };
+
+  const handleFollowActivePlayer = () => {
+    setIsFollowingTurn(true);
+    if (currentTurnPlayerId) {
+      setActivePlayerId(currentTurnPlayerId);
+    }
+  };
+
+  const handleViewMyBoard = () => {
+    if (!userId) return;
+    setIsFollowingTurn(false);
+    setActivePlayerId(userId);
   };
 
   const handleFreeStanceChange = (stance) => {
@@ -803,6 +794,7 @@ export default function App({
                       onGoToMarket={() => setZoomedPanel('market')}
                       showMarketTransition={zoomedPanel === 'threats'}
                       onZoom={() => setZoomedPanel(zoomedPanel === 'threats' ? null : 'threats')}
+                      isZoomed={zoomedPanel === 'threats'}
                     />
                   </div>
                   <div
@@ -858,6 +850,10 @@ export default function App({
           onEndTurn={handleEndTurnClick}
           onSurrender={onSurrender}
           isMyBoard={activePlayerId === userId}
+          isMyTurnGlobal={isMyTurn}
+          isFollowingActive={isFollowingTurn}
+          onFollowActivePlayer={handleFollowActivePlayer}
+          onViewMyBoard={handleViewMyBoard}
           activeUsedMap={activeUsedMap}
           stagedFightCards={
             activeFight

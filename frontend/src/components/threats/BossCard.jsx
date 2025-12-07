@@ -1,29 +1,22 @@
-import React from "react";
+import React, { useState } from "react";
 import { formatCost } from "../../utils/formatters";
 import { setHoverPreview } from "../hover/HoverPreviewPortal";
 
 export default function BossCard({ boss, compact, enablePreview }) {
-  const handleHover = () => {
-    if (!enablePreview) return;
-    setHoverPreview({ type: "boss", data: boss, sourceId: boss.id });
-  };
-  const handleLeave = () => {
-    if (!enablePreview) return;
-    setHoverPreview(null);
-  };
+  const [hovered, setHovered] = useState(false);
   const handleClick = () => {
     if (!enablePreview) return;
     setHoverPreview({ type: "boss", data: boss, sourceId: boss.id, lock: true });
   };
   const containerClass = compact
-    ? "w-56 bg-slate-900 border-2 border-amber-500 rounded-2xl p-3 shadow-xl transition hover:border-amber-300 cursor-pointer"
-    : "w-72 bg-slate-900 border-2 border-amber-500 rounded-2xl p-4 shadow-xl transition hover:border-amber-300 cursor-pointer";
+    ? "relative w-56 bg-slate-900 border-2 border-amber-500 rounded-2xl p-3 shadow-xl transition hover:border-amber-300 cursor-pointer overflow-hidden"
+    : "relative w-72 bg-slate-900 border-2 border-amber-500 rounded-2xl p-4 shadow-xl transition hover:border-amber-300 cursor-pointer overflow-hidden";
 
   return (
     <div
       className={containerClass}
-      onMouseEnter={handleHover}
-      onMouseLeave={handleLeave}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       onClick={handleClick}
     >
       <div className="flex justify-between text-xs text-slate-400">
@@ -51,6 +44,25 @@ export default function BossCard({ boss, compact, enablePreview }) {
             ))}
           </div>
         </div>
+      )}
+
+      {enablePreview && (
+        <>
+          <div
+            className={`mt-3 text-[10px] uppercase tracking-[0.18em] text-slate-400 transition-opacity ${
+              hovered ? "opacity-100" : "opacity-70"
+            }`}
+          >
+            Click for details
+          </div>
+          <div
+            className={`pointer-events-none absolute bottom-1 left-1 right-1 text-center text-[10px] uppercase tracking-[0.16em] text-slate-200 bg-black/40 rounded-md py-1 transition-opacity ${
+              hovered ? "opacity-100" : "opacity-0"
+            }`}
+          >
+            Click for details
+          </div>
+        </>
       )}
     </div>
   );
