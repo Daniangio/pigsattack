@@ -2,6 +2,7 @@ import React from "react";
 import { setHoverPreview } from "../hover/HoverPreviewPortal";
 import { formatCostParts } from "../../utils/formatters";
 import { getThreatImage } from "../../utils/threatImages";
+import { Flame } from "lucide-react";
 
 export default function ThreatCardCompact({ threat, onFight, rowIndex, isFront, canFight, isAttacking, weight = 0, position }) {
   const fightAllowed = typeof canFight === "boolean" ? canFight : isFront;
@@ -38,14 +39,21 @@ export default function ThreatCardCompact({ threat, onFight, rowIndex, isFront, 
 
   const imageSrc = getThreatImage(threat?.image);
 
+  const fightLabel = fightAllowed ? `Fight ${rowIndex + 1}` : "Wait";
+
+  const fightingPulse =
+    isAttacking || enrageTokens > 0
+      ? "shadow-[0_0_0_2px_rgba(251,191,36,0.4)] ring-1 ring-rose-500/40 animate-pulse"
+      : "";
+  const attackReady = onFight && fightAllowed ? "shadow-[0_0_0_2px_rgba(251,191,36,0.3)] ring-1 ring-amber-400/60" : "";
+
   return (
     <div
-      className={`relative w-[130px] min-w-[130px] max-w-[130px] overflow-hidden rounded-xl text-[11px] leading-tight cursor-pointer
-        ${isAttacking || enrageTokens > 0 ? "shadow-[0_0_0_2px_rgba(251,191,36,0.4)]" : ""}`}
+      className={`relative w-[130px] min-w-[130px] max-w-[130px] overflow-hidden rounded-xl text-[11px] leading-tight cursor-pointer ${fightingPulse} ${attackReady}`}
       onMouseEnter={handleHover}
       onMouseLeave={handleLeave}
       onClick={handleClick}
-      style={{ aspectRatio: "1 / 1" }}
+      style={{ aspectRatio: "1 / 1", padding: "0.5px", margin: "2px" }}
     >
       {imageSrc && (
         <div className="absolute inset-0 flex items-center justify-center">
@@ -79,50 +87,70 @@ export default function ThreatCardCompact({ threat, onFight, rowIndex, isFront, 
         </div>
       </div>
 
-      <div className="absolute bottom-1 left-0 right-0 px-1 space-y-1">
-        <div className="flex gap-1 text-[9px] text-slate-200 uppercase tracking-[0.08em] flex-wrap">
-          {weight > 0 && (
-            <span className="px-2 py-1 rounded-full border border-green-700 bg-green-900/40 text-green-200">
-              Weight +{weight}
-            </span>
-          )}
-          {enrageTokens > 0 && (
-            <span className="px-2 py-1 rounded-full border border-amber-500 bg-amber-500/15 text-amber-200">
-              Enraged +{2 * enrageTokens}R
-            </span>
-          )}
-          {isAttacking && (
-            <span className="px-2 py-1 rounded-full border border-rose-500 bg-rose-500/15 text-rose-200">
-              Attacking
-            </span>
-          )}
+      <div className="absolute bottom-1 left-0 right-0 px-1">
+        <div className="w-full flex justify-center">
+          <div className="max-w-full bg-black/55 border border-slate-800 rounded-lg px-1.5 py-1 flex items-center gap-1 backdrop-blur-sm flex-nowrap text-[8px] uppercase tracking-[0.08em] text-slate-200">
+            {costParts.map((p) => (
+              <span key={p.key} className={p.className}>{`${p.val}${p.key}`}</span>
+            ))}
+            {!costParts.length && <span className="text-slate-300">0</span>}
+            {enrageTokens > 0 && (
+              <span className="flex items-center gap-0.5 px-1 py-0.5 rounded border border-amber-500/70 bg-amber-500/15 text-amber-200 whitespace-nowrap">
+                <Flame size={10} className="text-amber-300" />+{2 * enrageTokens}R
+              </span>
+            )}
+            {weight > 0 && (
+              <span className="px-1 py-0.5 rounded border border-green-700 bg-green-900/40 text-green-200 whitespace-nowrap">
+                W+{weight}
+              </span>
+            )}
+          </div>
         </div>
-
-        <div className="w-fit ml-auto bg-black/55 border border-slate-800 rounded-lg px-1 py-1 flex justify-end items-center gap-1 backdrop-blur-sm">
-          {costParts.map((p) => (
-            <span key={p.key} className={p.className}>{`${p.val}${p.key}`}</span>
-          ))}
-          {!costParts.length && <span className="text-slate-300">0</span>}
-        </div>
-        {onFight && (
+      </div>
+      {onFight && (
+        <div className="mt-2 px-1">
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
+              e.preventDefault();
               setHoverPreview(null);
               onFight(rowIndex, threat);
             }}
             disabled={!fightAllowed}
-            className={`w-full text-[10px] uppercase tracking-[0.12em] rounded-md px-2 py-1 border ${
+            className={`w-full text-[10px] uppercase tracking-[0.10em] rounded-md px-1 py-1 border ${
               fightAllowed
                 ? "border-amber-400 text-amber-200 hover:bg-amber-400/10"
                 : "border-slate-800 text-slate-600 cursor-not-allowed"
             }`}
           >
-            Fight {rowIndex + 1}
+            {fightAllowed ? `Fight ${rowIndex + 1}` : "Wait"}
           </button>
-        )}
-      </div>
+        </div>
+      )}
+      {onFight && (
+        <div className="absolute right-0 top-6">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              setHoverPreview(null);
+              onFight(rowIndex, threat);
+            }}
+            disabled={!fightAllowed}
+            className={`px-1 py-1 rounded-l-md text-[10px] uppercase tracking-[0.16em] border text-amber-300 border-amber-400/50 bg-amber-900/40 bg-black/50 ${
+              fightAllowed ? "hover:bg-black/70" : "opacity-50 cursor-not-allowed"
+            }`}
+          >
+            {"ATTACK".split("").map((ch, idx) => (
+              <span key={idx} className="leading-none block">
+                {ch}
+              </span>
+            ))}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

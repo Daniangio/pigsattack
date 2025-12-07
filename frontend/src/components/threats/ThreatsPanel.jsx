@@ -154,7 +154,7 @@ export default function ThreatsPanel({
           {["back", "mid", "front"].map((pos) => (
             <div
               key={pos}
-              className="relative flex items-start gap-1 bg-slate-900/60 border border-slate-800 rounded-2xl p-1 overflow-visible min-h-[140px]"
+              className="relative flex items-start gap-1 bg-slate-900/60 border border-slate-800 rounded-2xl p-1 overflow-visible min-h-[160px]"
             >
               <div className="flex flex-col items-center justify-center w-10">
                 <div className="px-1 py-1 rounded-md border border-slate-600 bg-slate-800/60 text-[10px] leading-none text-slate-200">

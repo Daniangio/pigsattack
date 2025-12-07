@@ -71,7 +71,8 @@ export default function PlayerBoardBottom({
   const currentStance = player.stance;
   const stanceInfo = STANCE_CONFIG[currentStance] || STANCE_CONFIG[normalizeStance(currentStance)];
   const wildTokens = player?.tokens?.wild ?? player?.tokens?.WILD ?? 0;
-  const canExtendThisTurn = isMyBoard && !extendUsed && wildTokens > 0;
+  const isActiveTurn = activePlayerId === player.id;
+  const canExtendThisTurn = isMyBoard && isActiveTurn && !extendUsed && wildTokens > 0;
   const playerIndex = useMemo(
     () => (players || []).findIndex((p) => p.id === player.id),
     [players, player.id]
@@ -635,40 +636,46 @@ export default function PlayerBoardBottom({
               {/* Tokens and Actions */}
               <div className="flex flex-col gap-2 min-w-[280px]">
                 <div className="flex items-center gap-2">
-                  {isMyBoard && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!canChangeStance) return;
-                        onToggleStance();
-                      }}
-                      className={`relative rounded-xl ${
-                        canChangeStance ? "border-amber-400 hover:border-emerald-300" : "border-slate-700 opacity-50 cursor-not-allowed"
-                      }`}
-                      style={{ width: 100, height: 90 }}
-                    >
-                      <img src={schemeCard} alt="Scheme" className="w-full h-full object-contain bg-slate-900/40" />
-                      {!canChangeStance && <div className="absolute inset-0 bg-slate-900/50" />}
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!isMyBoard || !isActiveTurn || mainActionUsed || !canChangeStance) return;
+                      onToggleStance?.();
+                    }}
+                    disabled={!isMyBoard || !isActiveTurn || mainActionUsed || !canChangeStance}
+                    className={`relative rounded-xl ${
+                      !isMyBoard || !isActiveTurn || mainActionUsed
+                        ? "grayscale opacity-60 cursor-not-allowed"
+                        : "hover:ring-2 hover:ring-emerald-300"
+                    }`}
+                    style={{ width: 100, height: 90 }}
+                  >
+                    <img src={schemeCard} alt="Scheme" className="w-full h-full object-contain" />
+                    {!isMyBoard || !isActiveTurn || mainActionUsed || !canChangeStance ? (
+                      <div className="absolute inset-0 bg-slate-900/40 rounded-xl" />
+                    ) : null}
+                  </button>
                   {onPickToken && (
                     <button
                       type="button"
                       onClick={() => onPickToken?.()}
                       disabled={!canPickToken}
                       className={`relative rounded-xl ${
-                        canPickToken ? "border-emerald-400" : "border-slate-700 grayscale opacity-70 cursor-not-allowed"
+                        isMyBoard && isActiveTurn && canPickToken
+                          ? "hover:ring-2 hover:ring-emerald-300"
+                          : "grayscale opacity-70 cursor-not-allowed"
                       }`}
                       style={{ width: 100, height: 90 }}
                     >
-                      <img src={scavengeCard} alt="Pick Token" className="w-full h-full object-contain bg-slate-900/40" />
-                      {!canPickToken && <div className="absolute inset-0 bg-slate-900/50" />}
-                      {canPickToken && <div className="absolute inset-0" />}
+                      <img src={scavengeCard} alt="Pick Token" className="w-full h-full object-contain" />
+                      {!isMyBoard || !isActiveTurn || !canPickToken ? (
+                        <div className="absolute inset-0 bg-slate-900/40 rounded-xl" />
+                      ) : null}
                     </button>
                   )}
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3">
+                <div className="flex flex-wrap items-center gap-0.5">
                   {["attack", "wild", "mass", "conversion"].some((k) => (player.tokens?.[k] ?? player.tokens?.[k?.toUpperCase?.()] ?? 0) > 0) ? (
                     ["attack", "wild", "mass", "conversion"].map((key) => {
                       const total =
@@ -693,7 +700,7 @@ export default function PlayerBoardBottom({
                         <button
                           key={key}
                           type="button"
-                          className={`relative flex items-center gap-2 px-2 py-1 rounded transition ${
+                          className={`relative flex items-center gap-0.5 px-0.5 py-0.5 rounded transition ${
                             isDisabled ? "opacity-50 cursor-not-allowed" : "hover:bg-slate-800/80"
                           } ${isConversionActive ? "relative" : ""}`}
                           onClick={() => {
