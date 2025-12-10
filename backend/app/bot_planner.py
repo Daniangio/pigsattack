@@ -1,5 +1,6 @@
 import copy
 import itertools
+import math
 import random
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -55,216 +56,248 @@ def score_state(session: GameSession, player_id: str) -> float:
 class BotPlanner:
     def __init__(
         self,
-        max_depth: int = 5,
+        max_depth: int = 2,
         top_n: int = 5,
         max_branches: int = 150,
         rng: Optional[random.Random] = None,
     ):
-        self.max_depth = max_depth
+        self.max_depth = max_depth  # number of this bot's future turns to explore
         self.top_n = top_n
         self.max_branches = max_branches
         self.rng = rng or random.Random()
+        self._quiet = True  # disable logging in simulation clones
+        self._score_cache: Dict[str, float] = {}
 
-    async def plan(self, game: GameSession, player_id: str) -> Dict[str, Any]:
+    async def plan(self, game: GameSession, player_id: str, personality: str = "greedy") -> Dict[str, Any]:
         base_round = getattr(game.state, "round", 0)
         base_era = getattr(game.state, "era", "day")
-        start_score = score_state(game, player_id)
+        start_score = self._score_state_cached(game, player_id)
         best_runs: List[Dict[str, Any]] = []
-        explored = 0
+        best_runs: List[Dict[str, Any]] = []
+        score_cache: Dict[str, float] = {}
 
-        async def push_result(result: Dict[str, Any]):
-            nonlocal best_runs
-            # Insert sorted by score desc
-            best_runs.append(result)
-            best_runs = sorted(best_runs, key=lambda r: r.get("score", -1e9), reverse=True)[: self.top_n]
-
-        async def dfs(session: GameSession, steps: List[Dict[str, Any]], depth: int):
-            nonlocal explored
-            if explored >= self.max_branches:
-                return
-            if depth >= self.max_depth:
-                await push_result(
+        async def evaluate_turn(session: GameSession, turn_index: int, accumulated_steps: List[Dict[str, Any]]):
+            if turn_index >= self.max_depth or session.state.phase == GamePhase.GAME_OVER:
+                score = self._score_state_cached(session, player_id, score_cache)
+                best_runs.append(
                     {
                         "round": getattr(session.state, "round", base_round),
                         "era": getattr(session.state, "era", base_era),
                         "start_score": start_score,
-                        "score": score_state(session, player_id),
-                        "actions": [s["action"] for s in steps],
-                        "steps": steps,
+                        "score": score,
+                        "actions": [s["action"] for s in accumulated_steps],
+                        "steps": accumulated_steps,
                     }
                 )
-                explored += 1
                 return
 
-            possible = await self._enumerate_actions(session, player_id)
-            if not possible:
-                await push_result(
-                    {
-                        "round": getattr(session.state, "round", base_round),
-                        "era": getattr(session.state, "era", base_era),
-                        "start_score": start_score,
-                        "score": score_state(session, player_id),
-                        "actions": [s["action"] for s in steps],
-                        "steps": steps,
-                    }
-                )
-                explored += 1
-                return
+            turn_plans = await self._enumerate_turn_plans(session, player_id)
+            if not turn_plans:
+                turn_plans = [[{"type": "end_turn", "payload": {}}]]
 
-            for action in possible:
-                if explored >= self.max_branches:
-                    break
-                gs = copy.deepcopy(session)
-                try:
-                    await gs.player_action(player_id, action["type"], action.get("payload") or {}, None)
-                except Exception:
-                    continue
-                current_score = score_state(gs, player_id)
-                step_info = {
-                    "action": action,
-                    "score": current_score,
-                    "round": getattr(gs.state, "round", base_round),
-                    "era": getattr(gs.state, "era", base_era),
-                }
-                new_steps = steps + [step_info]
-                if action["type"] == "end_turn":
-                    await push_result(
+            scored_plans: List[Tuple[float, List[Dict[str, Any]], GameSession, List[Dict[str, Any]]]] = []
+            for plan in turn_plans:
+                sim = self._clone_quiet(session)
+                steps: List[Dict[str, Any]] = []
+                for action in plan:
+                    try:
+                        await sim.player_action(player_id, action["type"], action.get("payload") or {}, None)
+                    except Exception:
+                        steps = []
+                        break
+                    steps.append(
                         {
-                            "round": step_info["round"],
-                            "era": step_info["era"],
-                            "start_score": start_score,
-                            "score": current_score,
-                            "actions": [s["action"] for s in new_steps],
-                            "steps": new_steps,
+                            "action": action,
+                            "score": self._score_state_cached(sim, player_id, score_cache),
+                            "round": getattr(sim.state, "round", base_round),
+                            "era": getattr(sim.state, "era", base_era),
                         }
                     )
-                    explored += 1
-                else:
-                    await dfs(gs, new_steps, depth + 1)
+                    if sim.state.phase == GamePhase.GAME_OVER:
+                        break
+                    if sim.state.get_active_player_id() != player_id:
+                        break
+                if not steps:
+                    continue
+                if sim.state.get_active_player_id() == player_id and sim.state.phase != GamePhase.GAME_OVER:
+                    try:
+                        await sim.player_action(player_id, "end_turn", {}, None)
+                    except Exception:
+                        continue
+                scored_plans.append((steps[-1]["score"], plan, sim, steps))
 
-        # Begin exhaustive search up to depth
-        await dfs(copy.deepcopy(game), [], 0)
+            if not scored_plans:
+                return
 
-        # Prepare logs for top results only
+            scored_plans.sort(key=lambda t: t[0], reverse=True)
+            scored_plans = scored_plans[: self.top_n]
+
+            for _, plan_actions, sim_after_plan, plan_steps in scored_plans:
+                advanced = await self._advance_to_next_bot_turn(sim_after_plan, player_id)
+                await evaluate_turn(advanced, turn_index + 1, accumulated_steps + plan_steps)
+
+        await evaluate_turn(self._clone_quiet(game), 0, [])
+
+        best_runs = sorted(best_runs, key=lambda r: r.get("score", -1e9), reverse=True)
+        for i, run in enumerate(best_runs, start=1):
+            run["id"] = i
+            run["final_score"] = run.get("score")
+            run["score_after_lookahead"] = run.get("score")
+
         sim_logs: List[str] = []
         for idx, run in enumerate(best_runs[: self.top_n]):
             sim_logs.append(
                 f"[top {idx+1}] round {run.get('round', base_round)} era {run.get('era', base_era)} start {run.get('start_score', start_score):.2f} → final {run.get('score', -1e9):.2f}"
             )
-        sim_logs.append(f"[info] explored {explored} branches (depth≤{self.max_depth})")
+        sim_logs.append(f"[info] explored up to {self.max_depth} bot turns")
 
-        # Attach ids
-        for i, run in enumerate(best_runs, start=1):
-            run["id"] = i
-
-        best_plan = best_runs[0]["actions"] if best_runs else []
-        best_score = best_runs[0]["score"] if best_runs else -1e9
-
-        # Multi-turn lookahead: simulate this turn end, other players, and our next turn end.
-        future_candidates = [r for r in best_runs if r.get("actions")]
-        end_turn_candidates = [r for r in future_candidates if r["actions"] and r["actions"][-1]["type"] == "end_turn"]
-        if end_turn_candidates:
-            future_candidates = end_turn_candidates
-        future_k = min(5, self.top_n)
-        future_candidates = future_candidates[:future_k]
-
-        best_future_score = -1e9
-        best_future_plan: List[Dict[str, Any]] = best_plan
-        self_turn_target = 4  # current turn (already simulated) + two future turns
-        for run in future_candidates:
-            sim = copy.deepcopy(game)
-            try:
-                for act in run["actions"]:
-                    await sim.player_action(player_id, act["type"], act.get("payload") or {}, None)
-            except Exception:
-                continue
-            self_turns_completed = 1 if run["actions"] and run["actions"][-1]["type"] == "end_turn" else 0
-            # Advance through other players and our next turns (greedy best actions)
-            while self_turns_completed < self_turn_target and sim.state.phase != GamePhase.GAME_OVER:
-                active_id = sim.state.get_active_player_id()
-                if not active_id:
-                    break
-                await self._simulate_best_turn(sim, active_id, max_steps=8)
-                if active_id == player_id:
-                    self_turns_completed += 1
-            future_score = score_state(sim, player_id)
-            run["future_score"] = future_score
-            if future_score > best_future_score:
-                best_future_score = future_score
-                best_future_plan = run["actions"]
+        chosen_run = self._choose_run_by_personality(best_runs, personality)
+        best_plan = chosen_run.get("actions", []) if chosen_run else []
+        best_score = chosen_run.get("score", -1e9) if chosen_run else -1e9
 
         return {
-            "actions": best_future_plan,
-            "score": best_future_score if future_candidates else best_score,
+            "actions": best_plan,
+            "score": best_score,
             "logs": sim_logs,
             "simulations": best_runs,
         }
 
     async def _enumerate_actions(self, gs: GameSession, player_id: str) -> List[Dict[str, Any]]:
+        return await self._enumerate_turn_plans(gs, player_id)
+
+    async def _enumerate_turn_plans(
+        self, gs: GameSession, player_id: str, conversions_done: int = 0
+    ) -> List[List[Dict[str, Any]]]:
+        """Build ordered action plans (one turn) with optional skips for non-main actions."""
         player = gs.state.players.get(player_id)
         if not player:
             return []
-        actions: List[Dict[str, Any]] = []
-        # Fight simulations (only when main action available or during boss fights)
-        actions.extend(await self._generate_fight_actions(gs, player_id))
 
-        # Main actions
-        if not player.action_used:
-            # pick token
-            for token in ["attack", "conversion", "wild"]:
-                if player.tokens.get(TokenType[token.upper()], 0) < 3:
-                    actions.append({"type": "pick_token", "payload": {"token": token}})
-            # stance change
-            for stance in Stance:
-                if stance != player.stance:
-                    actions.append({"type": "realign", "payload": {"stance": stance.value}})
-
-        # Optional buy
-        if not player.buy_used:
-            for card in gs.state.market.upgrades:
-                if len(player.upgrades) < player.upgrade_slots and player.can_pay(card.cost):
-                    actions.append({"type": "buy_upgrade", "payload": {"card_id": card.id}})
-            for card in gs.state.market.weapons:
-                if len(player.weapons) < player.weapon_slots and player.can_pay(card.cost):
-                    actions.append({"type": "buy_weapon", "payload": {"card_id": card.id}})
-
-        # Optional extend slot
-        if not player.extend_used and player.tokens.get(TokenType.WILD, 0) > 0:
-            if len(player.upgrades) >= player.upgrade_slots and player.upgrade_slots < 4:
-                actions.append({"type": "extend_slot", "payload": {"slot_type": "upgrade"}})
-            if len(player.weapons) >= player.weapon_slots and player.weapon_slots < 4:
-                actions.append({"type": "extend_slot", "payload": {"slot_type": "weapon"}})
-
-        # Conversion token usage
-        if player.tokens.get(TokenType.CONVERSION, 0) > 0:
+        # --- Conversion tokens (0/1/2 allowed) ---
+        max_conv_left = min(player.tokens.get(TokenType.CONVERSION, 0), max(0, 2 - conversions_done))
+        if max_conv_left > 0:
+            conv_actions: List[Dict[str, Any]] = []
             for from_res in ResourceType:
-                if player.resources.get(from_res, 0) <= 0:
+                amount = player.resources.get(from_res, 0)
+                if amount <= 0:
                     continue
                 for to_res in ResourceType:
                     if to_res == from_res:
                         continue
-                    actions.append({"type": "convert", "payload": {"from": from_res.value, "to": to_res.value, "amount": 1}})
+                    conv_actions.append(
+                        [
+                            {
+                                "type": "convert",
+                                "payload": {"from": from_res.value, "to": to_res.value, "amount": amount},
+                            }
+                        ]
+                    )
+            # include no-conversion option
+            conv_options = [[]]
+            conv_options.extend(conv_actions)
+            # allow pairs
+            if len(conv_actions) > 1:
+                for i in range(len(conv_actions)):
+                    for j in range(i + 1, len(conv_actions)):
+                        conv_options.append(conv_actions[i] + conv_actions[j])
+        else:
+            conv_options = [[]]
 
-        # Upgrade actives
+        # --- Buying/slots ---
+        buy_upgrades: List[List[Dict[str, Any]]] = []
+        buy_weapons: List[List[Dict[str, Any]]] = []
+        need_upgrade_slot = (
+            not player.extend_used
+            and player.tokens.get(TokenType.WILD, 0) > 0
+            and len(player.upgrades) >= player.upgrade_slots
+            and player.upgrade_slots < 4
+            and any(player.can_pay(card.cost) for card in gs.state.market.upgrades)
+        )
+        need_weapon_slot = (
+            not player.extend_used
+            and player.tokens.get(TokenType.WILD, 0) > 0
+            and len(player.weapons) >= player.weapon_slots
+            and player.weapon_slots < 4
+            and any(player.can_pay(card.cost) for card in gs.state.market.weapons)
+        )
+        if not player.extend_used:
+            if need_upgrade_slot:
+                pass
+            if need_weapon_slot:
+                pass
+
+        if not player.buy_used:
+            if len(player.upgrades) < player.upgrade_slots or need_upgrade_slot:
+                for card in gs.state.market.upgrades:
+                    if player.can_pay(card.cost):
+                        action = {
+                            "type": "buy_upgrade",
+                            "payload": {"card_id": card.id, "card_name": getattr(card, "name", card.id)},
+                        }
+                        if need_upgrade_slot and len(player.upgrades) >= player.upgrade_slots:
+                            buy_upgrades.append(
+                                [{"type": "extend_slot", "payload": {"slot_type": "upgrade"}}, action]
+                            )
+                        if len(player.upgrades) < player.upgrade_slots:
+                            buy_upgrades.append([action])
+            if len(player.weapons) < player.weapon_slots or need_weapon_slot:
+                for card in gs.state.market.weapons:
+                    if player.can_pay(card.cost):
+                        action = {
+                            "type": "buy_weapon",
+                            "payload": {"card_id": card.id, "card_name": getattr(card, "name", card.id)},
+                        }
+                        if need_weapon_slot and len(player.weapons) >= player.weapon_slots:
+                            buy_weapons.append(
+                                [{"type": "extend_slot", "payload": {"slot_type": "weapon"}}, action]
+                            )
+                        if len(player.weapons) < player.weapon_slots:
+                            buy_weapons.append([action])
+        buy_options: List[List[Dict[str, Any]]] = [[]]
+        buy_options.extend(buy_upgrades)
+        buy_options.extend(buy_weapons)
+
+        # --- Upgrade activations ---
+        activation_options: List[List[Dict[str, Any]]] = [[]]
         if player.upgrades:
             for card in player.upgrades:
                 if player.active_used.get(card.id):
                     continue
                 tags = getattr(card, "tags", []) or []
                 if any(str(t).startswith("active:mass_token") for t in tags):
-                    for token in ["attack", "conversion", "wild", "mass", "boss"]:
+                    for token in ["attack", "conversion", "wild", "mass"]:
                         if player.tokens.get(TokenType[token.upper()], 0) > 0 and player.resources.get(ResourceType.GREEN, 0) >= 2:
-                            actions.append({"type": "activate_card", "payload": {"card_id": card.id, "token": token}})
+                            activation_options.append([{"type": "activate_card", "payload": {"card_id": card.id, "token": token}}])
                 if any(str(t).startswith("active:convert_split") for t in tags):
                     for res in ["R", "B", "G"]:
                         resource_enum = ResourceType(res)
                         if player.resources.get(resource_enum, 0) > 0:
-                            actions.append({"type": "activate_card", "payload": {"card_id": card.id, "resource": res}})
+                            activation_options.append([{"type": "activate_card", "payload": {"card_id": card.id, "resource": res}}])
 
-        # End turn fallback
-        actions.append({"type": "end_turn", "payload": {}})
-        print(actions)
-        return actions
+        # --- Main action bucket (required) ---
+        main_actions: List[Dict[str, Any]] = []
+        fights = await self._generate_fight_actions(gs, player_id)
+        if fights:
+            main_actions.extend(fights)
+        else:
+            if not player.action_used:
+                for stance in Stance:
+                    if stance != player.stance:
+                        main_actions.append({"type": "realign", "payload": {"stance": stance.value}})
+                for token in ["attack", "conversion", "wild"]:
+                    if player.tokens.get(TokenType[token.upper()], 0) < 3:
+                        main_actions.append({"type": "pick_token", "payload": {"token": token}})
+            if not main_actions:
+                main_actions.append({"type": "end_turn", "payload": {}})
+        plans: List[List[Dict[str, Any]]] = []
+        for conv_seq in conv_options:
+            for buy_seq in buy_options:
+                for act_seq in activation_options:
+                    for main_action in main_actions:
+                        plans.append(conv_seq + buy_seq + act_seq + [main_action])
+        if len(plans) > 80:
+            plans = plans[:80]
+        return plans
 
     async def _generate_fight_actions(self, gs: GameSession, player_id: str) -> List[Dict[str, Any]]:
         player = gs.state.players.get(player_id)
@@ -343,9 +376,9 @@ class BotPlanner:
 
     def _weapon_subsets(self, weapons: Sequence[Any]) -> Sequence[Sequence[Any]]:
         combos: List[Sequence[Any]] = [tuple()]
-        for r in range(1, len(weapons) + 1):
+        for r in range(1, min(len(weapons), 3) + 1):
             combos.extend(itertools.combinations(weapons, r))
-        return combos
+        return combos[:12]
 
     def _build_fight_payload(
         self,
@@ -422,43 +455,102 @@ class BotPlanner:
 
         return attack_used, {res: amt for res, amt in wild_alloc.items() if amt > 0}
 
-    async def _simulate_best_turn(self, gs: GameSession, active_id: str, max_steps: int = 8):
-        """Greedy turn simulation for a given player until turn passes or steps exceed."""
-        steps = 0
-        while gs.state.get_active_player_id() == active_id and steps < max_steps:
-            steps += 1
-            best_action = await self._pick_best_action(gs, active_id)
-            if not best_action:
-                best_action = {"type": "end_turn", "payload": {}}
+    def _choose_run_by_personality(self, runs: List[Dict[str, Any]], personality: str) -> Optional[Dict[str, Any]]:
+        if not runs:
+            return None
+        if personality == "top3":
+            pool = runs[: min(3, len(runs))]
+            return self.rng.choice(pool)
+        if personality == "softmax5":
+            pool = runs[: min(5, len(runs))]
+            scores = [r.get("score", -1e9) for r in pool]
+            max_s = max(scores) if scores else 0.0
+            exp_scores = [math.exp(s - max_s) for s in scores]
+            total = sum(exp_scores) or 1.0
+            probs = [v / total for v in exp_scores]
+            pick = self.rng.random()
+            acc = 0.0
+            for run, p in zip(pool, probs):
+                acc += p
+                if pick <= acc:
+                    return run
+            return pool[-1]
+        return runs[0]
+
+    def _clone_quiet(self, session: GameSession) -> GameSession:
+        try:
+            return session.clone_quiet()
+        except Exception:
+            clone = copy.deepcopy(session)
             try:
-                await gs.player_action(active_id, best_action["type"], best_action.get("payload") or {}, None)
-            except Exception:
-                # If action fails, force end turn to avoid infinite loops
-                try:
-                    await gs.player_action(active_id, "end_turn", {}, None)
-                except Exception:
-                    break
-        # Safety: if still on this player's turn after max_steps, force end turn
-        if gs.state.get_active_player_id() == active_id:
-            try:
-                await gs.player_action(active_id, "end_turn", {}, None)
+                clone.state.verbose = False
             except Exception:
                 pass
+            return clone
 
-    async def _pick_best_action(self, gs: GameSession, player_id: str) -> Optional[Dict[str, Any]]:
-        actions = await self._enumerate_actions(gs, player_id)
-        if not actions:
-            return None
-        best: Optional[Dict[str, Any]] = None
-        best_score = -1e9
-        for action in actions:
-            sim = copy.deepcopy(gs)
+    async def _apply_plan_in_place(self, sim: GameSession, player_id: str, plan: List[Dict[str, Any]]) -> bool:
+        for action in plan:
             try:
                 await sim.player_action(player_id, action["type"], action.get("payload") or {}, None)
             except Exception:
-                continue
-            score = score_state(sim, player_id)
-            if score > best_score:
-                best_score = score
-                best = action
-        return best
+                return False
+            if sim.state.phase == GamePhase.GAME_OVER or sim.state.get_active_player_id() != player_id:
+                break
+        if sim.state.get_active_player_id() == player_id and sim.state.phase != GamePhase.GAME_OVER:
+            try:
+                await sim.player_action(player_id, "end_turn", {}, None)
+            except Exception:
+                return False
+        return True
+
+    async def _advance_to_next_bot_turn(self, sim: GameSession, bot_id: str, score_cache: Optional[Dict[str, float]] = None) -> GameSession:
+        """Advance simulation through other players using greedy plans until the bot's turn returns."""
+        current = self._clone_quiet(sim)
+        cache = score_cache if score_cache is not None else self._score_cache
+        guard = 0
+        while current.state.phase != GamePhase.GAME_OVER:
+            active = current.state.get_active_player_id()
+            if not active:
+                break
+            if active == bot_id:
+                break
+            plans = await self._enumerate_turn_plans(current, active)
+            if not plans:
+                plans = [[{"type": "end_turn", "payload": {}}]]
+            best_sim = None
+            best_score = -1e9
+            for plan in plans:
+                trial = self._clone_quiet(current)
+                success = await self._apply_plan_in_place(trial, active, plan)
+                if not success:
+                    continue
+                score = self._score_state_cached(trial, active, cache)
+                if score > best_score:
+                    best_score = score
+                    best_sim = trial
+            if not best_sim:
+                break
+            current = best_sim
+            guard += 1
+            if guard > 50:
+                break
+        return current
+
+    def _score_state_cached(self, session: GameSession, player_id: str, cache: Optional[Dict[str, float]] = None) -> float:
+        cache = cache if cache is not None else self._score_cache
+        key = self._score_signature(session, player_id)
+        if key in cache:
+            return cache[key]
+        val = score_state(session, player_id)
+        cache[key] = val
+        return val
+
+    def _score_signature(self, session: GameSession, player_id: str) -> str:
+        p = session.state.players.get(player_id)
+        if not p:
+            return f"missing:{player_id}"
+        res_sig = (p.resources.get(ResourceType.RED, 0), p.resources.get(ResourceType.BLUE, 0), p.resources.get(ResourceType.GREEN, 0))
+        tok_sig = tuple(sorted((t.value, p.tokens.get(t, 0)) for t in TokenType))
+        upgrades = tuple(sorted(getattr(u, "id", str(u)) for u in (p.upgrades or [])))
+        weapons = tuple(sorted(getattr(w, "id", str(w)) for w in (p.weapons or [])))
+        return f"{player_id}|{p.vp}|{p.wounds}|{p.stance}|{res_sig}|{tok_sig}|{upgrades}|{weapons}|{p.upgrade_slots}|{p.weapon_slots}"

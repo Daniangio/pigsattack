@@ -25,6 +25,9 @@ export default function GamePage() {
   const [toastLogs, setToastLogs] = useState([]);
   const [isLogOpen, setIsLogOpen] = useState(false);
   const [isBotLogOpen, setIsBotLogOpen] = useState(false);
+  const [selectedBotId, setSelectedBotId] = useState(null);
+  const [selectedRunId, setSelectedRunId] = useState(null);
+  const [selectedRoundFilter, setSelectedRoundFilter] = useState(undefined);
   const prevLogLength = useRef(0);
   const toastTimers = useRef([]);
   const prevActivePlayer = useRef(activePlayerId);
@@ -125,29 +128,70 @@ export default function GamePage() {
   const myStatus = meState?.status || "ACTIVE";
   const isSpectating = !meState || myStatus !== "ACTIVE";
   const gameOver = (gameState?.phase || "").toUpperCase() === "GAME_OVER";
-  const botLogMessages = useMemo(
-    () => gameState?.bot_logs || gameState?.botLogs || [],
-    [gameState?.bot_logs, gameState?.botLogs]
-  );
-  const botRuns = useMemo(
+  const botRunsAll = useMemo(
     () => gameState?.bot_runs || gameState?.botRuns || [],
     [gameState?.bot_runs, gameState?.botRuns]
   );
-  const [selectedRunId, setSelectedRunId] = useState(null);
-  const [selectedRoundFilter, setSelectedRoundFilter] = useState(undefined);
-
+  const botPlayers = useMemo(() => {
+    const list = [];
+    const players = gameState?.players || {};
+    Object.entries(players).forEach(([id, p]) => {
+      if (p?.is_bot) {
+        list.push({ id, name: p.username || id });
+      }
+    });
+    return list;
+  }, [gameState?.players]);
+  const rawBotLogs = useMemo(
+    () => gameState?.bot_logs || gameState?.botLogs || {},
+    [gameState?.bot_logs, gameState?.botLogs]
+  );
+  const botLogMap = useMemo(() => {
+    if (Array.isArray(rawBotLogs)) {
+      return { all: rawBotLogs };
+    }
+    if (rawBotLogs && typeof rawBotLogs === "object") {
+      return rawBotLogs;
+    }
+    return {};
+  }, [rawBotLogs]);
+  const botLogKeys = Object.keys(botLogMap);
+  const scopedRuns = useMemo(() => {
+    if (!selectedBotId || selectedBotId === "all") return botRunsAll;
+    return botRunsAll.filter((run) => run.bot_id === selectedBotId || run.botId === selectedBotId);
+  }, [botRunsAll, selectedBotId]);
   const availableRounds = useMemo(() => {
     const set = new Set();
-    botRuns.forEach((run) => {
+    scopedRuns.forEach((run) => {
       if (run?.round !== undefined && run?.round !== null) set.add(run.round);
     });
     return Array.from(set).sort((a, b) => a - b);
-  }, [botRuns]);
-
+  }, [scopedRuns]);
   const filteredRuns = useMemo(() => {
-    if (selectedRoundFilter === null || selectedRoundFilter === undefined) return botRuns;
-    return botRuns.filter((run) => run?.round === selectedRoundFilter);
-  }, [botRuns, selectedRoundFilter]);
+    if (selectedRoundFilter === null || selectedRoundFilter === undefined) return scopedRuns;
+    return scopedRuns.filter((run) => run?.round === selectedRoundFilter);
+  }, [scopedRuns, selectedRoundFilter]);
+  const botRuns = useMemo(() => filteredRuns, [filteredRuns]);
+  const selectedBotLogs = useMemo(() => {
+    if (selectedBotId === "all") {
+      return Object.values(botLogMap).flat();
+    }
+    if (selectedBotId && botLogMap[selectedBotId]) {
+      return botLogMap[selectedBotId];
+    }
+    if (botLogKeys.length) {
+      return botLogMap[botLogKeys[0]] || [];
+    }
+    return [];
+  }, [botLogMap, botLogKeys, selectedBotId]);
+
+  useEffect(() => {
+    if (botPlayers.length && (!selectedBotId || !botPlayers.some((b) => b.id === selectedBotId))) {
+      setSelectedBotId(botPlayers[0].id);
+    } else if (!botPlayers.length && selectedBotId !== "all") {
+      setSelectedBotId("all");
+    }
+  }, [botPlayers, selectedBotId]);
 
   const pushToast = useCallback((text, color = "amber") => {
     const id = `${Date.now()}-${Math.random()}`;
@@ -212,7 +256,7 @@ export default function GamePage() {
     } else {
       setSelectedRunId(null);
     }
-  }, [botRuns, filteredRuns, isBotLogOpen]);
+  }, [botRuns, filteredRuns, isBotLogOpen, selectedBotId]);
 
   useEffect(() => {
     if (!availableRounds.length) {
@@ -362,6 +406,21 @@ export default function GamePage() {
               <div className="text-xs uppercase tracking-[0.25em] text-slate-500">Bot Log</div>
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-2 text-[10px] text-slate-400">
+                  <span>Bot</span>
+                  <select
+                    className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[10px] text-slate-200"
+                    value={selectedBotId || ""}
+                    onChange={(e) => setSelectedBotId(e.target.value || "all")}
+                  >
+                    <option value="all">All</option>
+                    {botPlayers.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-center gap-2 text-[10px] text-slate-400">
                   <span>Round</span>
                   <select
                     className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[10px] text-slate-200"
@@ -402,6 +461,8 @@ export default function GamePage() {
                     <div className="flex gap-3 overflow-x-auto pb-1">
                       {filteredRuns.map((run) => {
                         const isActive = selectedRunId === run.id;
+                        const scoreDisplay =
+                          run.score_after_lookahead ?? run.final_score ?? run.score;
                         return (
                           <button
                             key={run.id}
@@ -411,20 +472,21 @@ export default function GamePage() {
                                 ? "border-emerald-400 bg-slate-900 shadow-emerald-500/10"
                                 : "border-slate-700 bg-slate-900/60 hover:border-emerald-300"
                             }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="text-[10px] uppercase tracking-[0.14em] text-slate-400">
-                                Sim {run.id}
-                              </span>
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] uppercase tracking-[0.14em] text-slate-400">
+                                  Sim {run.id}
+                                </span>
                               <span className="text-[10px] text-slate-400">
                                 R{run.round} • {run.era}
                               </span>
                             </div>
                             <div className="text-sm text-emerald-300 font-semibold">
-                              {typeof run.score === "number" ? run.score.toFixed(2) : run.score}
+                              {typeof scoreDisplay === "number" ? scoreDisplay.toFixed(2) : scoreDisplay}
                             </div>
                             <div className="text-[10px] text-slate-400">
                               Start {run.start_score !== undefined ? Number(run.start_score).toFixed(2) : "?"}
+                              {run.bot_name && <span className="ml-2 text-slate-500">• {run.bot_name}</span>}
                             </div>
                           </button>
                         );
@@ -435,53 +497,119 @@ export default function GamePage() {
                     {selectedRunId ? (
                       filteredRuns
                         .filter((run) => run.id === selectedRunId)
-                        .map((run) => (
-                          <div
-                            key={run.id}
-                            className="transition-all duration-200 ease-in-out bg-slate-900/60 border border-slate-800 rounded-lg p-4"
-                          >
-                            <div className="flex items-center justify-between mb-3">
-                              <div className="text-xs text-slate-400">
-                                Sim {run.id} • Round {run.round} • Era {run.era}
+                        .map((run) => {
+                          const scoreDisplay =
+                            run.score_after_lookahead ?? run.final_score ?? run.score;
+                          const targetBotId =
+                            selectedBotId && selectedBotId !== "all"
+                              ? selectedBotId
+                              : run.bot_id || run.botId;
+                          const botState =
+                            (run.final_state?.players && run.final_state.players[targetBotId]) || null;
+                          return (
+                            <div
+                              key={run.id}
+                              className="transition-all duration-200 ease-in-out bg-slate-900/60 border border-slate-800 rounded-lg p-4"
+                            >
+                              <div className="flex items-center justify-between mb-3">
+                                <div className="text-xs text-slate-400">
+                                  Sim {run.id} • Round {run.round} • Era {run.era}
+                                </div>
+                                <div className="text-sm text-emerald-300 font-semibold">
+                                  Final score{" "}
+                                  {typeof scoreDisplay === "number" ? scoreDisplay.toFixed(2) : scoreDisplay}
+                                </div>
                               </div>
-                              <div className="text-sm text-emerald-300 font-semibold">
-                                Final score {typeof run.score === "number" ? run.score.toFixed(2) : run.score}
+                              <div className="text-[10px] text-slate-400 mb-2 space-y-1">
+                                <div>
+                                  Start score{" "}
+                                  {run.start_score !== undefined ? Number(run.start_score).toFixed(2) : "?"}
+                                </div>
+                                <div>
+                                  Lookahead turns simulated: {run.lookahead_turns ?? "?"} (bot-only turns counted)
+                                </div>
                               </div>
-                            </div>
-                            <div className="text-[10px] text-slate-400 mb-2">
-                              Start score {run.start_score !== undefined ? Number(run.start_score).toFixed(2) : "?"}
-                            </div>
-                            <div className="space-y-2">
-                              {(run.steps || []).length === 0 ? (
-                                <div className="text-slate-500 text-xs">No steps recorded.</div>
-                              ) : (
-                                run.steps.map((step, idx) => (
-                                  <div
-                                    key={idx}
-                                    className="p-3 rounded-md border border-slate-800 bg-slate-900/70"
-                                  >
-                                    <div className="flex items-center justify-between">
-                                      <div className="text-slate-200">
-                                        Step {idx + 1}: {step?.action?.type}
+                              <div className="space-y-2">
+                                {(run.steps || []).length === 0 ? (
+                                  <div className="text-slate-500 text-xs">No steps recorded.</div>
+                                ) : (
+                                  run.steps.map((step, idx) => (
+                                    <div
+                                      key={idx}
+                                      className="p-3 rounded-md border border-slate-800 bg-slate-900/70"
+                                    >
+                                      <div className="flex items-center justify-between">
+                                        <div className="text-slate-200">
+                                          Step {idx + 1}: {step?.action?.type}
+                                        </div>
+                                        <div className="text-emerald-300">
+                                          {typeof step?.score === "number" ? step.score.toFixed(2) : step?.score}
+                                        </div>
                                       </div>
-                                      <div className="text-emerald-300">
-                                        {typeof step?.score === "number" ? step.score.toFixed(2) : step?.score}
+                                      <div className="text-[10px] text-slate-400">
+                                        Round {step?.round} • Era {step?.era}
                                       </div>
+                                      {step?.action?.payload && Object.keys(step.action.payload).length > 0 && (
+                                        <div className="text-[10px] text-slate-500 mt-1">
+                                          {JSON.stringify(step.action.payload)}
+                                        </div>
+                                      )}
                                     </div>
-                                    <div className="text-[10px] text-slate-400">
-                                      Round {step?.round} • Era {step?.era}
-                                    </div>
-                                    {step?.action?.payload && Object.keys(step.action.payload).length > 0 && (
-                                      <div className="text-[10px] text-slate-500 mt-1">
-                                        {JSON.stringify(step.action.payload)}
-                                      </div>
-                                    )}
+                                  ))
+                                )}
+                              </div>
+                              {run.future_actions && run.future_actions.length > 0 && (
+                                <div className="mt-3 space-y-1">
+                                  <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">
+                                    Greedy future actions (bot turns)
                                   </div>
-                                ))
+                                  <div className="space-y-1">
+                                    {run.future_actions.map((fa, idx) => (
+                                      <div
+                                        key={`${idx}-${fa.type}`}
+                                        className="px-2 py-1 rounded border border-slate-800 bg-slate-900/70 flex items-center justify-between"
+                                      >
+                                        <div className="text-slate-200 text-xs">
+                                          Turn {idx + 1}: {fa.type}
+                                        </div>
+                                        {fa.payload && Object.keys(fa.payload || {}).length > 0 && (
+                                          <div className="text-[10px] text-slate-500 ml-2">
+                                            {JSON.stringify(fa.payload)}
+                                          </div>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              {run.final_state && (
+                                <div className="mt-3 space-y-1">
+                                  <div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">
+                                    Predicted state after lookahead
+                                  </div>
+                                  {botState ? (
+                                    <div className="text-[11px] text-slate-200">
+                                      VP {botState.vp} • Wounds {botState.wounds} • Resources{" "}
+                                      {botState.resources?.R ?? 0}R/{botState.resources?.B ?? 0}B/
+                                      {botState.resources?.G ?? 0}G • Tokens{" "}
+                                      {JSON.stringify(botState.tokens || {})}
+                                    </div>
+                                  ) : (
+                                    <div className="text-[11px] text-slate-400">Snapshot available below.</div>
+                                  )}
+                                  <details className="bg-slate-900/60 border border-slate-800 rounded-md p-2">
+                                    <summary className="cursor-pointer text-[11px] text-slate-300">
+                                      Full snapshot (JSON)
+                                    </summary>
+                                    <pre className="text-[10px] whitespace-pre-wrap text-slate-300 overflow-x-auto mt-2 max-h-64">
+                                      {JSON.stringify(run.final_state, null, 2)}
+                                    </pre>
+                                  </details>
+                                </div>
                               )}
                             </div>
-                          </div>
-                        ))
+                          );
+                        })
                     ) : (
                       <div className="text-slate-500 text-xs">Select a simulation to inspect steps.</div>
                     )}
@@ -489,10 +617,10 @@ export default function GamePage() {
                 </>
               ) : (
                 <div className="flex-1 overflow-y-auto p-4 space-y-2">
-                  {botLogMessages.length === 0 ? (
+                  {selectedBotLogs.length === 0 ? (
                     <div className="text-slate-500 text-xs">No bot simulations recorded yet.</div>
                   ) : (
-                    botLogMessages
+                    selectedBotLogs
                       .slice()
                       .reverse()
                       .map((entry, idx) => (

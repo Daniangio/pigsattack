@@ -7,6 +7,7 @@ from .connection_manager import ConnectionManager
 from .room_manager import RoomManager
 from .server_models import User
 from .routers import router as auth_router
+from .custom_content import router as custom_content_router
 from .player_router import router as player_router
 from .routers import fake_users_db 
 from .security import get_current_user
@@ -29,6 +30,7 @@ app.add_middleware(
 
 app.include_router(auth_router, prefix="/api")
 app.include_router(player_router, prefix="/api")
+app.include_router(custom_content_router)
 
 
 # --- SINGLETON INSTANCES ---
@@ -206,6 +208,22 @@ async def websocket_endpoint(websocket: WebSocket):
                 await room_manager.add_bot_to_room(user, payload.get("room_id"), connection_manager)
             elif action == "remove_bot":
                 await room_manager.remove_bot_from_room(user, payload.get("room_id"), payload.get("bot_id"), connection_manager)
+            elif action == "set_bot_personality":
+                await room_manager.set_bot_personality(
+                    user,
+                    payload.get("room_id"),
+                    payload.get("bot_id"),
+                    payload.get("personality"),
+                    connection_manager,
+                )
+            elif action == "set_bot_depth":
+                await room_manager.set_bot_depth(
+                    user,
+                    payload.get("room_id"),
+                    payload.get("bot_id"),
+                    payload.get("depth"),
+                    connection_manager,
+                )
             
             # 'request_view' is gone.
                 

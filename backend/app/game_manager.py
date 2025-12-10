@@ -3,6 +3,8 @@ The GameManager singleton.
 """
 
 import asyncio
+import copy
+from pathlib import Path
 from typing import Dict, List, Optional, Any
 from .connection_manager import ConnectionManager
 from typing import TYPE_CHECKING
@@ -12,7 +14,9 @@ if TYPE_CHECKING:
 from .server_models import User, Room, GameParticipant, PlayerStatus as ServerPlayerStatus
 from game_core import GameSession, GamePhase, PlayerStatus
 from game_core.session import InvalidActionError
+from game_core.data_loader import GameDataLoader
 from .routers import fake_games_db 
+from .custom_content import CUSTOM_THREATS_DIR
 from .bot_planner import BotPlanner
 from asyncio import Task
 
@@ -42,7 +46,7 @@ class GameManager:
                 return room
         return None
 
-    async def create_game(self, game_id: str, participants: List[GameParticipant]):
+    async def create_game(self, game_id: str, participants: List[GameParticipant], bot_depth: Optional[int] = None):
         """
         Creates a new GameInstance and stores it.
         """
@@ -51,13 +55,37 @@ class GameManager:
             
         try:
             # 1. Create the instance (synchronous)
-            session_players = [{"id": p.user.id, "username": p.user.username, "is_bot": getattr(p.user, "is_bot", False)} for p in participants]
-            game = GameSession(game_id, session_players)
+            session_players = [
+                {
+                    "id": p.user.id,
+                    "username": p.user.username,
+                    "is_bot": getattr(p.user, "is_bot", False),
+                    "personality": getattr(p.user, "personality", "greedy"),
+                }
+                for p in participants
+            ]
+            # Determine threats file based on active selection
+            threats_file = None
+            bosses_file = None
+            from .custom_content import _content_state
+            state = _content_state()
+            active_threat = state.get("active_threat_deck", "default")
+            active_boss = state.get("active_boss_deck", "default")
+            if active_threat != "default":
+                candidate = Path(CUSTOM_THREATS_DIR) / f"{active_threat}.json"
+                threats_file = str(candidate)
+            if active_boss != "default":
+                candidate = Path(CUSTOM_THREATS_DIR) / f"{active_boss}.json"
+                bosses_file = str(candidate)
+            loader = GameDataLoader(threats_file=threats_file, bosses_file=bosses_file)
+            game = GameSession(game_id, session_players, data_loader=loader)
             # 2. Perform async setup (draw resources, start first round)
             await game.async_setup()
             
             self.active_games[game_id] = game
             self.bot_lookup[game_id] = [p.user.id for p in participants if getattr(p.user, "is_bot", False)]
+            if bot_depth is not None and isinstance(bot_depth, int):
+                self.bot_planner.max_depth = max(1, min(5, bot_depth))
             print(f"GameInstance {game_id} created with {len(participants)} players.")
             
             # --- Broadcast initial state to all players ---
@@ -353,16 +381,19 @@ class GameManager:
             try:
                 # Yield to event loop so recent broadcasts flush before heavy planning
                 await asyncio.sleep(0)
-                plan = await self.bot_planner.plan(game, active_id)
+                player = game.state.players.get(active_id)
+                personality = getattr(player, "personality", "greedy") if player else "greedy"
+                plan = await self.bot_planner.plan(game, active_id, personality=personality)
                 if plan.get("logs"):
-                    game.state.bot_logs.extend(plan["logs"])
-                    game.state.bot_logs = game.state.bot_logs[-500:]
+                    game.state.add_bot_logs(active_id, plan["logs"])
                 if plan.get("simulations") is not None:
                     base_id = len(game.state.bot_runs) + 1
                     sims_with_ids = []
                     for idx, sim in enumerate(plan["simulations"], start=0):
                         sim = dict(sim)
                         sim["id"] = base_id + idx
+                        sim["bot_id"] = active_id
+                        sim["bot_name"] = game.state.players.get(active_id).username if game.state.players.get(active_id) else active_id
                         sims_with_ids.append(sim)
                     game.state.bot_runs.extend(sims_with_ids)
                     game.state.bot_runs = game.state.bot_runs[-50:]
@@ -376,12 +407,10 @@ class GameManager:
                             active_id, action["type"], action.get("payload") or {}, None
                         )
                     except InvalidActionError as e:
-                        game.state.bot_logs.append(f"[planner] Invalid {action['type']}: {e}")
-                        game.state.bot_logs = game.state.bot_logs[-500:]
+                        game.state.add_bot_log(active_id, f"[planner] Invalid {action['type']}: {e}")
                         continue
                     except Exception as e:
-                        game.state.bot_logs.append(f"[planner] Error {action['type']}: {e}")
-                        game.state.bot_logs = game.state.bot_logs[-500:]
+                        game.state.add_bot_log(active_id, f"[planner] Error {action['type']}: {e}")
                         break
                     if state_changed:
                         if game.state.phase == GamePhase.GAME_OVER:
@@ -394,8 +423,7 @@ class GameManager:
                 if not end_seen:
                     try:
                         state_changed = await game.player_action(active_id, "end_turn", {}, None)
-                        game.state.bot_logs.append("[planner] Forced end_turn fallback.")
-                        game.state.bot_logs = game.state.bot_logs[-500:]
+                        game.state.add_bot_log(active_id, "[planner] Forced end_turn fallback.")
                         if state_changed:
                             if game.state.phase == GamePhase.GAME_OVER:
                                 await self._handle_game_over(game_id, game.state)
@@ -403,8 +431,7 @@ class GameManager:
                                 return
                             await self.broadcast_game_state(game_id)
                     except Exception as e:
-                        game.state.bot_logs.append(f"[planner] Error end_turn fallback: {e}")
-                        game.state.bot_logs = game.state.bot_logs[-500:]
+                        game.state.add_bot_log(active_id, f"[planner] Error end_turn fallback: {e}")
                         break
             except Exception as e:
                 print(f"Bot error in game {game_id}: {e}")

@@ -1,44 +1,310 @@
 {
-  "bosses": [
+  "day_threats": [
     {
-      "id": "boss-day",
-      "name": "The Sowvereign",
-      "vp": 6,
-      "era": "day",
-      "thresholds": [
-        { "label": "6R Tribute", "cost": { "R": 6, "B": 0, "G": 0 }, "reward": "3 VP" },
-        { "label": "8B Tribute", "cost": { "R": 0, "B": 8, "G": 0 }, "reward": "Weapon Slot + Draw 1 weapon for free" },
-        { "label": "10G Tribute", "cost": { "R": 0, "B": 0, "G": 10 }, "reward": "4 VP + Wild token x2" }
-      ],
-      "image": "boss-the-sowvereign.jpg"
+      "id": "day-feral-1",
+      "name": "Wary Boar",
+      "type": "Feral",
+      "cost": {
+        "R": 8,
+        "B": 0,
+        "G": 1
+      },
+      "vp": 2,
+      "reward": "",
+      "copies": 2,
+      "image": "threat-wary-boar.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "ATTACK"
+        },
+        {
+          "kind": "token",
+          "token": "CONVERSION",
+          "amount": 1
+        }
+      ]
     },
     {
-      "id": "boss-night",
-      "name": "Boarliament of Doom",
-      "vp": 8,
-      "era": "night",
-      "thresholds": [
-        { "label": "10R", "cost": { "R": 10, "B": 0, "G": 0 }, "reward": "4 VP" },
-        { "label": "10B", "cost": { "R": 0, "B": 8, "G": 0 }, "reward": "Ignore 2 wounds" },
-        { "label": "12G", "cost": { "R": 0, "B": 0, "G": 12 }, "reward": "6 VP" }
-      ],
-      "image": "boss-boarliament-of-doom.jpg"
+      "id": "day-cunning-1",
+      "name": "Clever Piglet",
+      "type": "Cunning",
+      "cost": {
+        "R": 3,
+        "B": 7,
+        "G": 0
+      },
+      "vp": 3,
+      "reward": "",
+      "copies": 4,
+      "image": "threat-clever-piglet.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 2,
+          "token": "CONVERSION"
+        }
+      ]
+    },
+    {
+      "id": "day-massive-1",
+      "name": "Sturdy Swine",
+      "type": "Massive",
+      "cost": {
+        "R": 0,
+        "B": 2,
+        "G": 8
+      },
+      "vp": 3,
+      "reward": "",
+      "copies": 4,
+      "image": "threat-sturdy-swine.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "MASS"
+        },
+        {
+          "kind": "token",
+          "token": "WILD",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "day-hybrid-1",
+      "name": "Elusive Forager",
+      "type": "Hybrid",
+      "cost": {
+        "R": 4,
+        "B": 4,
+        "G": 3
+      },
+      "vp": 3,
+      "reward": "",
+      "copies": 4,
+      "image": "threat-elusive-forager.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "CONVERSION"
+        },
+        {
+          "kind": "token",
+          "token": "WILD",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "day-feral-2",
+      "name": "Razorback",
+      "type": "Feral",
+      "cost": {
+        "R": 10,
+        "B": 1,
+        "G": 0
+      },
+      "vp": 3,
+      "reward": "",
+      "copies": 2,
+      "image": "threat-razorback.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 2,
+          "token": "ATTACK"
+        }
+      ]
+    },
+    {
+      "id": "day-feral-3",
+      "name": "Territorial Sow",
+      "type": "Feral",
+      "cost": {
+        "R": 7,
+        "B": 3,
+        "G": 0
+      },
+      "vp": 2,
+      "reward": "",
+      "copies": 2,
+      "image": "threat-territorial-sow-fallen-fruit.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 2,
+          "token": "WILD"
+        }
+      ]
+    },
+    {
+      "id": "day-feral-4",
+      "name": "Scrabbling Piglet",
+      "type": "Feral",
+      "cost": {
+        "R": 6,
+        "B": 0,
+        "G": 0
+      },
+      "vp": 1,
+      "reward": "",
+      "copies": 2,
+      "image": "threat-scrabbling-piglet-fallen-fruit.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "WILD"
+        },
+        {
+          "kind": "resource",
+          "resources": {
+            "B": 1,
+            "G": 1
+          }
+        }
+      ]
     }
   ],
-  "day_threats": [
-    { "id": "day-feral-1", "name": "Wary Boar", "type": "Feral", "cost": { "R": 8, "B": 0, "G": 1 }, "vp": 2, "reward": "Attack token x1", "copies": 2, "image": "threat-wary-boar.jpg" },
-    { "id": "day-cunning-1", "name": "Clever Piglet", "type": "Cunning", "cost": { "R": 3, "B": 7, "G": 0 }, "vp": 3, "reward": "Conversion token x1", "copies": 4, "image": "threat-clever-piglet.jpg" },
-    { "id": "day-massive-1", "name": "Sturdy Swine", "type": "Massive", "cost": { "R": 0, "B": 2, "G": 8 }, "vp": 3, "reward": "Mass token x1", "copies": 4, "image": "threat-sturdy-swine.jpg" },
-    { "id": "day-hybrid-1", "name": "Elusive Forager", "type": "Hybrid", "cost": { "R": 4, "B": 4, "G": 3 }, "vp": 4, "reward": "Wild token x2", "copies": 4, "image": "threat-elusive-forager.jpg" },
-    { "id": "day-feral-2", "name": "Razorback", "type": "Feral", "cost": { "R": 10, "B": 1, "G": 0 }, "vp": 4, "reward": "Attack token x1", "copies": 2, "image": "threat-razorback.jpg" },
-    { "id": "day-feral-3", "name": "Territorial Sow", "type": "Feral", "cost": { "R": 8, "B": 1, "G": 0 }, "vp": 2, "reward": "Attack token x1", "copies": 2, "image": "threat-territorial-sow-fallen-fruit.jpg" },
-    { "id": "day-feral-4", "name": "Scrabbling Piglet", "type": "Feral", "cost": { "R": 6, "B": 0, "G": 0 }, "vp": 1, "reward": "Wild token x1", "copies": 2, "image": "threat-scrabbling-piglet-fallen-fruit.jpg" }
-  ],
   "night_threats": [
-    { "id": "night-cunning-1", "name": "Cunning Matriarch", "type": "Cunning", "cost": { "R": 3, "B": 11, "G": 0 }, "vp": 5, "reward": "Conversion token x2", "copies": 4, "image": "threat-cunning-matriarch.jpg" },
-    { "id": "night-massive-1", "name": "Plated Brute", "type": "Massive", "cost": { "R": 0, "B": 4, "G": 12 }, "vp": 6, "reward": "Mass token x2", "copies": 4, "image": "threat-plated-brute.jpg" },
-    { "id": "night-feral-1", "name": "Aggressive Boar", "type": "Feral", "cost": { "R": 14, "B": 0, "G": 2 }, "vp": 7, "reward": "Wild token x3", "copies": 4, "image": "threat-aggressive-boar.jpg" },
-    { "id": "night-hybrid-1", "name": "Stalking Boar", "type": "Hybrid", "cost": { "R": 9, "B": 9, "G": 5 }, "vp": 6, "reward": "Wild token x2", "copies": 4, "image": "threat-stalking-boar.jpg" },
-    { "id": "night-massive-2", "name": "Brute Boar", "type": "Massive", "cost": { "R": 3, "B": 2, "G": 13 }, "vp": 6, "reward": "Weapon Slot", "copies": 4, "image": "threat-brute-boar.jpg" }
+    {
+      "id": "night-cunning-1",
+      "name": "Cunning Matriarch",
+      "type": "Cunning",
+      "cost": {
+        "R": 3,
+        "B": 11,
+        "G": 0
+      },
+      "vp": 5,
+      "reward": "",
+      "copies": 4,
+      "image": "threat-cunning-matriarch.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 2,
+          "token": "conversion",
+          "slot_type": null,
+          "resources": {
+            "R": 0,
+            "B": 0,
+            "G": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "night-massive-1",
+      "name": "Plated Brute",
+      "type": "Massive",
+      "cost": {
+        "R": 0,
+        "B": 4,
+        "G": 12
+      },
+      "vp": 6,
+      "reward": "",
+      "copies": 4,
+      "image": "threat-plated-brute.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 2,
+          "token": "mass",
+          "slot_type": null,
+          "resources": {
+            "R": 0,
+            "B": 0,
+            "G": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "night-feral-1",
+      "name": "Aggressive Boar",
+      "type": "Feral",
+      "cost": {
+        "R": 14,
+        "B": 0,
+        "G": 2
+      },
+      "vp": 7,
+      "reward": "",
+      "copies": 4,
+      "image": "threat-aggressive-boar.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 3,
+          "token": "wild",
+          "slot_type": null,
+          "resources": {
+            "R": 0,
+            "B": 0,
+            "G": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "night-hybrid-1",
+      "name": "Stalking Boar",
+      "type": "Hybrid",
+      "cost": {
+        "R": 9,
+        "B": 9,
+        "G": 5
+      },
+      "vp": 6,
+      "reward": "",
+      "copies": 4,
+      "image": "threat-stalking-boar.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 2,
+          "token": "wild",
+          "slot_type": null,
+          "resources": {
+            "R": 0,
+            "B": 0,
+            "G": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "night-massive-2",
+      "name": "Brute Boar",
+      "type": "Massive",
+      "cost": {
+        "R": 3,
+        "B": 2,
+        "G": 13
+      },
+      "vp": 6,
+      "reward": "",
+      "copies": 4,
+      "image": "threat-brute-boar.jpg",
+      "spoils": [
+        {
+          "kind": "slot",
+          "amount": 1,
+          "token": null,
+          "slot_type": "weapon",
+          "resources": {
+            "R": 0,
+            "B": 0,
+            "G": 0
+          }
+        }
+      ]
+    }
   ]
 }

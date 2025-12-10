@@ -230,7 +230,6 @@ class RoomManager:
                 fake_users_db[p.id].game_ids.append(game_record_id)
 
         room.status = "in_game"
-        
         # GameManager will send 'game_state_update'.
         # Clients' <StateGuard> will handle navigation.
         await self.game_manager.create_game(game_record_id, participants)
@@ -335,6 +334,11 @@ class RoomManager:
 
     def get_room_dump(self, room: Room) -> dict:
         """Helper to get the dictionary representation of a room, enriched with game details."""
+        if not hasattr(room, "meta"):
+            try:
+                object.__setattr__(room, "meta", {})
+            except Exception:
+                pass
         room_dump = room.model_dump()
         if room.status == "in_game" and room.game_record_id in fake_games_db:
             record = fake_games_db[room.game_record_id]
@@ -421,7 +425,7 @@ class RoomManager:
             return
 
         bot_id = f"bot_{uuid.uuid4().hex[:6]}"
-        bot_user = User(id=bot_id, username=bot_id, is_bot=True)
+        bot_user = User(id=bot_id, username=bot_id, is_bot=True, personality="greedy", bot_depth=2)
         room.players.append(bot_user)
         fake_users_db[bot_id] = bot_user
         print(f"Bot {bot_id} added to room {room_id}.")
@@ -441,4 +445,56 @@ class RoomManager:
             await manager.send_to_user(host.id, {"type": "error", "payload": {"message": "Bot not found."}})
             return
         print(f"Bot {bot_id} removed from room {room_id}.")
+        await self.broadcast_room_state(room_id, manager)
+
+    async def set_bot_personality(self, host: User, room_id: str, bot_id: str, personality: str, manager: ConnectionManager):
+        """Host can set a bot's personality before the game starts."""
+        room = self.rooms.get(room_id)
+        if not room or room.status != "lobby":
+            return
+        if room.host_id != host.id:
+            await manager.send_to_user(host.id, {"type": "error", "payload": {"message": "Only host can configure bots."}})
+            return
+        allowed = {"greedy", "top3", "softmax5"}
+        if personality not in allowed:
+            await manager.send_to_user(host.id, {"type": "error", "payload": {"message": "Invalid personality."}})
+            return
+        updated = False
+        for idx, p in enumerate(room.players):
+            if p.id == bot_id and p.is_bot:
+                room.players[idx].personality = personality
+                updated = True
+                break
+        if bot_id in fake_users_db and getattr(fake_users_db[bot_id], "is_bot", False):
+            fake_users_db[bot_id].personality = personality
+            updated = True
+        if updated:
+            print(f"Bot {bot_id} personality set to {personality} in room {room_id}.")
+            await self.broadcast_room_state(room_id, manager)
+        else:
+            await manager.send_to_user(host.id, {"type": "error", "payload": {"message": "Bot not found."}})
+
+    async def set_bot_depth(self, host: User, room_id: str, bot_id: str, depth: int, manager: ConnectionManager):
+        """Host sets the bot lookahead depth for a specific bot."""
+        room = self.rooms.get(room_id)
+        if not room or room.status != "lobby":
+            return
+        if room.host_id != host.id:
+            await manager.send_to_user(host.id, {"type": "error", "payload": {"message": "Only host can configure bots."}})
+            return
+        if not bot_id:
+            await manager.send_to_user(host.id, {"type": "error", "payload": {"message": "Bot not found."}})
+            return
+        bot = next((p for p in room.players if p.id == bot_id and p.is_bot), None)
+        if not bot:
+            await manager.send_to_user(host.id, {"type": "error", "payload": {"message": "Bot not found."}})
+            return
+        try:
+            depth_int = int(depth)
+        except Exception:
+            depth_int = 2
+        depth_int = max(1, min(5, depth_int))
+        bot.bot_depth = depth_int
+        if bot_id in fake_users_db:
+            fake_users_db[bot_id].bot_depth = depth_int
         await self.broadcast_room_state(room_id, manager)

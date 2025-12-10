@@ -21,7 +21,6 @@ class TokenType(str, Enum):
     CONVERSION = "conversion"
     MASS = "mass"
     WILD = "wild"
-    BOSS = "boss"
 
 
 class CardType(str, Enum):
@@ -84,26 +83,48 @@ class Reward:
     amount: int = 0
     token: Optional[TokenType] = None
     slot_type: Optional[str] = None  # "upgrade" or "weapon"
+    resources: Optional[Dict[ResourceType, int]] = None
 
     def apply(self, player: "PlayerBoard"):
+        # Normalize token if stored as string
+        tok = self.token
+        if isinstance(tok, str):
+            try:
+                # Try by value (lower) then by name (upper)
+                tok = TokenType(tok.lower())
+            except Exception:
+                try:
+                    tok = TokenType[tok.upper()]
+                except Exception:
+                    tok = None
         if self.kind == "vp":
             player.vp += self.amount
         elif self.kind == "heal_wound":
             player.wounds = max(0, player.wounds - self.amount)
-        elif self.kind == "token" and self.token:
-            player.tokens[self.token] = player.tokens.get(self.token, 0) + self.amount
+        elif self.kind == "token" and tok:
+            player.tokens[tok] = player.tokens.get(tok, 0) + self.amount
         elif self.kind == "slot" and self.slot_type:
             if self.slot_type == "upgrade":
                 player.upgrade_slots = min(4, player.upgrade_slots + self.amount)
             elif self.slot_type == "weapon":
                 player.weapon_slots = min(4, player.weapon_slots + self.amount)
+        elif self.kind == "resource" and self.resources:
+            for res, amt in self.resources.items():
+                player.resources[res] = player.resources.get(res, 0) + max(0, amt)
 
     def to_public_dict(self) -> Dict[str, Any]:
+        resources_payload = None
+        if self.resources:
+            try:
+                resources_payload = resource_to_wire(self.resources)
+            except Exception:
+                resources_payload = None
         return {
           "kind": self.kind,
           "amount": self.amount,
           "token": self.token.value if self.token else None,
           "slot_type": self.slot_type,
+          "resources": resources_payload,
           "label": self.label,
         }
 
@@ -116,7 +137,18 @@ class Reward:
         if self.kind == "slot" and self.slot_type:
             return f"{self.slot_type.capitalize()} Slot"
         if self.kind == "token" and self.token:
-            return f"{self.token.value.capitalize()} Token x{self.amount}"
+            name = (
+                self.token.value.capitalize()
+                if isinstance(self.token, TokenType)
+                else str(self.token).capitalize()
+            )
+            return f"{name} Token x{self.amount}"
+        if self.kind == "resource" and self.resources:
+            parts = []
+            for res, amt in (self.resources or {}).items():
+                if amt:
+                    parts.append(f"{amt}{res.value}")
+            return "Resources: " + " ".join(parts)
         return "Reward"
 
 @dataclass
@@ -224,6 +256,7 @@ class PlayerBoard:
     user_id: str
     username: str
     is_bot: bool = False
+    personality: str = "greedy"
     stance: Stance = Stance.BALANCED
     turn_initial_stance: Stance = Stance.BALANCED
     resources: Dict[ResourceType, int] = field(default_factory=empty_resources)
@@ -278,6 +311,7 @@ class PlayerBoard:
             "user_id": self.user_id,
             "username": self.username,
             "is_bot": self.is_bot,
+            "personality": self.personality,
             "stance": self.stance.value,
             "turn_initial_stance": self.turn_initial_stance.value,
             "resources": resource_to_wire(self.resources),
@@ -300,6 +334,7 @@ class PlayerBoard:
 @dataclass
 class GameState:
     game_id: str
+    verbose: bool = True
     players: Dict[str, PlayerBoard] = field(default_factory=dict)
     threat_rows: List[List[ThreatCard]] = field(default_factory=list)
     boss: Optional[BossCard] = None
@@ -316,13 +351,40 @@ class GameState:
     turn_order: List[str] = field(default_factory=list)
     active_player_index: int = 0
     log: List[str] = field(default_factory=list)
-    bot_logs: List[str] = field(default_factory=list)
+    bot_logs: Dict[str, List[str]] = field(default_factory=dict)
     bot_runs: List[Dict[str, Any]] = field(default_factory=list)
     winner_id: Optional[str] = None
 
     def add_log(self, message: str):
+        if not self.verbose:
+            return
         self.log.append(message)
         print(f"[{self.game_id}] {message}")
+
+    def add_bot_log(self, bot_id: str, message: str):
+        if not self.verbose:
+            return
+        logs = self.bot_logs.setdefault(bot_id, [])
+        logs.append(message)
+        if len(logs) > 200:
+            self.bot_logs[bot_id] = logs[-200:]
+
+    def add_bot_logs(self, bot_id: str, entries: List[str]):
+        if not self.verbose:
+            return
+        for entry in entries or []:
+            self.add_bot_log(bot_id, entry)
+
+    def add_bot_log(self, bot_id: str, message: str):
+        """Store planner logs per bot and keep them trimmed."""
+        logs = self.bot_logs.setdefault(bot_id, [])
+        logs.append(message)
+        if len(logs) > 200:
+            self.bot_logs[bot_id] = logs[-200:]
+
+    def add_bot_logs(self, bot_id: str, entries: List[str]):
+        for entry in entries or []:
+            self.add_bot_log(bot_id, entry)
 
     def get_active_player_id(self) -> Optional[str]:
         if not self.turn_order:
@@ -349,7 +411,7 @@ class GameState:
             "era": self.era,
             "market": self.market.to_public_dict(),
             "log": self.log[-50:],
-            "bot_logs": self.bot_logs[-200:],
+            "bot_logs": {pid: logs[-200:] for pid, logs in self.bot_logs.items()},
             "bot_runs": self.bot_runs[-50:],
             "winner_id": self.winner_id,
             "viewer": viewer_id,

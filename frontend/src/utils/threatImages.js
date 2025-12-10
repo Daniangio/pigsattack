@@ -1,4 +1,6 @@
-const threatGlobs = import.meta.glob("../images/cards/threats/*.{jpg,png}", { eager: true });
+const threatGlobs = import.meta.glob("../images/cards/threats/*.{jpg,jpeg,png,webp}", { eager: true });
+
+const apiBase = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 const threatImageMap = Object.fromEntries(
   Object.entries(threatGlobs).map(([path, mod]) => {
@@ -11,7 +13,9 @@ export const getThreatImage = (imageName) => {
   if (!imageName) return null;
   const key = imageName.toLowerCase();
   if (threatImageMap[key]) return threatImageMap[key];
-  const base = key.replace(/\.(jpg|png)$/i, "");
+  const base = key.replace(/\.(jpg|jpeg|png|webp)$/i, "");
   const found = Object.entries(threatImageMap).find(([k]) => k.startsWith(base));
-  return found ? found[1] : null;
+  if (found) return found[1];
+  // Fallback: fetch from custom uploads served by the backend
+  return `${apiBase}/api/custom/threat-images/file/${encodeURIComponent(imageName)}`;
 };

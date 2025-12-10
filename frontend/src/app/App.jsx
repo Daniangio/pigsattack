@@ -17,6 +17,8 @@ import RoomPage from "../pages/RoomPage.jsx";
 import GamePage from "../pages/GamePage.jsx";
 import ProfilePage from "../pages/ProfilePage.jsx";
 import PostGamePage from "../pages/PostGamePage.jsx";
+import ThreatForgePage from "../pages/ThreatForgePage.jsx";
+import ThreatDeckEditPage from "../pages/ThreatDeckEditPage.jsx";
 
 /**
  * This component enforces the core navigation rules.
@@ -185,6 +187,14 @@ function AppContent() {
       <Route
         path="/post-game/:gameId"
         element={token ? <PostGamePage /> : <Navigate to="/auth" />}
+      />
+      <Route
+        path="/forge/threats"
+        element={token ? <ThreatForgePage /> : <Navigate to="/auth" />}
+      />
+      <Route
+        path="/forge/threats/:deckName"
+        element={token ? <ThreatDeckEditPage /> : <Navigate to="/auth" />}
       />
 
       {/* Default route */}

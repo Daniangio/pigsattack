@@ -106,6 +106,13 @@ const LobbyPage = ({ onLogout }) => { // --- REFACTOR: Added roomState ---
           <button onClick={handleViewProfile} className={btnSecondary}>
             Profile
           </button>
+          <button
+            onClick={() => navigate("/forge/threats")}
+            className={btnInfoAlt}
+            title="Create or edit custom threats decks"
+          >
+            Threat Forge
+          </button>
           <button onClick={onLogout} className={btnDanger}>
             Logout
           </button>
@@ -121,6 +128,8 @@ const LobbyPage = ({ onLogout }) => { // --- REFACTOR: Added roomState ---
           <form onSubmit={handleCreateRoom} className="flex gap-2 mb-4">
             <input
               type="text"
+              name="room_name"
+              id="room_name"
               value={newRoomName}
               onChange={(e) => setNewRoomName(e.target.value)}
               placeholder="New room name..."

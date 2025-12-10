@@ -76,6 +76,28 @@ const RoomPage = ({ onLogout }) => {
     sendMessage({ action: "remove_bot", payload: { room_id: roomId, bot_id: bot.id } });
   };
 
+  const handleSetBotPersonality = (botId, personality) => {
+    if (!sendMessage || !isHost) return;
+    sendMessage({
+      action: "set_bot_personality",
+      payload: { room_id: roomId, bot_id: botId, personality },
+    });
+  };
+
+  const handleSetBotDepth = (botId, depth) => {
+    if (!sendMessage || !isHost) return;
+    sendMessage({
+      action: "set_bot_depth",
+      payload: { room_id: roomId, bot_id: botId, depth: Number(depth) },
+    });
+  };
+
+  const personalityOptions = [
+    { value: "greedy", label: "Greedy (best)" },
+    { value: "top3", label: "Top 3 (uniform)" },
+    { value: "softmax5", label: "Top 5 (softmax)" },
+  ];
+
   return (
     <div className="animate-fade-in">
       <header className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
@@ -105,13 +127,48 @@ const RoomPage = ({ onLogout }) => {
           <ul className="space-y-2">
             {roomState.players.map((p) => (
               <li key={p.id} className="p-3 bg-gray-700 border border-gray-600 rounded-md text-gray-200">
-                {p.username}
-                {p.id === roomState.host_id && (
-                  <span className="ml-2 text-xs font-bold text-orange-400">(Host)</span>
-                )}
-                {p.id === user.id && (
-                  <span className="ml-2 text-xs font-medium text-gray-400">(You)</span>
-                )}
+                <div className="flex items-center justify-between gap-3">
+                  <div className="space-x-2">
+                    <span>{p.username}</span>
+                    {p.id === roomState.host_id && (
+                      <span className="text-xs font-bold text-orange-400">(Host)</span>
+                    )}
+                    {p.id === user.id && (
+                      <span className="text-xs font-medium text-gray-400">(You)</span>
+                    )}
+                    {p.is_bot && (
+                      <span className="text-xs font-semibold text-blue-300">
+                        Bot • {p.personality || "greedy"} • Depth {p.bot_depth ?? 2}
+                      </span>
+                    )}
+                  </div>
+                  {p.is_bot && isHost && (
+                    <div className="flex flex-wrap gap-2">
+                      <select
+                        className="text-sm bg-gray-800 border border-gray-600 rounded px-2 py-1 text-gray-100"
+                        value={p.personality || "greedy"}
+                        onChange={(e) => handleSetBotPersonality(p.id, e.target.value)}
+                      >
+                        {personalityOptions.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        className="text-sm bg-gray-800 border border-gray-600 rounded px-2 py-1 text-gray-100"
+                        value={p.bot_depth ?? 2}
+                        onChange={(e) => handleSetBotDepth(p.id, e.target.value)}
+                      >
+                        {[1, 2, 3, 4, 5].map((d) => (
+                          <option key={d} value={d}>
+                            Depth {d}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
               </li>
             ))}
           </ul>

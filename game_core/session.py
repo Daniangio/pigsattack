@@ -19,9 +19,9 @@ class GameSession:
     Domain-level game session independent from any transport layer.
     """
 
-    def __init__(self, game_id: str, players: List[Dict[str, str]], data_loader: Optional[GameDataLoader] = None):
+    def __init__(self, game_id: str, players: List[Dict[str, str]], data_loader: Optional[GameDataLoader] = None, verbose: bool = True):
         self.data_loader = data_loader or GameDataLoader()
-        self.state = GameState(game_id=game_id)
+        self.state = GameState(game_id=game_id, verbose=verbose)
         self.threat_manager: Optional[ThreatManager] = None
         self.rng = random.Random()
         for p in players:
@@ -29,10 +29,26 @@ class GameSession:
                 user_id=p["id"],
                 username=p["username"],
                 is_bot=bool(p.get("is_bot")),
+                personality=p.get("personality") or "greedy",
             )
             self.state.players[p["id"]] = board
             self.state.turn_order.append(p["id"])
         self._update_deck_remaining()
+
+    def clone_quiet(self) -> "GameSession":
+        """Create a lightweight clone for simulations: shallow-copy immutable assets, deep-copy mutable state."""
+        clone = GameSession(
+            self.state.game_id,
+            [],
+            data_loader=self.data_loader,  # shared static data
+            verbose=False,
+        )
+        # Copy state deeply to avoid cross-mutation
+        clone.state = copy.deepcopy(self.state)
+        clone.state.verbose = False
+        clone.threat_manager = copy.deepcopy(self.threat_manager)
+        clone.rng = random.Random()
+        return clone
 
     def _card_effects(self, card: Any) -> List[CardEffect]:
         """
@@ -199,20 +215,27 @@ class GameSession:
         return thresholds
 
     async def _start_boss_phase(self, stage: str):
-        boss = self._boss_card_for_stage(stage)
-        self.state.boss_stage = stage or "day"
+        # Always play Day boss first, then Night boss, regardless of deck phase drift.
+        stage_to_use = "day" if self.state.boss_index == 0 else "night"
+        self.state.era = stage_to_use
+        self.state.boss_stage = stage_to_use
+        boss = self._boss_card_for_stage(stage_to_use)
         if not boss:
-            # No boss: proceed directly to next stage
-            if stage == "day":
+            # No boss for this stage: advance directly to the next era or end.
+            if stage_to_use == "day":
                 await self._start_night_after_boss()
             else:
                 await self._check_game_over(force=True)
             return
+        # Align deck phase with the boss stage to keep effects consistent.
+        if self.threat_manager and self.threat_manager.deck:
+            self.threat_manager.deck.phase = stage_to_use
+            self._sync_era_from_deck()
         self.state.boss = boss
         self.state.boss_mode = True
         self.state.phase = GamePhase.BOSS
         self.state.boss_thresholds_state = self._build_boss_threshold_state(boss)
-        self.state.add_log(f"{stage.capitalize()} boss {boss.name} emerges!")
+        self.state.add_log(f"{stage_to_use.capitalize()} boss {boss.name} emerges!")
         self.state.active_player_index = 0
         # Clear threats display during boss
         self.state.threat_rows = []
@@ -224,7 +247,9 @@ class GameSession:
         self.state.boss_mode = False
         self.state.phase = GamePhase.ROUND_START
         self.state.boss_thresholds_state = []
-        if stage == "day":
+        finished_index = self.state.boss_index
+        self.state.boss_index = finished_index + 1
+        if finished_index == 0:
             await self._start_night_after_boss()
         else:
             # Night boss ends the game
@@ -249,6 +274,7 @@ class GameSession:
         self.state.boss_stage = "night"
         self.state.boss = self._boss_card_for_stage("night")
         self.state.round = 1
+        self._update_deck_remaining()
         await self._start_round()
 
     async def _end_round(self):
@@ -544,7 +570,6 @@ class GameSession:
                 "conversion": TokenType.CONVERSION,
                 "wild": TokenType.WILD,
                 "mass": TokenType.MASS,
-                "boss": TokenType.BOSS,
             }
             token_type = token_map.get(token_raw)
             if not token_type:
@@ -699,7 +724,6 @@ class GameSession:
             "+Conversion": TokenType.CONVERSION,
             "+Wild": TokenType.WILD,
             "+Mass": TokenType.MASS,
-            "Boss Token": TokenType.BOSS,
         }
         token_type = reward_map.get(reward)
         if token_type:
