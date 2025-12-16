@@ -16,7 +16,8 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/token")
 
 SECRET_KEY = settings.SECRET_KEY
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+# Use the configured lifetime (default: see backend/app/config.py)
+ACCESS_TOKEN_EXPIRE_MINUTES = settings.ACCESS_TOKEN_EXPIRE_MINUTES
 
 def get_password_hash(password: str) -> str:
     """Hash a password using bcrypt"""
@@ -46,10 +47,8 @@ def authenticate_user(db: dict, username: str, password: str):
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     """Creates a new JWT access token."""
     to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.now(timezone.utc) + expires_delta
-    else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=15)
+    lifetime = expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = datetime.now(timezone.utc) + lifetime
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt

@@ -11,6 +11,7 @@ export default function ThreatForgePage() {
   const [activeDeck, setActiveDeck] = useState("default");
   const [loading, setLoading] = useState(true);
   const [newName, setNewName] = useState("");
+  const [newEmptyName, setNewEmptyName] = useState("");
   const [error, setError] = useState(null);
 
   const headers = token ? { Authorization: `Bearer ${token}` } : {};
@@ -66,6 +67,27 @@ export default function ThreatForgePage() {
     }
   };
 
+  const createEmptyDeck = async () => {
+    if (!newEmptyName.trim()) return;
+    try {
+      const target = newEmptyName.trim();
+      const template = {
+        day_threats: [],
+        night_threats: [],
+        bosses: [],
+      };
+      await fetch(`${apiBase}/api/custom/threat-decks/${target}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...headers },
+        body: JSON.stringify(template),
+      });
+      setNewEmptyName("");
+      fetchData();
+    } catch (e) {
+      setError("Failed to create deck");
+    }
+  };
+
   if (loading) return <div className="text-slate-300">Loading...</div>;
 
   return (
@@ -81,6 +103,24 @@ export default function ThreatForgePage() {
       </div>
       {error && <div className="text-rose-400 text-sm">{error}</div>}
       <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 space-y-3">
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={newEmptyName}
+              onChange={(e) => setNewEmptyName(e.target.value)}
+              placeholder="New empty deck name"
+              className="px-3 py-2 rounded-md bg-slate-800 border border-slate-700 text-slate-200 text-sm"
+            />
+            <button
+              onClick={createEmptyDeck}
+              className="px-3 py-2 rounded-md border border-emerald-400 text-emerald-200 text-[12px] uppercase tracking-[0.12em] hover:bg-emerald-400/10"
+            >
+              Create Empty Deck
+            </button>
+          </div>
+          <div className="text-xs text-slate-400">Default deck is read-only</div>
+        </div>
         <div className="grid gap-2">
           {decks.map((deck) => (
             <div
@@ -117,12 +157,18 @@ export default function ThreatForgePage() {
                 >
                   {activeDeck === deck.name ? "Active" : "Use"}
                 </button>
-                <Link
-                  to={`/forge/threats/${deck.name}`}
-                  className="px-2 py-1 rounded-md border border-blue-400 text-blue-200 text-[11px] uppercase tracking-[0.12em] hover:bg-blue-400/10"
-                >
-                  Edit
-                </Link>
+                {deck.editable ? (
+                  <Link
+                    to={`/forge/threats/${deck.name}`}
+                    className="px-2 py-1 rounded-md border border-blue-400 text-blue-200 text-[11px] uppercase tracking-[0.12em] hover:bg-blue-400/10"
+                  >
+                    Edit
+                  </Link>
+                ) : (
+                  <span className="px-2 py-1 rounded-md border border-slate-700 text-slate-400 text-[11px] uppercase tracking-[0.12em] cursor-not-allowed">
+                    Locked
+                  </span>
+                )}
                 {deck.editable && (
                   <button
                     onClick={async () => {

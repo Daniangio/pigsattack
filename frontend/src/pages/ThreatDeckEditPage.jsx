@@ -32,6 +32,7 @@ export default function ThreatDeckEditPage() {
     () => (token ? { Authorization: `Bearer ${token}` } : {}),
     [token]
   );
+  const isDefault = deckName === "default";
 
   const fetchImages = useCallback(async () => {
     try {
@@ -46,6 +47,10 @@ export default function ThreatDeckEditPage() {
   }, [headers]);
 
   useEffect(() => {
+    if (isDefault) {
+      setError("Default deck is read-only. Clone it or create a new deck to edit.");
+      return;
+    }
     (async () => {
       try {
         const res = await fetch(`${apiBase}/api/custom/threat-decks/${deckName}`, { headers });
@@ -56,7 +61,7 @@ export default function ThreatDeckEditPage() {
         setError("Unable to load deck");
       }
     })();
-  }, [deckName, headers]);
+  }, [deckName, headers, isDefault]);
 
   useEffect(() => {
     fetchImages();
@@ -89,7 +94,7 @@ export default function ThreatDeckEditPage() {
   };
 
   const handleSave = async () => {
-    if (!deck) return;
+    if (!deck || isDefault) return;
     setSaving(true);
     try {
       // Clean spoils: remove empty resources on token spoils, drop empty fields

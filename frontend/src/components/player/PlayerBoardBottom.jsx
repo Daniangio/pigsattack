@@ -749,31 +749,8 @@ export default function PlayerBoardBottom({
                       const isConversion = key === "conversion";
                       const isConversionActive = isConversion && displayTotal > 0;
 
-                      return (
-                        <button
-                          key={key}
-                          type="button"
-                          className={`relative flex items-center gap-0.5 px-0.5 py-0.5 rounded transition ${
-                            isDisabled ? "opacity-50 cursor-not-allowed" : "hover:bg-slate-800/80"
-                          } ${isConversionActive ? "relative" : ""}`}
-                          onClick={() => {
-                            if (isConversionActive) {
-                              setConversionOpen(true);
-                            } else if (!isDisabled) {
-                              onTokenToggleForFight?.(key);
-                            }
-                          }}
-                          disabled={isDisabled && !isConversionActive}
-                          draggable={Boolean(onTokenToggleForFight) && !isConversion}
-                          onDragStart={(e) => {
-                            if (onTokenToggleForFight && !isConversion) {
-                              e.dataTransfer.setData("token_type", key);
-                            }
-                          }}
-                          title={
-                            isConversionActive ? "Click to convert resources" : (isDisabled ? "No tokens remaining" : `${remaining} available`)
-                          }
-                        >
+                      const content = (
+                        <>
                           {style.img ? (
                             <img
                               src={style.img}
@@ -786,20 +763,34 @@ export default function PlayerBoardBottom({
                           )}
                           <span className={`${style.text || "text-slate-200"} text-sm font-semibold`}>×{displayTotal}</span>
                           {isConversionActive && conversionOpen && (
-                            <div className="absolute z-50 bottom-full right-0 mb-2">
+                            <div
+                              className="absolute z-50 bottom-full right-0 mb-2"
+                              onClick={(e) => e.stopPropagation()}
+                            >
                               <div className="relative bg-slate-900 border border-slate-700 rounded-xl p-3 shadow-xl w-64">
                                 <div className="absolute -bottom-2 right-4 w-4 h-4 bg-slate-900 border-b border-l border-slate-700 transform rotate-45 z-0"></div>
                                 <div className="relative z-10">
                                   <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.16em] text-slate-400 mb-2">
                                     <span>Use Conversion Token</span>
-                                    <button
-                                      type="button"
-                                      onClick={() => setConversionOpen(false)}
-                                      className="text-slate-300 hover:text-amber-200 text-xs"
+                                    <div
+                                      role="button"
+                                      tabIndex={0}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setConversionOpen(false);
+                                      }}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter" || e.key === " ") {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          setConversionOpen(false);
+                                        }
+                                      }}
+                                      className="text-slate-300 hover:text-amber-200 text-xs cursor-pointer px-1"
                                       aria-label="Close conversion panel"
                                     >
                                       ×
-                                    </button>
+                                    </div>
                                   </div>
                                   <div className="flex flex-col gap-2">
                                     {conversionOptions.length === 0 && (
@@ -821,22 +812,22 @@ export default function PlayerBoardBottom({
                                           <button
                                             type="button"
                                             onClick={cycleAmount}
-                                            className="px-2 py-1 rounded-md border border-slate-700 bg-slate-900/60 hover:border-amber-300 text-xs"
+                                            className="relative w-10 h-10 flex items-center justify-center rounded-full border border-slate-700 bg-slate-900/70 hover:border-amber-300"
+                                            title={`Increase amount from ${opt.from}`}
                                           >
-                                            Amount: {amount}
+                                            {opt.fromIcon}
+                                            <span className="absolute right-[-15px] top-1/2 -translate-y-1/2 text-[10px] text-slate-300 font-semibold">
+                                              ×{amount}
+                                            </span>
                                           </button>
-                                          <div className="flex items-center gap-2 text-xs">
-                                            <span className="text-slate-400">From</span>
-                                            <span className="px-2 py-1 rounded border border-slate-700 bg-slate-900/60">{opt.from}</span>
-                                            <span className="text-slate-400">to</span>
-                                            <span className="px-2 py-1 rounded border border-slate-700 bg-slate-900/60">{opt.to}</span>
-                                          </div>
+                                          <span className="text-slate-400 uppercase tracking-[0.12em] text-xs">→</span>
                                           <button
                                             type="button"
-                                            className="px-2 py-1 rounded-md border border-emerald-400 text-emerald-200 hover:bg-emerald-400/10 text-xs"
+                                            className="w-10 h-10 flex items-center justify-center rounded-full border border-emerald-400 text-emerald-200 bg-slate-900/70 hover:bg-emerald-400/10"
                                             onClick={() => onConvertToken?.(opt.from, opt.to, amount)}
+                                            title={`Convert to ${opt.to}`}
                                           >
-                                            Convert
+                                            {opt.toIcon}
                                           </button>
                                         </div>
                                       );
@@ -846,6 +837,58 @@ export default function PlayerBoardBottom({
                               </div>
                             </div>
                           )}
+                        </>
+                      );
+
+                      if (isConversionActive) {
+                        return (
+                          <div
+                            key={key}
+                            role="button"
+                            tabIndex={0}
+                            className={`relative flex items-center gap-0.5 px-0.5 py-0.5 rounded transition ${
+                              isDisabled ? "opacity-50 cursor-not-allowed" : "hover:bg-slate-800/80"
+                            } ${isConversionActive ? "relative" : ""}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setConversionOpen((prev) => !prev);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setConversionOpen((prev) => !prev);
+                              }
+                            }}
+                            title="Click to convert resources"
+                          >
+                            {content}
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          className={`relative flex items-center gap-0.5 px-0.5 py-0.5 rounded transition ${
+                            isDisabled ? "opacity-50 cursor-not-allowed" : "hover:bg-slate-800/80"
+                          } ${isConversionActive ? "relative" : ""}`}
+                          onClick={() => {
+                            if (!isDisabled) {
+                              onTokenToggleForFight?.(key);
+                            }
+                          }}
+                          disabled={isDisabled && !isConversionActive}
+                          draggable={Boolean(onTokenToggleForFight) && !isConversion}
+                          onDragStart={(e) => {
+                            if (onTokenToggleForFight && !isConversion) {
+                              e.dataTransfer.setData("token_type", key);
+                            }
+                          }}
+                          title={isDisabled ? "No tokens remaining" : `${remaining} available`}
+                        >
+                          {content}
                         </button>
                       );
                     })

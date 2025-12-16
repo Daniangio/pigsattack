@@ -127,13 +127,13 @@ export const useStore = create((set, get) => ({
 
   // --- Reusable Authenticated Fetch (Unchanged) ---
   httpGameRequest: async (gameId, endpoint, method = "POST", body = {}) => {
-    // ... (this logic is fine and remains unchanged) ...
-    const { token, handleError } = get();
+    const { token, handleError, clearAuth } = get();
 
     if (!token || token === "guest") {
+      const guestMessage = "Guests cannot perform this action.";
       console.error("Attempted HTTP request as guest.");
-      handleError({ message: "Guests cannot perform this action." });
-      return null;
+      handleError({ message: guestMessage });
+      return { error: guestMessage };
     }
 
     const url = `http://localhost:8000/api/game/${gameId}/${endpoint}`;
@@ -149,15 +149,32 @@ export const useStore = create((set, get) => ({
       });
 
       if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.detail || `HTTP Error: ${response.statusText}`);
+        let detail = null;
+        try {
+          const errData = await response.json();
+          detail = errData?.detail || errData?.message || null;
+        } catch (parseErr) {
+          console.warn("Failed to parse error response:", parseErr);
+        }
+        const error = new Error(detail || `HTTP Error: ${response.statusText}`);
+        error.status = response.status;
+        throw error;
       }
 
       return await response.json(); // Return the JSON response
     } catch (err) {
       console.error(`HTTP request to ${url} failed:`, err);
-      handleError({ message: err.message || "A network error occurred." });
-      return null;
+      const message = err?.message || "A network error occurred.";
+      const payload = { error: message, status: err?.status };
+
+      if (err?.status === 401 || message.includes("Could not validate credentials")) {
+        handleError({ message: "Session expired. Please log in again." });
+        clearAuth();
+        return { ...payload, error: "Session expired. Please log in again." };
+      }
+
+      handleError({ message });
+      return payload;
     }
   },
 }));
