@@ -6,6 +6,7 @@ import { MarketData } from "../../state/market";
 import { setHoverPreview } from "../hover/HoverPreviewPortal";
 import { stanceColorRing } from "../../utils/stanceColorRing";
 import { STANCE_CONFIG } from "../../utils/stanceConfig";
+import { ResourceIcon } from "../resources/ResourceCost";
 import { normalizeStance } from "../../utils/formatters";
 import {
   playerIcon1,
@@ -406,7 +407,8 @@ export default function PlayerBoardBottom({
         <div className="flex flex-col md:flex-row gap-3 items-start">
           <div className="flex flex-col gap-2 min-w-[80px]">
             <div className="px-2 py-1 rounded-md border border-green-700 bg-green-900/30 text-green-200 text-xs flex items-center gap-2">
-              <Shield size={14} className="text-green-300" /> Cost: 2G
+              <Shield size={14} className="text-green-300" /> Cost: 2
+              <ResourceIcon resource="G" size={12} />
             </div>
             <div className="px-2 py-1 rounded-md border border-slate-700 bg-slate-800/50 text-slate-200 text-xs">
               G Available: {gAvailable}

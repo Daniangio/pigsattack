@@ -6,6 +6,8 @@ import ThreatCardCompact from "./ThreatCardCompact";
 import BossCard from "./BossCard";
 import { getThreatImage } from "../../utils/threatImages";
 import { setHoverPreview } from "../hover/HoverPreviewPortal";
+import { formatCostParts } from "../../utils/formatters";
+import { ResourceCost } from "../resources/ResourceCost";
 
 export default function ThreatsPanel({
   compact,
@@ -92,8 +94,9 @@ export default function ThreatsPanel({
                       <ArrowRightCircle size={14} className="text-amber-300" />
                     )}
                   </div>
-                  <div className="text-[11px] text-amber-200 mt-1">
-                    Cost: {["R", "B", "G"].map((k) => (cost?.[k] ? `${k}${cost[k]} ` : ""))}
+                  <div className="text-[11px] text-amber-200 mt-1 flex items-center gap-2">
+                    <span>Cost:</span>
+                    <ResourceCost parts={formatCostParts(cost)} iconSize={12} />
                   </div>
                   {th.reward && <div className="text-[11px] text-slate-300">Reward: {th.reward}</div>}
                 </button>
@@ -180,11 +183,9 @@ export default function ThreatsPanel({
                       <div className="text-xs text-slate-200">{th.label || `Threshold ${idx + 1}`}</div>
                       {th.reward && <div className="text-[10px] text-emerald-300">{th.reward}</div>}
                     </div>
-                    <div className="text-[10px] text-slate-300">
-                      Cost:{" "}
-                      {["R", "B", "G"]
-                        .map((k) => `${k}${(th.cost || {})[k] ?? 0}`)
-                        .join(" ")}
+                    <div className="text-[10px] text-slate-300 flex items-center gap-2">
+                      <span>Cost:</span>
+                      <ResourceCost parts={formatCostParts(th.cost || {})} iconSize={11} />
                     </div>
                   </button>
                 ))}

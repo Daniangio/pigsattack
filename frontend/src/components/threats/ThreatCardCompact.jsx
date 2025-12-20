@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 import { setHoverPreview } from "../hover/HoverPreviewPortal";
 import { formatCostParts } from "../../utils/formatters";
+import { ResourceCost, ResourceIcon } from "../resources/ResourceCost";
 import { getThreatImage } from "../../utils/threatImages";
-import { Flame, Weight } from "lucide-react";
+import { Weight } from "lucide-react";
 
 export default function ThreatCardCompact({ threat, onFight, rowIndex, isFront, canFight, isAttacking, weight = 0, position }) {
   const fightAllowed = typeof canFight === "boolean" ? canFight : isFront;
@@ -105,18 +106,18 @@ export default function ThreatCardCompact({ threat, onFight, rowIndex, isFront, 
       <div className="absolute bottom-1 left-0 right-0 px-1">
         <div className="w-full flex justify-center">
           <div className="w-full bg-black/55 border border-slate-800 rounded-lg px-0.5 py-1 flex items-center justify-center gap-0.5 backdrop-blur-sm flex-nowrap whitespace-nowrap overflow-x-auto text-[8px] uppercase tracking-[0.08em] text-slate-200">
-            {costParts.map((p) => (
-              <span key={p.key} className={p.className}>{`${p.val}${p.key}`}</span>
-            ))}
-            {!costParts.length && <span className="text-slate-300">0</span>}
+            <ResourceCost parts={costParts} iconSize={10} />
             {enrageTokens > 0 && (
-              <span className="flex text-red-200 whitespace-nowrap">
-                <Flame size={10} className="text-red-300" />+{2 * enrageTokens}R
+              <span className="flex items-center gap-1 text-red-200 whitespace-nowrap">
+                +{2 * enrageTokens}
+                <ResourceIcon resource="R" size={10} />
               </span>
             )}
             {weight > 0 && (
-              <span className="flex text-green-200 whitespace-nowrap">
-                <Weight size={10} className="text-green-300" />+{weight}G
+              <span className="flex items-center gap-1 text-green-200 whitespace-nowrap">
+                <Weight size={10} className="text-green-300" />
+                +{weight}
+                <ResourceIcon resource="G" size={10} />
               </span>
             )}
           </div>

@@ -1,6 +1,7 @@
 import React from "react";
 import { setHoverPreview } from "../hover/HoverPreviewPortal";
 import { formatCostParts } from "../../utils/formatters";
+import { ResourceCost, ResourceIcon } from "../resources/ResourceCost";
 import { getThreatImage } from "../../utils/threatImages";
 
 export default function ThreatCardMini({ threat, onFight, rowIndex, isFront, canFight, isAttacking, weight = 0, position }) {
@@ -77,8 +78,9 @@ export default function ThreatCardMini({ threat, onFight, rowIndex, isFront, can
             </span>
           )}
           {enrageTokens > 0 && (
-            <span className="px-2 py-1 rounded-full border border-amber-500 bg-amber-500/15 text-amber-200">
-              Enraged +{2 * enrageTokens}R
+            <span className="px-2 py-1 rounded-full border border-amber-500 bg-amber-500/15 text-amber-200 flex items-center gap-1">
+              Enraged +{2 * enrageTokens}
+              <ResourceIcon resource="R" size={12} />
             </span>
           )}
           {isAttacking && (
@@ -91,10 +93,7 @@ export default function ThreatCardMini({ threat, onFight, rowIndex, isFront, can
           <div className="bg-black/55 border border-slate-800 rounded-lg p-2 flex justify-between items-center backdrop-blur-sm">
             <span className="text-slate-200 text-[10px] uppercase tracking-[0.1em]">Cost</span>
             <span className="flex gap-1 text-[11px] items-center">
-              {costParts.map((p) => (
-                <span key={p.key} className={p.className}>{`${p.val}${p.key}`}</span>
-              ))}
-              {!costParts.length && <span className="text-slate-300">0</span>}
+              <ResourceCost parts={costParts} iconSize={12} />
               <span className="px-2 py-1 rounded-full border border-amber-400/80 bg-amber-500/15 text-amber-200 text-[10px] ml-1">
                 {threat.vp} VP
               </span>

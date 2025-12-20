@@ -1,6 +1,7 @@
 import React from "react";
 import { getThreatImage } from "../../utils/threatImages";
 import { formatCostParts } from "../../utils/formatters";
+import { ResourceIcon } from "../resources/ResourceCost";
 
 export default function BossCardDetail({ boss }) {
   if (!boss) return null;
@@ -12,8 +13,11 @@ export default function BossCardDetail({ boss }) {
     return parts.map((p) => (
       <span
         key={p.key}
-        className={`${p.className} px-2 py-0.5 rounded-full border text-[11px]`}
-      >{`${p.val}${p.key}`}</span>
+        className={`${p.className} px-2 py-0.5 rounded-full border text-[11px] inline-flex items-center gap-1`}
+      >
+        <ResourceIcon resource={p.key} size={12} />
+        <span>{p.val}</span>
+      </span>
     ));
   };
 

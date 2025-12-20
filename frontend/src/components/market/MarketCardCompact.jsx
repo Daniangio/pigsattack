@@ -1,6 +1,7 @@
 import React from "react";
 import { setHoverPreview } from "../hover/HoverPreviewPortal";
-import { formatCost, formatCostParts } from "../../utils/formatters";
+import { formatCostParts } from "../../utils/formatters";
+import { ResourceCost } from "../resources/ResourceCost";
 
 export default function MarketCardCompact({ card, onBuy, buttonState = "ready", highlight = false, tooltip }) {
   const handleHover = (e) =>
@@ -40,12 +41,7 @@ export default function MarketCardCompact({ card, onBuy, buttonState = "ready", 
 
       <div className="text-slate-300 text-[11px] flex gap-1 items-center">
         <span>Cost:</span>
-        <span className="flex gap-2 items-center">
-          {formatCostParts(card.cost).map((p) => (
-            <span key={p.key} className={p.className}>{`${p.val}${p.key}`}</span>
-          ))}
-          {!formatCostParts(card.cost).length && <span>0</span>}
-        </span>
+        <ResourceCost parts={formatCostParts(card.cost)} iconSize={11} />
       </div>
       {onBuy && (
         <button

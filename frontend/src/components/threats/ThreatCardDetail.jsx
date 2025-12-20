@@ -1,6 +1,7 @@
 import React from "react";
 import { Flame, Weight } from "lucide-react";
 import { formatCostParts } from "../../utils/formatters";
+import { ResourceCost, ResourceIcon } from "../resources/ResourceCost";
 import { getThreatImage } from "../../utils/threatImages";
 
 export default function ThreatCardDetail({ threat, actionLabel, actionDisabled, onAction }) {
@@ -71,14 +72,28 @@ export default function ThreatCardDetail({ threat, actionLabel, actionDisabled, 
                 <span>Enrage</span>
                 <span className="flex items-center gap-1 text-amber-200">
                   <Flame size={14} className="text-red-300" />
-                  {enrageTokens > 0 ? `+${2 * enrageTokens} R` : "None"}
+                  {enrageTokens > 0 ? (
+                    <>
+                      +{2 * enrageTokens}
+                      <ResourceIcon resource="R" size={12} />
+                    </>
+                  ) : (
+                    "None"
+                  )}
                 </span>
               </div>
               <div className="flex items-center justify-between">
                 <span>Weight</span>
                 <span className="flex items-center gap-1 text-green-200">
                   <Weight size={14} className="text-green-300" />
-                  {weightTokens > 0 ? `+${weightTokens} G` : "None"}
+                  {weightTokens > 0 ? (
+                    <>
+                      +{weightTokens}
+                      <ResourceIcon resource="G" size={12} />
+                    </>
+                  ) : (
+                    "None"
+                  )}
                 </span>
               </div>
             </div>
@@ -87,18 +102,18 @@ export default function ThreatCardDetail({ threat, actionLabel, actionDisabled, 
           <div className="bg-slate-900/70 border border-slate-800 rounded-xl p-3">
             <div className="text-[11px] uppercase tracking-[0.18em] text-slate-400 mb-2">Cost</div>
             <div className="flex items-center gap-2 flex-wrap text-[12px] uppercase tracking-[0.12em] text-slate-100">
-              {costParts.map((p) => (
-                <span key={`detail-${p.key}`} className={p.className}>{`${p.val}${p.key}`}</span>
-              ))}
-              {!costParts.length && <span className="text-slate-300">0</span>}
+              <ResourceCost parts={costParts} iconSize={12} />
               {enrageTokens > 0 && (
                 <span className="flex items-center gap-1 px-2 py-1 rounded border border-amber-500/70 bg-amber-500/15 text-amber-200 whitespace-nowrap">
-                  <Flame size={14} className="text-amber-300" />+{2 * enrageTokens}R
+                  <Flame size={14} className="text-amber-300" />
+                  +{2 * enrageTokens}
+                  <ResourceIcon resource="R" size={12} />
                 </span>
               )}
               {weightTokens > 0 && (
-                <span className="px-2 py-1 rounded border border-green-700 bg-green-900/40 text-green-200 whitespace-nowrap">
+                <span className="flex items-center gap-1 px-2 py-1 rounded border border-green-700 bg-green-900/40 text-green-200 whitespace-nowrap">
                   W+{weightTokens}
+                  <ResourceIcon resource="G" size={12} />
                 </span>
               )}
             </div>

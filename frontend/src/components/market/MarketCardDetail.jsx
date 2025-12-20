@@ -1,5 +1,6 @@
 import React from "react";
-import { formatCost, formatCostParts } from "../../utils/formatters";
+import { formatCostParts } from "../../utils/formatters";
+import { ResourceCost } from "../resources/ResourceCost";
 
 export default function MarketCardDetail({ card, actionLabel, actionDisabled, onAction, secondaryAction, onSecondaryAction }) {
   if (!card) return null;
@@ -18,11 +19,8 @@ export default function MarketCardDetail({ card, actionLabel, actionDisabled, on
 
       <div className="text-sm text-slate-200 mt-2">
         Cost:
-        <span className="ml-2 flex gap-2">
-          {formatCostParts(card.cost).map((p) => (
-            <span key={p.key} className={p.className}>{`${p.val}${p.key}`}</span>
-          ))}
-          {!formatCostParts(card.cost).length && <span>0</span>}
+        <span className="ml-2">
+          <ResourceCost parts={formatCostParts(card.cost)} iconSize={14} />
         </span>
       </div>
 

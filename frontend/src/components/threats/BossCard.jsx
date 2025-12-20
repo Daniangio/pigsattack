@@ -1,6 +1,7 @@
 import React, { useState } from "react";
-import { formatCost } from "../../utils/formatters";
+import { formatCostParts } from "../../utils/formatters";
 import { setHoverPreview } from "../hover/HoverPreviewPortal";
+import { ResourceCost } from "../resources/ResourceCost";
 
 export default function BossCard({ boss, compact, enablePreview }) {
   const [hovered, setHovered] = useState(false);
@@ -38,7 +39,10 @@ export default function BossCard({ boss, compact, enablePreview }) {
                 className="p-2 bg-slate-900/40 border border-slate-700 rounded-lg text-xs min-w-[120px]"
               >
                 <div className="font-bold text-slate-300">{t.label}</div>
-                <div className="text-slate-200">Cost: {formatCost(t.cost)}</div>
+                <div className="text-slate-200 flex items-center gap-2">
+                  <span>Cost:</span>
+                  <ResourceCost parts={formatCostParts(t.cost)} iconSize={12} />
+                </div>
                 <div className="text-emerald-300">Reward: {t.reward}</div>
               </div>
             ))}

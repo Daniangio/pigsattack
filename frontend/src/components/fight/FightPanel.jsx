@@ -565,12 +565,20 @@ export default function FightPanel({
         <div className="bg-slate-950/60 border border-slate-800 rounded-2xl p-3 flex flex-col gap-2 overflow-auto">
             {threatWeight > 0 && (
               <div className="text-[11px] text-amber-200">
-                Weight +{threatWeight}: added to Green cost.
+                <span className="inline-flex items-center gap-1">
+                  Weight +{threatWeight}
+                  {iconFor("G")}
+                </span>
+                : added to Green cost.
               </div>
             )}
             {enrageTokens > 0 && (
               <div className="text-[11px] text-rose-300">
-                Enraged +{2 * enrageTokens}R: added to Red cost.
+                <span className="inline-flex items-center gap-1">
+                  Enraged +{2 * enrageTokens}
+                  {iconFor("R")}
+                </span>
+                : added to Red cost.
               </div>
             )}
             {hasPrecisionChoice && (
@@ -589,7 +597,7 @@ export default function FightPanel({
                       }`}
                     >
                       {iconFor(key)}
-                      <span>{key}</span>
+                      <span className="sr-only">{key}</span>
                     </button>
                   ))}
                 </div>
