@@ -226,8 +226,10 @@ export default function App({
   };
   const cardCatalog = useMemo(
     () => [
-      ...(market?.upgrades || []),
-      ...(market?.weapons || []),
+      ...(market?.upgrades_top || []),
+      ...(market?.upgrades_bottom || []),
+      ...(market?.weapons_top || []),
+      ...(market?.weapons_bottom || []),
     ],
     [market]
   );
@@ -330,6 +332,17 @@ export default function App({
     setPrompt(payload);
   };
 
+  const cancelActionOverlays = () => {
+    setPromptSafe(null);
+    setSelectedCard(null);
+    setPickTokenOpen(false);
+    setStealPromptOpen(false);
+    setHoverPreview(null);
+    if (activeFight) {
+      clearFightPanel();
+    }
+  };
+
   const resolveRowSlots = (row = []) => {
     const slots = { front: null, mid: null, back: null };
     row.forEach((t) => {
@@ -386,8 +399,7 @@ export default function App({
         return;
       }
     }
-    clearBuySelection();
-    setPromptSafe(null);
+    cancelActionOverlays();
     setStanceMenuOpen(false);
     setZoomedPanel(null);
     setHoverPreview(null);
@@ -515,6 +527,8 @@ export default function App({
       onLocalToast?.("Main action already used this turn.", "amber");
       return;
     }
+    cancelActionOverlays();
+    setStanceMenuOpen(false);
     setPickTokenChoice(null);
     setPickTokenOpen(true);
   };
@@ -586,6 +600,13 @@ export default function App({
     setActivePlayerId(userId);
   };
 
+  const handleToggleStanceMenu = () => {
+    if (!stanceMenuOpen) {
+      cancelActionOverlays();
+    }
+    setStanceMenuOpen((v) => !v);
+  };
+
   const handleFreeStanceChange = (stance) => {
     if (!isMyTurn) return;
     if (!activePlayer) return;
@@ -598,6 +619,7 @@ export default function App({
       return;
     }
 
+    cancelActionOverlays();
     const baseline = backendActivePlayer?.stance || activePlayer.stance;
     lastLegalStanceRef.current = baseline;
     const target = normalizeStance(stance);
@@ -620,7 +642,8 @@ export default function App({
   };
 
   const startExtendFlowWithChoice = (slotType) => {
-    clearBuySelection();
+    cancelActionOverlays();
+    setStanceMenuOpen(false);
     if (!activePlayer) return;
     if (!isMyTurn || activePlayerId !== userId) {
       onLocalToast?.("You can extend slots only on your turn.", "amber");
@@ -674,7 +697,7 @@ export default function App({
       onLocalToast?.("Market buy already used this turn.", "amber");
       return;
     }
-    setPromptSafe(null);
+    cancelActionOverlays();
     const actionType = card.type === "Weapon" ? "buy_weapon" : "buy_upgrade";
     setStanceMenuOpen(false);
     setSelectedCard({ type: actionType, card });
@@ -775,7 +798,7 @@ export default function App({
               <>
                 <div className={`h-full flex transition-all duration-500 relative ${zoomedPanel ? "gap-0" : "gap-1"}`}>
                   <div
-                    className={`h-full transition-all duration-500 ease-in-out ${
+                    className={`h-full transition-all duration-500 ease-in-out relative z-10 min-w-0 ${
                       threatsCollapsed ? "opacity-0 pointer-events-none -translate-x-6 w-0 min-w-0" : "opacity-100 translate-x-0"
                     }`}
                     style={{ flex: threatPanelFlex, minWidth: threatsCollapsed ? 0 : undefined }}
@@ -798,7 +821,7 @@ export default function App({
                     />
                   </div>
                   <div
-                    className={`h-full transition-all duration-500 ease-in-out ${
+                    className={`h-full transition-all duration-500 ease-in-out relative z-0 min-w-0 ${
                       marketCollapsed ? "opacity-0 pointer-events-none translate-x-6 w-0 min-w-0" : "opacity-100 translate-x-0"
                     }`}
                     style={{ flex: marketPanelFlex, minWidth: marketCollapsed ? 0 : undefined }}
@@ -832,7 +855,7 @@ export default function App({
           cardCatalog={cardCatalog}
           activePlayerId={activePlayerId}
           stanceMenuOpen={stanceMenuOpen}
-          onToggleStance={() => setStanceMenuOpen((v) => !v)}
+          onToggleStance={handleToggleStanceMenu}
           onCloseStance={() => setStanceMenuOpen(false)}
           onAttemptStanceChange={handleFreeStanceChange}
           onExtendSlot={startExtendFlowWithChoice}

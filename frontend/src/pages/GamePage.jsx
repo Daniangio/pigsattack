@@ -279,18 +279,23 @@ export default function GamePage() {
   return (
     <div className="w-full h-screen bg-slate-950 text-slate-100 flex flex-col">
       {/* Toast stack */}
-      <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 items-center pointer-events-none">
+      <div className="fixed top-16 right-4 z-40 flex flex-col gap-2 items-end pointer-events-none">
         {toastLogs.map((log) => (
           <div
             key={log.id}
-            className={`px-4 py-2 rounded-xl bg-slate-900/90 border shadow-lg min-w-[240px] max-w-[520px] text-sm pointer-events-auto ${
+            className={`px-3 py-2 rounded-lg bg-slate-950/85 border shadow-lg w-[min(360px,80vw)] text-[12px] pointer-events-none backdrop-blur flex items-start gap-2 ${
               log.color === "emerald"
-                ? "border-emerald-400 text-emerald-50 shadow-emerald-500/20"
-                : "border-amber-400 text-amber-50 shadow-amber-500/20"
+                ? "border-emerald-400/70 text-emerald-50 shadow-emerald-500/20"
+                : "border-amber-400/70 text-amber-50 shadow-amber-500/20"
             }`}
             style={{ animation: "toastFade 4s ease-in-out forwards" }}
           >
-            {log.text}
+            <span
+              className={`mt-1 inline-flex h-2 w-2 rounded-full ${
+                log.color === "emerald" ? "bg-emerald-300" : "bg-amber-300"
+              }`}
+            />
+            <span className="leading-snug">{log.text}</span>
           </div>
         ))}
       </div>
@@ -641,10 +646,10 @@ export default function GamePage() {
 
       <style>{`
         @keyframes toastFade {
-          0% { opacity: 0; transform: translateY(-6px); }
-          10% { opacity: 1; transform: translateY(0); }
-          80% { opacity: 1; transform: translateY(0); }
-          100% { opacity: 0; transform: translateY(-6px); }
+          0% { opacity: 0; transform: translateX(16px) translateY(-4px); }
+          10% { opacity: 1; transform: translateX(0) translateY(0); }
+          80% { opacity: 1; transform: translateX(0) translateY(0); }
+          100% { opacity: 0; transform: translateX(16px) translateY(-4px); }
         }
       `}</style>
     </div>

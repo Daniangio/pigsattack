@@ -206,19 +206,21 @@ class BotPlanner:
         # --- Buying/slots ---
         buy_upgrades: List[List[Dict[str, Any]]] = []
         buy_weapons: List[List[Dict[str, Any]]] = []
+        visible_upgrades = gs.state.market.upgrades_top + gs.state.market.upgrades_bottom
+        visible_weapons = gs.state.market.weapons_top + gs.state.market.weapons_bottom
         need_upgrade_slot = (
             not player.extend_used
             and player.tokens.get(TokenType.WILD, 0) > 0
             and len(player.upgrades) >= player.upgrade_slots
             and player.upgrade_slots < 4
-            and any(player.can_pay(card.cost) for card in gs.state.market.upgrades)
+            and any(player.can_pay(card.cost) for card in visible_upgrades)
         )
         need_weapon_slot = (
             not player.extend_used
             and player.tokens.get(TokenType.WILD, 0) > 0
             and len(player.weapons) >= player.weapon_slots
             and player.weapon_slots < 4
-            and any(player.can_pay(card.cost) for card in gs.state.market.weapons)
+            and any(player.can_pay(card.cost) for card in visible_weapons)
         )
         if not player.extend_used:
             if need_upgrade_slot:
@@ -228,7 +230,7 @@ class BotPlanner:
 
         if not player.buy_used:
             if len(player.upgrades) < player.upgrade_slots or need_upgrade_slot:
-                for card in gs.state.market.upgrades:
+                for card in visible_upgrades:
                     if player.can_pay(card.cost):
                         action = {
                             "type": "buy_upgrade",
@@ -241,7 +243,7 @@ class BotPlanner:
                         if len(player.upgrades) < player.upgrade_slots:
                             buy_upgrades.append([action])
             if len(player.weapons) < player.weapon_slots or need_weapon_slot:
-                for card in gs.state.market.weapons:
+                for card in visible_weapons:
                     if player.can_pay(card.cost):
                         action = {
                             "type": "buy_weapon",

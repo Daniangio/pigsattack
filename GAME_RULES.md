@@ -134,9 +134,9 @@ Your **stance** determines:
 
 | Stance      | Start-of-Turn Production | Naturally Weak To      | Playstyle                 |
 | ----------- | ------------------------ | ---------------------- | ------------------------- |
-| Aggressive  | 4R / 0B / 1G            | **Feral & Hybrid**     | High tempo, high risk    |
-| Tactical    | 1R / 4B / 0G            | **Cunning & Hybrid**   | Efficient, opportunistic |
-| Hunkered    | 0R / 1B / 4G            | **Massive & Hybrid**   | Slow, resilient          |
+| Aggressive  | 5R / 0B / 1G            | **Feral & Hybrid**     | High tempo, high risk    |
+| Tactical    | 1R / 5B / 0G            | **Cunning & Hybrid**   | Efficient, opportunistic |
+| Hunkered    | 0R / 1B / 5G            | **Massive & Hybrid**   | Slow, resilient          |
 | Balanced    | 2R / 2B / 2G            | **Feral, Cunning, Massive** (not Hybrid) | Flexible but exposed |
 
 > **Balanced stance** is weak to **all basic types** (Feral, Cunning, Massive)  
@@ -172,6 +172,18 @@ Front
 * Threats move forward (Back → Mid → Front) during **End of Round**
 * Threats **do not collapse** when others are removed — you always fill from the Back
 * Threats already in front position gain an **Enrage Token** 🔥
+
+---
+
+### 3.4 Market Lanes (New Stock & Carryover)
+
+Both the **Upgrade** and **Weapon** markets have two lanes:
+
+* **New Stock (Top Lane)** — freshly revealed this round
+* **Carryover (Bottom Lane)** — cards that survived the previous round
+
+At the start of each round, the Carryover lane is cleared, New Stock slides down into Carryover, and New Stock is refilled.
+Markets are **not** refilled immediately after purchases; availability only changes when the round advances.
 
 ---
 
@@ -211,8 +223,9 @@ Front
 6. **Markets**
 
    * Shuffle Upgrades Deck and Weapons Deck separately
-   * Reveal **N_players + 1** **Upgrades** into the Upgrade Market
-   * Reveal **N_players + 1** **Weapons** into the Weapon Market
+   * Reveal **N_players + 1** **Upgrades** into **New Stock (Top Lane)**
+   * Reveal **N_players + 1** **Weapons** into **New Stock (Top Lane)**
+   * **Carryover (Bottom Lane)** starts empty
 
 7. **Round & Turn Order**
 
@@ -233,8 +246,10 @@ At the **start of each Round** (Day or Night):
 
 1. **Refill Markets**
 
-   * Refill the **Upgrade Market** back up to `N_players + 1` cards
-   * Refill the **Weapon Market** back up to `N_players + 1` cards
+   * **Discard** all cards in **Carryover (Bottom Lane)**
+   * **Move** all cards from **New Stock (Top Lane)** into **Carryover**
+   * **Refill New Stock** back up to `N_players + 1` cards
+   * If a market deck runs out, **shuffle its discarded cards** to rebuild it
 
 2. **(Night Only)**
 

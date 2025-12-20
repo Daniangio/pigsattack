@@ -237,17 +237,25 @@ class MarketCard:
 
 @dataclass
 class MarketState:
-    upgrades: List[MarketCard] = field(default_factory=list)
-    weapons: List[MarketCard] = field(default_factory=list)
+    upgrades_top: List[MarketCard] = field(default_factory=list)
+    upgrades_bottom: List[MarketCard] = field(default_factory=list)
+    weapons_top: List[MarketCard] = field(default_factory=list)
+    weapons_bottom: List[MarketCard] = field(default_factory=list)
     upgrade_deck: List[MarketCard] = field(default_factory=list)
     weapon_deck: List[MarketCard] = field(default_factory=list)
+    upgrade_discard: List[MarketCard] = field(default_factory=list)
+    weapon_discard: List[MarketCard] = field(default_factory=list)
 
     def to_public_dict(self) -> Dict[str, Any]:
         return {
-            "upgrades": [c.to_public_dict() for c in self.upgrades],
-            "weapons": [c.to_public_dict() for c in self.weapons],
+            "upgrades_top": [c.to_public_dict() for c in self.upgrades_top],
+            "upgrades_bottom": [c.to_public_dict() for c in self.upgrades_bottom],
+            "weapons_top": [c.to_public_dict() for c in self.weapons_top],
+            "weapons_bottom": [c.to_public_dict() for c in self.weapons_bottom],
             "upgrade_deck_remaining": len(self.upgrade_deck),
             "weapon_deck_remaining": len(self.weapon_deck),
+            "upgrade_discard_count": len(self.upgrade_discard),
+            "weapon_discard_count": len(self.weapon_discard),
         }
 
 

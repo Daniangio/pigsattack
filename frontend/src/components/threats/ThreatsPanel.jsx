@@ -45,20 +45,18 @@ export default function ThreatsPanel({
   if (bossMode) {
     return (
       <div className="w-full h-full bg-slate-950/60 border border-slate-800 rounded-3xl p-3 flex flex-col relative overflow-hidden">
-        <div className="flex justify-end items-center mb-2">
+        <div className="flex justify-end items-center mb-2 relative z-10 pointer-events-auto">
           <h3 className="text-xs uppercase tracking-[0.35em] text-slate-400">
             Boss • {String(bossStage || "day").toUpperCase()}
           </h3>
-          <div className="flex items-center gap-2">
-            {onZoom && (
-              <button
-                onClick={onZoom}
-                className="p-1 rounded-full border border-slate-700 text-slate-200 hover:bg-slate-800"
-              >
-                <Maximize2 size={14} />
-              </button>
-            )}
-          </div>
+          {onZoom && (
+            <button
+              onClick={onZoom}
+              className="ml-2 p-1 rounded-full border border-slate-700 text-slate-200 hover:bg-slate-800"
+            >
+              <Maximize2 size={14} />
+            </button>
+          )}
         </div>
         <div className="flex-1 flex flex-col gap-1 overflow-y-auto">
           <BossCard boss={bossCard} enablePreview compact />
@@ -109,7 +107,7 @@ export default function ThreatsPanel({
 
   return (
     <div className="w-full h-full bg-slate-950/5 border border-slate-800 rounded-3xl p-1 flex flex-col overflow-hidden relative">
-      <div className="flex items-center justify-end mb-2 gap-2 z-30 pointer-events-auto">
+      <div className="flex justify-end items-center mb-2 relative z-10 pointer-events-auto">
         <h3 className="text-xs uppercase tracking-[0.35em] text-slate-400">Threats</h3>
         {onGoToMarket && showMarketTransition && (
           <button
@@ -134,7 +132,7 @@ export default function ThreatsPanel({
 
       <div className="flex-1 flex flex-col gap-2 min-h-0">
         {bossImage && !isZoomed && (
-          <div className="relative flex items-end justify-center gap-3 mb-1 z-20 -mt-8">
+          <div className="relative flex items-end justify-center gap-3 mb-1 -mt-8 z-0">
             <div
               className="w-32 h-24 rounded border border-amber-400 shadow-lg shadow-amber-400/30 bg-slate-900/70 cursor-pointer overflow-hidden"
               onClick={() => setHoverPreview({ type: "boss", data: bossCard, sourceId: bossCard.id, lock: true })}

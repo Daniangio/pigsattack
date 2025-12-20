@@ -19,10 +19,16 @@ export default function MarketPanel({
   showThreatsTransition = false,
   optionalBuyUsed = false,
 }) {
-  const upgrades = (Array.isArray(market?.upgrades) ? market.upgrades : MarketData.upgrades).filter(
+  const upgradesTop = (Array.isArray(market?.upgrades_top) ? market.upgrades_top : MarketData.upgrades_top).filter(
     (c) => c.id !== selectedCardId
   );
-  const weapons = (Array.isArray(market?.weapons) ? market.weapons : MarketData.weapons).filter(
+  const upgradesBottom = (Array.isArray(market?.upgrades_bottom) ? market.upgrades_bottom : MarketData.upgrades_bottom).filter(
+    (c) => c.id !== selectedCardId
+  );
+  const weaponsTop = (Array.isArray(market?.weapons_top) ? market.weapons_top : MarketData.weapons_top).filter(
+    (c) => c.id !== selectedCardId
+  );
+  const weaponsBottom = (Array.isArray(market?.weapons_bottom) ? market.weapons_bottom : MarketData.weapons_bottom).filter(
     (c) => c.id !== selectedCardId
   );
   const upgradeDeckRemaining = market?.upgrade_deck_remaining ?? 0;
@@ -80,7 +86,7 @@ export default function MarketPanel({
       </div>
 
       {/* main content grid (no overflow here, to avoid clipping the header images) */}
-      <div className={`flex-1 min-h-0 overflow-y-auto pr-1 ${panelGridClasses}`}>
+      <div className={`flex-1 min-h-0 pr-1 ${panelGridClasses}`}>
         {/* Upgrades panel */}
         <div className="relative flex flex-col h-full min-h-0 bg-slate-900/60 border border-slate-800 rounded-2xl p-3">
           {/* header row: image + deck count */}
@@ -99,30 +105,65 @@ export default function MarketPanel({
             </span>
           </div>
 
-          {/* scrollable cards list */}
-          <div className="flex-1 min-h-0 overflow-y-auto pr-1">
-            <div className={cardGridClasses}>
-              {upgrades.map((u, idx) =>
-                compact ? (
-                  <MarketCardCompact
-                    key={`${u.id}-${idx}`}
-                    card={u}
-                    onBuy={onCardBuy}
-                    buttonState={getButtonState(u)}
-                    highlight={shouldHighlight(u)}
-                    tooltip={getTooltip(u)}
-                  />
-                ) : (
-                  <MarketCardMini
-                    key={`${u.id}-${idx}`}
-                    card={u}
-                    onBuy={onCardBuy}
-                    buttonState={getButtonState(u)}
-                    highlight={shouldHighlight(u)}
-                    tooltip={getTooltip(u)}
-                  />
-                )
-              )}
+          <div className="flex-1 min-h-0 flex flex-col gap-2">
+            <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.24em] text-slate-400">
+              <span>New Stock</span>
+              <span className="text-slate-500">Top Lane</span>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+              <div className={cardGridClasses}>
+                {upgradesTop.map((u, idx) =>
+                  compact ? (
+                    <MarketCardCompact
+                      key={`${u.id}-${idx}`}
+                      card={u}
+                      onBuy={onCardBuy}
+                      buttonState={getButtonState(u)}
+                      highlight={shouldHighlight(u)}
+                      tooltip={getTooltip(u)}
+                    />
+                  ) : (
+                    <MarketCardMini
+                      key={`${u.id}-${idx}`}
+                      card={u}
+                      onBuy={onCardBuy}
+                      buttonState={getButtonState(u)}
+                      highlight={shouldHighlight(u)}
+                      tooltip={getTooltip(u)}
+                    />
+                  )
+                )}
+              </div>
+            </div>
+            <div className="h-px bg-slate-800" />
+            <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.24em] text-slate-400">
+              <span>Carryover</span>
+              <span className="text-slate-500">Bottom Lane</span>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+              <div className={cardGridClasses}>
+                {upgradesBottom.map((u, idx) =>
+                  compact ? (
+                    <MarketCardCompact
+                      key={`${u.id}-${idx}`}
+                      card={u}
+                      onBuy={onCardBuy}
+                      buttonState={getButtonState(u)}
+                      highlight={shouldHighlight(u)}
+                      tooltip={getTooltip(u)}
+                    />
+                  ) : (
+                    <MarketCardMini
+                      key={`${u.id}-${idx}`}
+                      card={u}
+                      onBuy={onCardBuy}
+                      buttonState={getButtonState(u)}
+                      highlight={shouldHighlight(u)}
+                      tooltip={getTooltip(u)}
+                    />
+                  )
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -145,30 +186,65 @@ export default function MarketPanel({
             </span>
           </div>
 
-          {/* scrollable cards list */}
-          <div className="flex-1 min-h-0 overflow-y-auto pr-1">
-            <div className={cardGridClasses}>
-              {weapons.map((w, idx) =>
-                compact ? (
-                  <MarketCardCompact
-                    key={`${w.id}-${idx}`}
-                    card={w}
-                    onBuy={onCardBuy}
-                    buttonState={getButtonState(w)}
-                    highlight={shouldHighlight(w)}
-                    tooltip={getTooltip(w)}
-                  />
-                ) : (
-                  <MarketCardMini
-                    key={`${w.id}-${idx}`}
-                    card={w}
-                    onBuy={onCardBuy}
-                    buttonState={getButtonState(w)}
-                    highlight={shouldHighlight(w)}
-                    tooltip={getTooltip(w)}
-                  />
-                )
-              )}
+          <div className="flex-1 min-h-0 flex flex-col gap-2">
+            <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.24em] text-slate-400">
+              <span>New Stock</span>
+              <span className="text-slate-500">Top Lane</span>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+              <div className={cardGridClasses}>
+                {weaponsTop.map((w, idx) =>
+                  compact ? (
+                    <MarketCardCompact
+                      key={`${w.id}-${idx}`}
+                      card={w}
+                      onBuy={onCardBuy}
+                      buttonState={getButtonState(w)}
+                      highlight={shouldHighlight(w)}
+                      tooltip={getTooltip(w)}
+                    />
+                  ) : (
+                    <MarketCardMini
+                      key={`${w.id}-${idx}`}
+                      card={w}
+                      onBuy={onCardBuy}
+                      buttonState={getButtonState(w)}
+                      highlight={shouldHighlight(w)}
+                      tooltip={getTooltip(w)}
+                    />
+                  )
+                )}
+              </div>
+            </div>
+            <div className="h-px bg-slate-800" />
+            <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.24em] text-slate-400">
+              <span>Carryover</span>
+              <span className="text-slate-500">Bottom Lane</span>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+              <div className={cardGridClasses}>
+                {weaponsBottom.map((w, idx) =>
+                  compact ? (
+                    <MarketCardCompact
+                      key={`${w.id}-${idx}`}
+                      card={w}
+                      onBuy={onCardBuy}
+                      buttonState={getButtonState(w)}
+                      highlight={shouldHighlight(w)}
+                      tooltip={getTooltip(w)}
+                    />
+                  ) : (
+                    <MarketCardMini
+                      key={`${w.id}-${idx}`}
+                      card={w}
+                      onBuy={onCardBuy}
+                      buttonState={getButtonState(w)}
+                      highlight={shouldHighlight(w)}
+                      tooltip={getTooltip(w)}
+                    />
+                  )
+                )}
+              </div>
             </div>
           </div>
         </div>

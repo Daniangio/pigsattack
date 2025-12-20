@@ -183,7 +183,18 @@ class GameSession:
                 p.buy_used = False
                 p.extend_used = False
         self._sync_era_from_deck()
-        self._refill_market()
+        market = self.state.market
+        if (
+            self.state.round == 1
+            and market
+            and not market.upgrades_bottom
+            and not market.weapons_bottom
+            and not market.upgrade_discard
+            and not market.weapon_discard
+        ):
+            self._refill_market_top()
+        else:
+            self._advance_market_round()
         self.state.add_log(f"Round {self.state.round} start. Resources produced.")
 
         self.state.phase = GamePhase.PLAYER_TURN
@@ -467,7 +478,8 @@ class GameSession:
 
     async def _handle_buy_upgrade(self, player: PlayerBoard, payload: Dict[str, Any]):
         self._assert_turn(player)
-        card = self._find_card(self.state.market.upgrades, payload.get("card_id"))
+        market = self.state.market
+        card = self._find_card((market.upgrades_top + market.upgrades_bottom), payload.get("card_id"))
         if not card:
             raise InvalidActionError("Upgrade not found.")
         if len(player.upgrades) >= player.upgrade_slots:
@@ -479,13 +491,14 @@ class GameSession:
         player.pay(card.cost)
         player.upgrades.append(card)
         player.vp += card.vp
-        self.state.market.upgrades = [c for c in self.state.market.upgrades if c.id != card.id]
-        self._refill_market()
+        market.upgrades_top = [c for c in market.upgrades_top if c.id != card.id]
+        market.upgrades_bottom = [c for c in market.upgrades_bottom if c.id != card.id]
         self.state.add_log(f"{player.username} bought upgrade {self._card_name(card)}.")
 
     async def _handle_buy_weapon(self, player: PlayerBoard, payload: Dict[str, Any]):
         self._assert_turn(player)
-        card = self._find_card(self.state.market.weapons, payload.get("card_id"))
+        market = self.state.market
+        card = self._find_card((market.weapons_top + market.weapons_bottom), payload.get("card_id"))
         if not card:
             raise InvalidActionError("Weapon not found.")
         if len(player.weapons) >= player.weapon_slots:
@@ -497,8 +510,8 @@ class GameSession:
         player.pay(card.cost)
         player.weapons.append(card)
         player.vp += card.vp
-        self.state.market.weapons = [c for c in self.state.market.weapons if c.id != card.id]
-        self._refill_market()
+        market.weapons_top = [c for c in market.weapons_top if c.id != card.id]
+        market.weapons_bottom = [c for c in market.weapons_bottom if c.id != card.id]
         self.state.add_log(f"{player.username} bought weapon {self._card_name(card)}.")
 
     async def _handle_pick_token(self, player: PlayerBoard, payload: Dict[str, Any]):
@@ -613,11 +626,12 @@ class GameSession:
         if not target:
             raise InvalidActionError("Target stance required.")
         try:
-            player.stance = Stance[target.upper()]
+            target_stance = Stance[target.upper()]
         except KeyError:
             raise InvalidActionError("Unknown stance.")
 
         self._consume_main_action(player)
+        player.stance = target_stance
         self.state.add_log(f"{player.username} realigned to {player.stance.value}.")
 
     async def _handle_convert(self, player: PlayerBoard, payload: Dict[str, Any]):
@@ -736,28 +750,64 @@ class GameSession:
                 self.state.add_log(f"{player.username} gained {eff.amount} conversion token(s) from {eff.source_name or 'an upgrade'}.")
 
     def _init_market(self):
-        """Shuffle decks and reveal initial market (N_players + 1)."""
+        """Shuffle decks and reveal initial market (top lane only)."""
         if not self.state.market:
             return
         market = self.state.market
-        market.upgrade_deck = list(market.upgrades)
-        market.weapon_deck = list(market.weapons)
+        market.upgrade_deck = list(market.upgrade_deck or [])
+        market.weapon_deck = list(market.weapon_deck or [])
         self.rng.shuffle(market.upgrade_deck)
         self.rng.shuffle(market.weapon_deck)
-        market.upgrades = []
-        market.weapons = []
-        self._refill_market()
+        market.upgrades_top = []
+        market.upgrades_bottom = []
+        market.weapons_top = []
+        market.weapons_bottom = []
+        market.upgrade_discard = []
+        market.weapon_discard = []
+        self._refill_market_top()
 
-    def _refill_market(self):
-        """Ensure visible market has N_players + 1 cards per pile."""
+    def _draw_market_cards(self, deck: List[MarketCard], discard: List[MarketCard], count: int) -> List[MarketCard]:
+        """Draw up to count cards, reshuffling discard into deck when needed."""
+        drawn: List[MarketCard] = []
+        while len(drawn) < count:
+            if not deck:
+                if not discard:
+                    break
+                self.rng.shuffle(discard)
+                deck.extend(discard)
+                discard.clear()
+            if not deck:
+                break
+            drawn.append(deck.pop(0))
+        return drawn
+
+    def _refill_market_top(self):
+        """Ensure the top lanes have N_players + 1 cards."""
         if not self.state.market:
             return
         desired = max(1, len(self.state.players) + 1)
         market = self.state.market
-        while len(market.upgrades) < desired and market.upgrade_deck:
-            market.upgrades.append(market.upgrade_deck.pop(0))
-        while len(market.weapons) < desired and market.weapon_deck:
-            market.weapons.append(market.weapon_deck.pop(0))
+        upgrade_needed = max(0, desired - len(market.upgrades_top))
+        weapon_needed = max(0, desired - len(market.weapons_top))
+        if upgrade_needed:
+            market.upgrades_top.extend(self._draw_market_cards(market.upgrade_deck, market.upgrade_discard, upgrade_needed))
+        if weapon_needed:
+            market.weapons_top.extend(self._draw_market_cards(market.weapon_deck, market.weapon_discard, weapon_needed))
+
+    def _advance_market_round(self):
+        """Discard bottom lanes, slide top to bottom, then refill top."""
+        if not self.state.market:
+            return
+        market = self.state.market
+        if market.upgrades_bottom:
+            market.upgrade_discard.extend(market.upgrades_bottom)
+        if market.weapons_bottom:
+            market.weapon_discard.extend(market.weapons_bottom)
+        market.upgrades_bottom = market.upgrades_top
+        market.weapons_bottom = market.weapons_top
+        market.upgrades_top = []
+        market.weapons_top = []
+        self._refill_market_top()
 
     def _sync_era_from_deck(self):
         if self.threat_manager and self.threat_manager.deck:

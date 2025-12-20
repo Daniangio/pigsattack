@@ -230,7 +230,10 @@ class GameDataLoader:
         upgrades = build_cards(upgrades_raw, CardType.UPGRADE, itertools.count(1))
         weapons = build_cards(weapons_raw, CardType.WEAPON, itertools.count(1))
 
-        return MarketState(upgrades=upgrades, weapons=weapons)
+        return MarketState(
+            upgrade_deck=upgrades,
+            weapon_deck=weapons,
+        )
 
     def _parse_threat_list(self, raw_items: List[Dict[str, Any]]) -> List[ThreatCard]:
         threats: List[ThreatCard] = []

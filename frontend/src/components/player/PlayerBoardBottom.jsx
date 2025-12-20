@@ -514,7 +514,7 @@ export default function PlayerBoardBottom({
   return (
     <div className="flex flex-col gap-2">
       <div
-        className={`relative bg-slate-950/90 border-t border-slate-800 backdrop-blur-xl ${
+        className={`relative z-40 bg-slate-950/90 border-t border-slate-800 backdrop-blur-xl ${
           collapsed ? "h-12 px-4 py-2" : "px-6 py-4"
         }`}
       >
@@ -526,18 +526,6 @@ export default function PlayerBoardBottom({
         >
           {collapsed ? "▼" : "▲"}
         </button>
-        {stanceMenuOpen && (
-          <StanceModal
-            players={modalPlayers}
-            setPlayers={setPlayers}
-            activePlayerId={activePlayerId}
-            onClose={onCloseStance}
-            onChangeStance={onAttemptStanceChange}
-            inline
-            disabled={!canChangeStance}
-          />
-        )}
-
         {collapsed ? (
           <div className="h-full flex items-center gap-4 overflow-visible">
             <div
@@ -687,7 +675,18 @@ export default function PlayerBoardBottom({
               {/* Tokens */}
               {/* Tokens and Actions */}
               <div className="flex flex-col gap-2 min-w-[280px]">
-                <div className="flex items-center gap-2">
+                <div className="relative flex items-center gap-2">
+                  {stanceMenuOpen && (
+                    <StanceModal
+                      players={modalPlayers}
+                      setPlayers={setPlayers}
+                      activePlayerId={activePlayerId}
+                      onClose={onCloseStance}
+                      onChangeStance={onAttemptStanceChange}
+                      inline
+                      disabled={!canChangeStance}
+                    />
+                  )}
                   <button
                     type="button"
                     onClick={() => {
