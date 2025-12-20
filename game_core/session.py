@@ -30,6 +30,7 @@ class GameSession:
                 username=p["username"],
                 is_bot=bool(p.get("is_bot")),
                 personality=p.get("personality") or "greedy",
+                planning_profile=p.get("planning_profile") or "full",
             )
             self.state.players[p["id"]] = board
             self.state.turn_order.append(p["id"])
@@ -307,7 +308,16 @@ class GameSession:
             self.state.turn_order = [last_player_id] + remaining
 
         self.state.round += 1
-        await self._check_game_over()
+        active_humans = [
+            p for p in self.state.players.values()
+            if not getattr(p, "is_bot", False) and p.status == PlayerStatus.ACTIVE
+        ]
+        active_bots = [
+            p for p in self.state.players.values()
+            if getattr(p, "is_bot", False) and p.status == PlayerStatus.ACTIVE
+        ]
+        force_game_over = not active_humans and bool(active_bots)
+        await self._check_game_over(force=force_game_over)
         if self.state.phase == GamePhase.GAME_OVER:
             return
 
@@ -397,6 +407,11 @@ class GameSession:
         if not result["can_afford"]:
             raise InvalidActionError(result["message"])
         is_boss_fight = self.state.boss_mode or self.state.phase == GamePhase.BOSS or result.get("boss_threshold") is not None
+        if is_boss_fight and result.get("boss_threshold") is not None:
+            idx = result.get("boss_threshold")
+            for entry in self.state.boss_thresholds_state:
+                if int(entry.get("index", -1)) == idx and entry.get("defeated"):
+                    raise InvalidActionError("That boss threshold has already been defeated.")
         if not is_boss_fight:
             self._consume_main_action(player)
 
@@ -434,6 +449,13 @@ class GameSession:
             if getattr(threat, "spoils", None):
                 for reward in threat.spoils:
                     reward.apply(player)
+                    if reward.kind == "slot" and reward.slot_type == "weapon":
+                        market = self.state.market
+                        if market and len(player.weapons) < player.weapon_slots:
+                            drawn = self._draw_market_cards(market.weapon_deck, market.weapon_discard, 1)
+                            if drawn:
+                                player.weapons.append(drawn[0])
+                                self.state.add_log(f"{player.username} gained {self._card_name(drawn[0])} from the weapon deck.")
                     self.state.add_log(f"{player.username} gains {reward.label}.")
             else:
                 self._apply_reward(player, getattr(threat, "reward", ""))
@@ -684,7 +706,16 @@ class GameSession:
             player.tokens[TokenType.WILD] = min(3, current_wild + 1)
             self.state.add_log(f"{player.username} gains 1 wild token at end of turn.")
 
-        await self._check_game_over()
+        active_humans = [
+            p for p in self.state.players.values()
+            if not getattr(p, "is_bot", False) and p.status == PlayerStatus.ACTIVE
+        ]
+        active_bots = [
+            p for p in self.state.players.values()
+            if getattr(p, "is_bot", False) and p.status == PlayerStatus.ACTIVE
+        ]
+        force_game_over = not active_humans and bool(active_bots)
+        await self._check_game_over(force=force_game_over)
         if self.state.phase == GamePhase.GAME_OVER:
             return
         if self.state.boss_mode and self.state.boss_thresholds_state and all(e.get("defeated") for e in self.state.boss_thresholds_state):
@@ -706,15 +737,17 @@ class GameSession:
             self._begin_player_turn()
 
     async def _handle_surrender(self, player: PlayerBoard, payload: Dict[str, Any]):
+        was_active = player.user_id == self.state.get_active_player_id()
         player.status = PlayerStatus.SURRENDERED
         self.state.add_log(f"{player.username} surrendered.")
-        # Run end-turn effects if this player was active
-        try:
-            await self._process_end_turn(player, payload or {}, allow_inactive=True)
-        except Exception:
-            pass
-        await self._check_game_over()
-        await self._skip_inactive_players()
+        # Run end-turn effects only if this player was active.
+        if was_active:
+            try:
+                await self._process_end_turn(player, payload or {}, allow_inactive=True)
+            except Exception:
+                await self._check_game_over()
+        else:
+            await self._check_game_over()
 
     async def _handle_disconnect(self, player: PlayerBoard, payload: Dict[str, Any]):
         player.status = PlayerStatus.DISCONNECTED
@@ -857,9 +890,16 @@ class GameSession:
         return next((c for c in cards if c.id == card_id), None)
 
     async def _check_game_over(self, force: bool = False):
+        if self.state.phase == GamePhase.GAME_OVER:
+            return
         total_humans = [p for p in self.state.players.values() if not getattr(p, "is_bot", False)]
         active_humans = [p for p in total_humans if p.status == PlayerStatus.ACTIVE]
         active_bots = [p for p in self.state.players.values() if getattr(p, "is_bot", False) and p.status == PlayerStatus.ACTIVE]
+        if not force and not active_humans and active_bots:
+            active_id = self.state.get_active_player_id()
+            active_player = self.state.players.get(active_id) if active_id else None
+            if active_player and getattr(active_player, "is_bot", False) and self.state.phase in {GamePhase.PLAYER_TURN, GamePhase.BOSS}:
+                return
         if self.state.boss_mode and active_humans and not force:
             return
         if self.threat_manager:

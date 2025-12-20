@@ -138,11 +138,31 @@ const RoomPage = ({ onLogout }) => {
     });
   };
 
+  const handleSetBotPlanningProfile = (botId, planning_profile) => {
+    if (!sendMessage || !isHost) return;
+    sendMessage({
+      action: "set_bot_planning_profile",
+      payload: { room_id: roomId, bot_id: botId, planning_profile },
+    });
+  };
+
   const personalityOptions = [
     { value: "greedy", label: "Greedy (best)" },
     { value: "top3", label: "Top 3 (uniform)" },
     { value: "softmax5", label: "Top 5 (softmax)" },
   ];
+  const planningProfileOptions = [
+    { value: "full", label: "Full planning" },
+    { value: "buy_only", label: "Buy only" },
+    { value: "fight_only", label: "Fight only" },
+    { value: "fight_buy", label: "Fight + buy" },
+  ];
+  const planningProfileLabels = {
+    full: "Full planning",
+    buy_only: "Buy only",
+    fight_only: "Fight only",
+    fight_buy: "Fight + buy",
+  };
 
   const handleDeckChange = (key, value) => {
     if (!sendMessage) return;
@@ -194,7 +214,8 @@ const RoomPage = ({ onLogout }) => {
                     )}
                     {p.is_bot && (
                       <span className="text-xs font-semibold text-blue-300">
-                        Bot • {p.personality || "greedy"} • Depth {p.bot_depth ?? 2}
+                        Bot • {p.personality || "greedy"} • Depth {p.bot_depth ?? 2} • Plan{" "}
+                        {planningProfileLabels[p.planning_profile || "full"] || "Full planning"}
                       </span>
                     )}
                   </div>
@@ -206,6 +227,17 @@ const RoomPage = ({ onLogout }) => {
                         onChange={(e) => handleSetBotPersonality(p.id, e.target.value)}
                       >
                         {personalityOptions.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        className="text-sm bg-gray-800 border border-gray-600 rounded px-2 py-1 text-gray-100"
+                        value={p.planning_profile || "full"}
+                        onChange={(e) => handleSetBotPlanningProfile(p.id, e.target.value)}
+                      >
+                        {planningProfileOptions.map((opt) => (
                           <option key={opt.value} value={opt.value}>
                             {opt.label}
                           </option>

@@ -478,7 +478,14 @@ class RoomManager:
             return
 
         bot_id = f"bot_{uuid.uuid4().hex[:6]}"
-        bot_user = User(id=bot_id, username=bot_id, is_bot=True, personality="greedy", bot_depth=2)
+        bot_user = User(
+            id=bot_id,
+            username=bot_id,
+            is_bot=True,
+            personality="greedy",
+            bot_depth=2,
+            planning_profile="fight_buy",
+        )
         room.players.append(bot_user)
         fake_users_db[bot_id] = bot_user
         print(f"Bot {bot_id} added to room {room_id}.")
@@ -550,4 +557,32 @@ class RoomManager:
         bot.bot_depth = depth_int
         if bot_id in fake_users_db:
             fake_users_db[bot_id].bot_depth = depth_int
+        await self.broadcast_room_state(room_id, manager)
+
+    async def set_bot_planning_profile(
+        self,
+        host: User,
+        room_id: str,
+        bot_id: str,
+        planning_profile: str,
+        manager: ConnectionManager,
+    ):
+        """Host sets the bot planning profile before the game starts."""
+        room = self.rooms.get(room_id)
+        if not room or room.status != "lobby":
+            return
+        if room.host_id != host.id:
+            await manager.send_to_user(host.id, {"type": "error", "payload": {"message": "Only host can configure bots."}})
+            return
+        allowed = {"full", "buy_only", "fight_only", "fight_buy"}
+        if planning_profile not in allowed:
+            await manager.send_to_user(host.id, {"type": "error", "payload": {"message": "Invalid planning profile."}})
+            return
+        bot = next((p for p in room.players if p.id == bot_id and p.is_bot), None)
+        if not bot:
+            await manager.send_to_user(host.id, {"type": "error", "payload": {"message": "Bot not found."}})
+            return
+        bot.planning_profile = planning_profile
+        if bot_id in fake_users_db:
+            fake_users_db[bot_id].planning_profile = planning_profile
         await self.broadcast_room_state(room_id, manager)

@@ -57,7 +57,7 @@ class BotPlanner:
     def __init__(
         self,
         max_depth: int = 2,
-        top_n: int = 5,
+        top_n: int = 10,
         max_branches: int = 150,
         rng: Optional[random.Random] = None,
     ):
@@ -68,13 +68,20 @@ class BotPlanner:
         self._quiet = True  # disable logging in simulation clones
         self._score_cache: Dict[str, float] = {}
 
-    async def plan(self, game: GameSession, player_id: str, personality: str = "greedy") -> Dict[str, Any]:
+    async def plan(
+        self,
+        game: GameSession,
+        player_id: str,
+        personality: str = "greedy",
+        planning_profile: Optional[str] = None,
+    ) -> Dict[str, Any]:
         base_round = getattr(game.state, "round", 0)
         base_era = getattr(game.state, "era", "day")
         start_score = self._score_state_cached(game, player_id)
         best_runs: List[Dict[str, Any]] = []
         best_runs: List[Dict[str, Any]] = []
         score_cache: Dict[str, float] = {}
+        active_profile = planning_profile or getattr(game.state.players.get(player_id), "planning_profile", "full") or "full"
 
         async def evaluate_turn(session: GameSession, turn_index: int, accumulated_steps: List[Dict[str, Any]]):
             if turn_index >= self.max_depth or session.state.phase == GamePhase.GAME_OVER:
@@ -91,7 +98,7 @@ class BotPlanner:
                 )
                 return
 
-            turn_plans = await self._enumerate_turn_plans(session, player_id)
+            turn_plans = await self._enumerate_turn_plans(session, player_id, active_profile)
             if not turn_plans:
                 turn_plans = [[{"type": "end_turn", "payload": {}}]]
 
@@ -133,7 +140,7 @@ class BotPlanner:
             scored_plans = scored_plans[: self.top_n]
 
             for _, plan_actions, sim_after_plan, plan_steps in scored_plans:
-                advanced = await self._advance_to_next_bot_turn(sim_after_plan, player_id)
+                advanced = await self._advance_to_next_bot_turn(sim_after_plan, player_id, personality=personality)
                 await evaluate_turn(advanced, turn_index + 1, accumulated_steps + plan_steps)
 
         await evaluate_turn(self._clone_quiet(game), 0, [])
@@ -162,106 +169,87 @@ class BotPlanner:
             "simulations": best_runs,
         }
 
-    async def _enumerate_actions(self, gs: GameSession, player_id: str) -> List[Dict[str, Any]]:
-        return await self._enumerate_turn_plans(gs, player_id)
+    async def _enumerate_actions(
+        self, gs: GameSession, player_id: str, planning_profile: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        return await self._enumerate_turn_plans(gs, player_id, planning_profile)
 
     async def _enumerate_turn_plans(
-        self, gs: GameSession, player_id: str, conversions_done: int = 0
+        self, gs: GameSession, player_id: str, planning_profile: Optional[str] = None
     ) -> List[List[Dict[str, Any]]]:
         """Build ordered action plans (one turn) with optional skips for non-main actions."""
         player = gs.state.players.get(player_id)
         if not player:
             return []
-
-        # --- Conversion tokens (0/1/2 allowed) ---
-        max_conv_left = min(player.tokens.get(TokenType.CONVERSION, 0), max(0, 2 - conversions_done))
-        if max_conv_left > 0:
-            conv_actions: List[Dict[str, Any]] = []
-            for from_res in ResourceType:
-                amount = player.resources.get(from_res, 0)
-                if amount <= 0:
-                    continue
-                for to_res in ResourceType:
-                    if to_res == from_res:
-                        continue
-                    conv_actions.append(
-                        [
-                            {
-                                "type": "convert",
-                                "payload": {"from": from_res.value, "to": to_res.value, "amount": amount},
-                            }
-                        ]
-                    )
-            # include no-conversion option
-            conv_options = [[]]
-            conv_options.extend(conv_actions)
-            # allow pairs
-            if len(conv_actions) > 1:
-                for i in range(len(conv_actions)):
-                    for j in range(i + 1, len(conv_actions)):
-                        conv_options.append(conv_actions[i] + conv_actions[j])
-        else:
-            conv_options = [[]]
+        profile = (planning_profile or getattr(player, "planning_profile", "full") or "full").lower()
+        if profile not in {"full", "buy_only", "fight_only", "fight_buy"}:
+            profile = "full"
+        allow_buys = profile in {"full", "buy_only", "fight_buy"}
+        allow_fights = profile in {"full", "fight_only", "fight_buy"}
+        allow_realign = profile == "full"
+        allow_pick_token = profile == "full"
+        allow_activations = profile == "full"
 
         # --- Buying/slots ---
         buy_upgrades: List[List[Dict[str, Any]]] = []
         buy_weapons: List[List[Dict[str, Any]]] = []
         visible_upgrades = gs.state.market.upgrades_top + gs.state.market.upgrades_bottom
         visible_weapons = gs.state.market.weapons_top + gs.state.market.weapons_bottom
-        need_upgrade_slot = (
+        can_extend_upgrade = (
             not player.extend_used
             and player.tokens.get(TokenType.WILD, 0) > 0
-            and len(player.upgrades) >= player.upgrade_slots
             and player.upgrade_slots < 4
-            and any(player.can_pay(card.cost) for card in visible_upgrades)
         )
-        need_weapon_slot = (
+        can_extend_weapon = (
             not player.extend_used
             and player.tokens.get(TokenType.WILD, 0) > 0
-            and len(player.weapons) >= player.weapon_slots
             and player.weapon_slots < 4
-            and any(player.can_pay(card.cost) for card in visible_weapons)
         )
-        if not player.extend_used:
-            if need_upgrade_slot:
-                pass
-            if need_weapon_slot:
-                pass
 
-        if not player.buy_used:
-            if len(player.upgrades) < player.upgrade_slots or need_upgrade_slot:
-                for card in visible_upgrades:
-                    if player.can_pay(card.cost):
-                        action = {
-                            "type": "buy_upgrade",
-                            "payload": {"card_id": card.id, "card_name": getattr(card, "name", card.id)},
-                        }
-                        if need_upgrade_slot and len(player.upgrades) >= player.upgrade_slots:
-                            buy_upgrades.append(
-                                [{"type": "extend_slot", "payload": {"slot_type": "upgrade"}}, action]
-                            )
-                        if len(player.upgrades) < player.upgrade_slots:
-                            buy_upgrades.append([action])
-            if len(player.weapons) < player.weapon_slots or need_weapon_slot:
-                for card in visible_weapons:
-                    if player.can_pay(card.cost):
-                        action = {
-                            "type": "buy_weapon",
-                            "payload": {"card_id": card.id, "card_name": getattr(card, "name", card.id)},
-                        }
-                        if need_weapon_slot and len(player.weapons) >= player.weapon_slots:
-                            buy_weapons.append(
-                                [{"type": "extend_slot", "payload": {"slot_type": "weapon"}}, action]
-                            )
-                        if len(player.weapons) < player.weapon_slots:
-                            buy_weapons.append([action])
+        if allow_buys and not player.buy_used:
+            for card in visible_upgrades:
+                needs_slot = len(player.upgrades) >= player.upgrade_slots
+                if needs_slot and not can_extend_upgrade:
+                    continue
+                extend_seq = [{"type": "extend_slot", "payload": {"slot_type": "upgrade"}}] if needs_slot else []
+                action = {
+                    "type": "buy_upgrade",
+                    "payload": {"card_id": card.id, "card_name": getattr(card, "name", card.id)},
+                }
+                if player.can_pay(card.cost):
+                    buy_upgrades.append(extend_seq + [action])
+                else:
+                    if not self._can_convert_to_cover_cost(player, card.cost):
+                        continue
+                    conv_action = self._pick_conversion_for_cost(player, card.cost)
+                    if conv_action:
+                        buy_upgrades.append(extend_seq + [conv_action, action])
+
+            for card in visible_weapons:
+                needs_slot = len(player.weapons) >= player.weapon_slots
+                if needs_slot and not can_extend_weapon:
+                    continue
+                extend_seq = [{"type": "extend_slot", "payload": {"slot_type": "weapon"}}] if needs_slot else []
+                action = {
+                    "type": "buy_weapon",
+                    "payload": {"card_id": card.id, "card_name": getattr(card, "name", card.id)},
+                }
+                if player.can_pay(card.cost):
+                    buy_weapons.append(extend_seq + [action])
+                else:
+                    if not self._can_convert_to_cover_cost(player, card.cost):
+                        continue
+                    conv_action = self._pick_conversion_for_cost(player, card.cost)
+                    if conv_action:
+                        buy_weapons.append(extend_seq + [conv_action, action])
         buy_options: List[List[Dict[str, Any]]] = [[]]
-        buy_options.extend(buy_upgrades)
-        buy_options.extend(buy_weapons)
+        if allow_buys:
+            buy_options.extend(buy_upgrades)
+            buy_options.extend(buy_weapons)
 
         # --- Upgrade activations ---
         activation_options: List[List[Dict[str, Any]]] = [[]]
-        if player.upgrades:
+        if allow_activations and player.upgrades:
             for card in player.upgrades:
                 if player.active_used.get(card.id):
                     continue
@@ -277,31 +265,32 @@ class BotPlanner:
                             activation_options.append([{"type": "activate_card", "payload": {"card_id": card.id, "resource": res}}])
 
         # --- Main action bucket (required) ---
-        main_actions: List[Dict[str, Any]] = []
-        fights = await self._generate_fight_actions(gs, player_id)
-        if fights:
-            main_actions.extend(fights)
-        else:
-            if not player.action_used:
-                for stance in Stance:
-                    if stance != player.stance:
-                        main_actions.append({"type": "realign", "payload": {"stance": stance.value}})
-                for token in ["attack", "conversion", "wild"]:
-                    if player.tokens.get(TokenType[token.upper()], 0) < 3:
-                        main_actions.append({"type": "pick_token", "payload": {"token": token}})
-            if not main_actions:
-                main_actions.append({"type": "end_turn", "payload": {}})
+        main_actions: List[List[Dict[str, Any]]] = []
+        fights: List[List[Dict[str, Any]]] = []
+        if allow_fights:
+            fights = await self._generate_fight_actions(gs, player_id)
+            if fights:
+                main_actions.extend(fights)
+        if not player.action_used and allow_realign:
+            for stance in Stance:
+                if stance != player.stance:
+                    main_actions.append([{"type": "realign", "payload": {"stance": stance.value}}])
+        if not fights and not player.action_used and allow_pick_token:
+            for token in ["attack", "conversion", "wild"]:
+                if player.tokens.get(TokenType[token.upper()], 0) < 3:
+                    main_actions.append([{"type": "pick_token", "payload": {"token": token}}])
+        if not main_actions:
+            main_actions.append([{"type": "end_turn", "payload": {}}])
         plans: List[List[Dict[str, Any]]] = []
-        for conv_seq in conv_options:
-            for buy_seq in buy_options:
-                for act_seq in activation_options:
-                    for main_action in main_actions:
-                        plans.append(conv_seq + buy_seq + act_seq + [main_action])
+        for buy_seq in buy_options:
+            for act_seq in activation_options:
+                for main_action in main_actions:
+                    plans.append(buy_seq + act_seq + main_action)
         if len(plans) > 80:
             plans = plans[:80]
         return plans
 
-    async def _generate_fight_actions(self, gs: GameSession, player_id: str) -> List[Dict[str, Any]]:
+    async def _generate_fight_actions(self, gs: GameSession, player_id: str) -> List[List[Dict[str, Any]]]:
         player = gs.state.players.get(player_id)
         if not player:
             return []
@@ -317,26 +306,32 @@ class BotPlanner:
 
         playable_weapons = self._playable_weapons(gs, player)
         weapon_sets = list(self._weapon_subsets(playable_weapons))
-        actions: List[Dict[str, Any]] = []
-        seen_keys = set()
+        best_by_target: Dict[Tuple[int, str], Tuple[int, int, List[Dict[str, Any]]]] = {}
         for row_index, threat in targets:
             for subset in weapon_sets:
-                payload = self._build_fight_payload(gs, player, row_index, threat, subset)
-                if not payload:
+                built = self._build_fight_payload(gs, player, row_index, threat, subset)
+                if not built:
                     continue
-                use_tokens = payload.get("use_tokens", {}) or {}
-                key = (
-                    row_index,
-                    payload.get("threat_id"),
-                    tuple(sorted(payload.get("played_weapons", []))),
-                    use_tokens.get("attack", 0),
-                    tuple(sorted((use_tokens.get("wild_allocation", {}) or {}).items())),
-                )
-                if key in seen_keys:
+                payload, resource_cost, token_used, can_afford, adjusted_cost = built
+                threat_id = payload.get("threat_id")
+                if not threat_id:
                     continue
-                seen_keys.add(key)
-                actions.append({"type": "fight", "payload": payload})
-        return actions
+                plans: List[List[Dict[str, Any]]] = []
+                fight_action = {"type": "fight", "payload": payload}
+                if can_afford:
+                    plans.append([fight_action])
+                else:
+                    conversion_candidates = self._pick_conversion_for_fight(player, adjusted_cost)
+                    for conv_action in conversion_candidates:
+                        if self._can_afford_fight_with_conversion(gs, player, payload, conv_action):
+                            plans.append([conv_action, fight_action])
+                for seq in plans:
+                    key = (row_index, str(threat_id))
+                    candidate = (resource_cost, token_used, seq)
+                    current = best_by_target.get(key)
+                    if not current or candidate[0] < current[0] or (candidate[0] == current[0] and candidate[1] < current[1]):
+                        best_by_target[key] = candidate
+        return [seq for _, _, seq in best_by_target.values()]
 
     def _has_range_any(self, gs: GameSession, player: Any) -> bool:
         cards = (player.weapons or []) + (player.upgrades or [])
@@ -389,7 +384,7 @@ class BotPlanner:
         row_index: int,
         threat: Any,
         weapons: Sequence[Any],
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Optional[Tuple[Dict[str, Any], int, int, bool, Dict[ResourceType, int]]]:
         threat_id = getattr(threat, "id", None)
         if threat_id is None:
             return None
@@ -421,9 +416,140 @@ class BotPlanner:
             result = gs._compute_fight_cost(player, payload)
         except Exception:
             return None
-        if not result.get("can_afford"):
+        total_cost = sum(int(v or 0) for v in result.get("adjusted_cost", {}).values())
+        token_used = int(attack_used) + sum(int(v) for v in wild_alloc.values())
+        return payload, total_cost, token_used, bool(result.get("can_afford")), result.get("adjusted_cost", {})
+
+    def _pick_conversion_for_fight(
+        self, player: Any, cost: Dict[ResourceType, int]
+    ) -> List[Dict[str, Any]]:
+        if not cost:
+            return []
+        if player.tokens.get(TokenType.CONVERSION, 0) <= 0:
+            return []
+        remaining: Dict[ResourceType, int] = {}
+        missing: Dict[ResourceType, int] = {}
+        for res in ResourceType:
+            available = int(player.resources.get(res, 0))
+            required = int(cost.get(res, 0))
+            remaining[res] = max(0, available - required)
+            missing[res] = max(0, required - available)
+        highest_res, highest_amount = max(remaining.items(), key=lambda kv: kv[1])
+        if highest_amount <= 0:
+            return []
+        candidates: List[Dict[str, Any]] = []
+        for res in ResourceType:
+            miss = missing.get(res, 0)
+            if miss <= 0 or res == highest_res:
+                continue
+            if miss <= 3 and highest_amount >= miss:
+                candidates.append(
+                    {
+                        "type": "convert",
+                        "payload": {"from": highest_res.value, "to": res.value, "amount": int(miss)},
+                    }
+                )
+        return candidates
+
+    def _can_afford_fight_with_conversion(
+        self,
+        gs: GameSession,
+        player: Any,
+        payload: Dict[str, Any],
+        conversion_action: Dict[str, Any],
+    ) -> bool:
+        conv_payload = conversion_action.get("payload") or {}
+        from_key = conv_payload.get("from")
+        to_key = conv_payload.get("to")
+        amount = int(conv_payload.get("amount") or 0)
+        if not from_key or not to_key or amount <= 0:
+            return False
+        try:
+            from_res = ResourceType(from_key)
+            to_res = ResourceType(to_key)
+        except Exception:
+            return False
+        if from_res == to_res:
+            return False
+        if player.resources.get(from_res, 0) < amount:
+            return False
+        sim_player = copy.copy(player)
+        sim_player.resources = dict(player.resources)
+        sim_player.resources[from_res] = max(0, sim_player.resources.get(from_res, 0) - amount)
+        sim_player.resources[to_res] = sim_player.resources.get(to_res, 0) + amount
+        try:
+            result = gs._compute_fight_cost(sim_player, payload)
+        except Exception:
+            return False
+        return bool(result.get("can_afford"))
+
+    def _pick_conversion_for_cost(self, player: Any, cost: Dict[ResourceType, int]) -> Optional[Dict[str, Any]]:
+        """Pick one conversion token action that enables buying; returns None if not needed or unavailable."""
+        if not cost:
             return None
-        return payload
+        if player.tokens.get(TokenType.CONVERSION, 0) <= 0:
+            return None
+        if player.can_pay(cost):
+            return None
+        if not self._can_convert_to_cover_cost(player, cost):
+            return None
+
+        valid_actions: List[Dict[str, Any]] = []
+        for from_res in ResourceType:
+            available = player.resources.get(from_res, 0)
+            if available <= 0:
+                continue
+            max_amount = min(3, int(available))
+            for to_res in ResourceType:
+                if to_res == from_res:
+                    continue
+                for amount in range(1, max_amount + 1):
+                    test_resources = dict(player.resources)
+                    test_resources[from_res] = max(0, test_resources.get(from_res, 0) - amount)
+                    test_resources[to_res] = test_resources.get(to_res, 0) + amount
+                    if self._can_pay_cost(cost, test_resources):
+                        valid_actions.append(
+                            {
+                                "type": "convert",
+                                "payload": {"from": from_res.value, "to": to_res.value, "amount": amount},
+                            }
+                        )
+        if not valid_actions:
+            return None
+        return self.rng.choice(valid_actions)
+
+    def _can_convert_to_cover_cost(self, player: Any, cost: Dict[ResourceType, int]) -> bool:
+        if not cost:
+            return False
+        if player.tokens.get(TokenType.CONVERSION, 0) <= 0:
+            return False
+        total_cost = sum(int(v or 0) for v in cost.values())
+        total_resources = sum(int(v or 0) for v in player.resources.values())
+        if total_cost > total_resources:
+            return False
+        missing: Dict[ResourceType, int] = {}
+        surplus: Dict[ResourceType, int] = {}
+        for res in ResourceType:
+            required = int(cost.get(res, 0))
+            available = int(player.resources.get(res, 0))
+            missing[res] = max(0, required - available)
+            surplus[res] = max(0, available - required)
+        missing_total = sum(missing.values())
+        if missing_total == 0:
+            return False
+        if missing_total > 3:
+            return False
+        missing_res = [res for res, amt in missing.items() if amt > 0]
+        if len(missing_res) != 1:
+            return False
+        need = missing[missing_res[0]]
+        return any(res != missing_res[0] and amt >= need for res, amt in surplus.items())
+
+    def _can_pay_cost(self, cost: Dict[ResourceType, int], resources: Dict[ResourceType, int]) -> bool:
+        for res, amt in (cost or {}).items():
+            if resources.get(res, 0) < int(amt or 0):
+                return False
+        return True
 
     def _plan_tokens(self, player: Any, cost: Dict[ResourceType, int]) -> Tuple[int, Dict[ResourceType, int]]:
         # Attack tokens reduce R by 2; use only when missing more than 1R initially
@@ -505,8 +631,14 @@ class BotPlanner:
                 return False
         return True
 
-    async def _advance_to_next_bot_turn(self, sim: GameSession, bot_id: str, score_cache: Optional[Dict[str, float]] = None) -> GameSession:
-        """Advance simulation through other players using greedy plans until the bot's turn returns."""
+    async def _advance_to_next_bot_turn(
+        self,
+        sim: GameSession,
+        bot_id: str,
+        personality: str = "greedy",
+        score_cache: Optional[Dict[str, float]] = None,
+    ) -> GameSession:
+        """Advance simulation through other players using the planning bot's choice policy."""
         current = self._clone_quiet(sim)
         cache = score_cache if score_cache is not None else self._score_cache
         guard = 0
@@ -516,23 +648,24 @@ class BotPlanner:
                 break
             if active == bot_id:
                 break
-            plans = await self._enumerate_turn_plans(current, active)
+            active_player = current.state.players.get(active)
+            profile = getattr(active_player, "planning_profile", "full") if active_player else "full"
+            plans = await self._enumerate_turn_plans(current, active, profile)
             if not plans:
                 plans = [[{"type": "end_turn", "payload": {}}]]
-            best_sim = None
-            best_score = -1e9
+            candidate_runs: List[Dict[str, Any]] = []
             for plan in plans:
                 trial = self._clone_quiet(current)
                 success = await self._apply_plan_in_place(trial, active, plan)
                 if not success:
                     continue
                 score = self._score_state_cached(trial, active, cache)
-                if score > best_score:
-                    best_score = score
-                    best_sim = trial
-            if not best_sim:
+                candidate_runs.append({"score": score, "plan": plan, "sim": trial})
+            if not candidate_runs:
                 break
-            current = best_sim
+            candidate_runs.sort(key=lambda run: run.get("score", -1e9), reverse=True)
+            chosen = self._choose_run_by_personality(candidate_runs, personality) or candidate_runs[0]
+            current = chosen["sim"]
             guard += 1
             if guard > 50:
                 break

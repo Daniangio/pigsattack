@@ -17,6 +17,8 @@ class User(BaseModel):
     hashed_password: Optional[str] = None
     is_bot: bool = False
     personality: str = "greedy"
+    bot_depth: int = 2
+    planning_profile: str = "full"
 
 class GameParticipant(BaseModel):
     """Represents a player's state within a specific game."""

@@ -224,6 +224,14 @@ async def websocket_endpoint(websocket: WebSocket):
                     payload.get("depth"),
                     connection_manager,
                 )
+            elif action == "set_bot_planning_profile":
+                await room_manager.set_bot_planning_profile(
+                    user,
+                    payload.get("room_id"),
+                    payload.get("bot_id"),
+                    payload.get("planning_profile"),
+                    connection_manager,
+                )
             elif action == "set_room_decks":
                 await room_manager.set_room_decks(user, payload, connection_manager)
             

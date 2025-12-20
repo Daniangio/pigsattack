@@ -67,6 +67,7 @@ class GameManager:
                     "username": p.user.username,
                     "is_bot": getattr(p.user, "is_bot", False),
                     "personality": getattr(p.user, "personality", "greedy"),
+                    "planning_profile": getattr(p.user, "planning_profile", "full"),
                 }
                 for p in participants
             ]
@@ -404,7 +405,13 @@ class GameManager:
                 await asyncio.sleep(0)
                 player = game.state.players.get(active_id)
                 personality = getattr(player, "personality", "greedy") if player else "greedy"
-                plan = await self.bot_planner.plan(game, active_id, personality=personality)
+                planning_profile = getattr(player, "planning_profile", "full") if player else "full"
+                plan = await self.bot_planner.plan(
+                    game,
+                    active_id,
+                    personality=personality,
+                    planning_profile=planning_profile,
+                )
                 if plan.get("logs"):
                     game.state.add_bot_logs(active_id, plan["logs"])
                 if plan.get("simulations") is not None:

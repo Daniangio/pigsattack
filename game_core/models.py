@@ -265,6 +265,7 @@ class PlayerBoard:
     username: str
     is_bot: bool = False
     personality: str = "greedy"
+    planning_profile: str = "full"
     stance: Stance = Stance.BALANCED
     turn_initial_stance: Stance = Stance.BALANCED
     resources: Dict[ResourceType, int] = field(default_factory=empty_resources)
@@ -320,6 +321,7 @@ class PlayerBoard:
             "username": self.username,
             "is_bot": self.is_bot,
             "personality": self.personality,
+            "planning_profile": self.planning_profile,
             "stance": self.stance.value,
             "turn_initial_stance": self.turn_initial_stance.value,
             "resources": resource_to_wire(self.resources),
