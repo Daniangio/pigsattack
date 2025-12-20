@@ -1,9 +1,16 @@
 import uuid
+import os
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 from .server_models import User, Room, LobbyState, GameRecord, GameParticipant, PlayerStatus
 from .connection_manager import ConnectionManager
 from .routers import fake_games_db, fake_users_db
+from .custom_content import (
+    CUSTOM_THREATS_DIR,
+    CUSTOM_BOSS_DIR,
+    CUSTOM_UPGRADES_DIR,
+    CUSTOM_WEAPONS_DIR,
+)
 
 # --- NEW GAME CORE IMPORTS ---
 from typing import TYPE_CHECKING
@@ -232,7 +239,16 @@ class RoomManager:
         room.status = "in_game"
         # GameManager will send 'game_state_update'.
         # Clients' <StateGuard> will handle navigation.
-        await self.game_manager.create_game(game_record_id, participants)
+        await self.game_manager.create_game(
+            game_record_id,
+            participants,
+            deck_selection={
+                "threat_deck": room.threat_deck,
+                "boss_deck": room.boss_deck,
+                "upgrade_deck": room.upgrade_deck,
+                "weapon_deck": room.weapon_deck,
+            },
+        )
         await self.broadcast_lobby_state(manager)
 
     async def end_game(self, room: Room, record: GameRecord, manager: ConnectionManager, winner: Optional[User]):
@@ -362,6 +378,43 @@ class RoomManager:
         if exclude_user_id:
             all_user_ids = [uid for uid in all_user_ids if uid != exclude_user_id]
         await manager.broadcast_to_users(all_user_ids, state_update_msg)
+
+    def _deck_exists(self, deck_name: str, folder: str) -> bool:
+        if not deck_name or deck_name == "default":
+            return True
+        return os.path.isfile(os.path.join(folder, f"{deck_name}.json"))
+
+    async def set_room_decks(self, user: User, payload: dict, manager: ConnectionManager):
+        room_id, room = self.find_room_by_user(user.id)
+        if not room or room.status != "lobby":
+            return
+        if room.host_id != user.id:
+            await manager.send_to_user(user.id, {"type": "error", "payload": {"message": "Only host can set decks."}})
+            return
+
+        updates = {}
+        threat_deck = payload.get("threat_deck")
+        boss_deck = payload.get("boss_deck")
+        upgrade_deck = payload.get("upgrade_deck")
+        weapon_deck = payload.get("weapon_deck")
+
+        if threat_deck is not None and self._deck_exists(threat_deck, CUSTOM_THREATS_DIR):
+            updates["threat_deck"] = threat_deck or "default"
+        if boss_deck is not None and self._deck_exists(boss_deck, CUSTOM_BOSS_DIR):
+            updates["boss_deck"] = boss_deck or "default"
+        if upgrade_deck is not None and self._deck_exists(upgrade_deck, CUSTOM_UPGRADES_DIR):
+            updates["upgrade_deck"] = upgrade_deck or "default"
+        if weapon_deck is not None and self._deck_exists(weapon_deck, CUSTOM_WEAPONS_DIR):
+            updates["weapon_deck"] = weapon_deck or "default"
+
+        if not updates:
+            await manager.send_to_user(user.id, {"type": "error", "payload": {"message": "Invalid deck selection."}})
+            return
+
+        for key, val in updates.items():
+            setattr(room, key, val)
+
+        await self.broadcast_room_state(room_id, manager)
 
     def find_room_by_user(self, user_id: str, include_spectators: bool = False):
         """Finds the room a user is currently in."""

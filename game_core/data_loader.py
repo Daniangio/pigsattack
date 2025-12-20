@@ -1,4 +1,5 @@
 import json
+import itertools
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -84,15 +85,32 @@ def _parse_token_value(val: Any) -> Optional[TokenType]:
 class GameDataLoader:
     """Loads static game data from JSON files."""
 
-    def __init__(self, data_root: Optional[Path] = None, threats_file: Optional[str] = None, bosses_file: Optional[str] = None):
+    def __init__(
+        self,
+        data_root: Optional[Path] = None,
+        threats_file: Optional[str] = None,
+        bosses_file: Optional[str] = None,
+        market_file: Optional[str] = None,
+        upgrade_file: Optional[str] = None,
+        weapon_file: Optional[str] = None,
+    ):
         self.data_root = data_root or Path(__file__).resolve().parent / "data"
         self.threats_file = threats_file  # Optional full path or filename
         self.bosses_file = bosses_file  # Optional full path or filename
+        self.market_file = market_file  # Optional full path or filename
+        self.upgrade_file = upgrade_file  # Optional full path or filename
+        self.weapon_file = weapon_file  # Optional full path or filename
 
     def _load_json(self, filename: str):
         path = self.data_root / filename
         with path.open("r", encoding="utf-8") as handle:
             return json.load(handle)
+
+    def _load_optional_json(self, filename: str, file_override: Optional[str]):
+        if file_override:
+            path = Path(file_override)
+            return json.loads(path.read_text(encoding="utf-8"))
+        return self._load_json(filename)
 
     def load_threats(self) -> ThreatDeckData:
         if self.threats_file:
@@ -157,28 +175,60 @@ class GameDataLoader:
         return ThreatDeckData(day_threats=day_threats, night_threats=night_threats, bosses=bosses)
 
     def load_market(self) -> MarketState:
-        data = self._load_json("market.json")
+        if self.market_file:
+            combined = self._load_optional_json("market.json", self.market_file)
+            upgrades_raw = combined.get("upgrades", []) if isinstance(combined, dict) else []
+            weapons_raw = combined.get("weapons", []) if isinstance(combined, dict) else []
+        else:
+            upgrades_payload = self._load_optional_json("upgrades.json", self.upgrade_file)
+            weapons_payload = self._load_optional_json("weapons.json", self.weapon_file)
+            if isinstance(upgrades_payload, dict):
+                upgrades_raw = upgrades_payload.get("upgrades", [])
+            elif isinstance(upgrades_payload, list):
+                upgrades_raw = upgrades_payload
+            else:
+                upgrades_raw = []
+            if isinstance(weapons_payload, dict):
+                weapons_raw = weapons_payload.get("weapons", [])
+            elif isinstance(weapons_payload, list):
+                weapons_raw = weapons_payload
+            else:
+                weapons_raw = []
 
-        def build_cards(raw_items, card_type: CardType) -> List[MarketCard]:
+        def build_cards(raw_items, card_type: CardType, id_counter: itertools.count) -> List[MarketCard]:
             cards: List[MarketCard] = []
             for raw in raw_items:
                 copies = int(raw.get("copies", 1)) if isinstance(raw, dict) else 1
-                card = MarketCard(
-                    id=raw["id"],
-                    card_type=card_type,
-                    name=raw["name"],
-                    cost=resource_from_json(raw.get("cost", {})),
-                    vp=raw.get("vp", 0),
-                    effect=raw.get("effect", ""),
-                    uses=raw.get("uses") if card_type == CardType.WEAPON else None,
-                    tags=raw.get("tags", []),
-                )
-                for _ in range(max(1, copies)):
-                    cards.append(card)
+                base_id = raw.get("id") if isinstance(raw, dict) else None
+                base_name = raw.get("name") if isinstance(raw, dict) else None
+                name = base_name if base_name is not None else str(base_id or "Unknown")
+                cost = resource_from_json(raw.get("cost", {})) if isinstance(raw, dict) else {}
+                vp = raw.get("vp", 0) if isinstance(raw, dict) else 0
+                effect = raw.get("effect", "") if isinstance(raw, dict) else ""
+                uses = raw.get("uses") if isinstance(raw, dict) and card_type == CardType.WEAPON else None
+                tags = raw.get("tags", []) if isinstance(raw, dict) and isinstance(raw.get("tags", []), list) else []
+                prefix = "u" if card_type == CardType.UPGRADE else "w"
+                for copy_idx in range(max(1, copies)):
+                    if base_id:
+                        card_id = str(base_id) if copies == 1 else f"{base_id}-{copy_idx + 1}"
+                    else:
+                        card_id = f"{prefix}-{next(id_counter)}"
+                    cards.append(
+                        MarketCard(
+                            id=card_id,
+                            card_type=card_type,
+                            name=name,
+                            cost=cost,
+                            vp=vp,
+                            effect=effect,
+                            uses=uses,
+                            tags=list(tags),
+                        )
+                    )
             return cards
 
-        upgrades = build_cards(data.get("upgrades", []), CardType.UPGRADE)
-        weapons = build_cards(data.get("weapons", []), CardType.WEAPON)
+        upgrades = build_cards(upgrades_raw, CardType.UPGRADE, itertools.count(1))
+        weapons = build_cards(weapons_raw, CardType.WEAPON, itertools.count(1))
 
         return MarketState(upgrades=upgrades, weapons=weapons)
 

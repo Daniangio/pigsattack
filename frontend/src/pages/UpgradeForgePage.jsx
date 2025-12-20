@@ -4,7 +4,7 @@ import { useStore } from "../store";
 
 const apiBase = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
-export default function ThreatForgePage() {
+export default function UpgradeForgePage() {
   const token = useStore((state) => state.token);
   const navigate = useNavigate();
   const [decks, setDecks] = useState([]);
@@ -19,7 +19,7 @@ export default function ThreatForgePage() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const deckRes = await fetch(`${apiBase}/api/custom/threat-decks`, { headers });
+      const deckRes = await fetch(`${apiBase}/api/custom/upgrade-decks`, { headers });
       const deckJson = await deckRes.json();
       setDecks(deckJson.decks || []);
     } catch (e) {
@@ -37,7 +37,7 @@ export default function ThreatForgePage() {
     if (!cloneModal.value.trim()) return;
     try {
       const target = cloneModal.value.trim();
-      await fetch(`${apiBase}/api/custom/threat-decks/${sourceName}/clone`, {
+      await fetch(`${apiBase}/api/custom/upgrade-decks/${sourceName}/clone`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...headers },
         body: JSON.stringify({ target }),
@@ -53,7 +53,7 @@ export default function ThreatForgePage() {
     if (!renameModal.value.trim()) return;
     try {
       const target = renameModal.value.trim();
-      await fetch(`${apiBase}/api/custom/threat-decks/${sourceName}/rename`, {
+      await fetch(`${apiBase}/api/custom/upgrade-decks/${sourceName}/rename`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...headers },
         body: JSON.stringify({ target }),
@@ -70,11 +70,9 @@ export default function ThreatForgePage() {
     try {
       const target = newEmptyName.trim();
       const template = {
-        day_threats: [],
-        night_threats: [],
-        bosses: [],
+        upgrades: [],
       };
-      await fetch(`${apiBase}/api/custom/threat-decks/${target}`, {
+      await fetch(`${apiBase}/api/custom/upgrade-decks/${target}`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...headers },
         body: JSON.stringify(template),
@@ -91,12 +89,12 @@ export default function ThreatForgePage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-orange-400">Threat Forge</h1>
+        <h1 className="text-3xl font-bold text-blue-300">Upgrade Forge</h1>
         <button
-          onClick={() => navigate("/lobby")}
+          onClick={() => navigate("/forge/market")}
           className="px-3 py-2 rounded-md border border-slate-700 text-slate-200 hover:border-amber-400 text-sm"
         >
-          Back to Lobby
+          Back to Market Hub
         </button>
       </div>
       {error && <div className="text-rose-400 text-sm">{error}</div>}
@@ -151,7 +149,7 @@ export default function ThreatForgePage() {
                 )}
                 {deck.editable ? (
                   <Link
-                    to={`/forge/threats/${deck.name}`}
+                    to={`/forge/upgrades/${deck.name}`}
                     className="px-2 py-1 rounded-md border border-blue-400 text-blue-200 text-[11px] uppercase tracking-[0.12em] hover:bg-blue-400/10"
                   >
                     Edit
@@ -165,7 +163,7 @@ export default function ThreatForgePage() {
                   <button
                     onClick={async () => {
                       try {
-                        await fetch(`${apiBase}/api/custom/threat-decks/${deck.name}`, {
+                        await fetch(`${apiBase}/api/custom/upgrade-decks/${deck.name}`, {
                           method: "DELETE",
                           headers,
                         });

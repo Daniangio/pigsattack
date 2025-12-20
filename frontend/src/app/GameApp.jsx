@@ -730,7 +730,7 @@ export default function App({
 
   return (
     <div
-      className="w-full h-screen text-slate-100 flex"
+      className="w-full h-full min-h-0 text-slate-100 flex overflow-hidden"
       style={{
         backgroundImage: `url(${gameBackground})`,
         backgroundSize: "cover",

@@ -10,17 +10,26 @@ DATA_DIR = os.path.join(BASE_DIR, "..", "game_core", "data")
 DEFAULT_THREATS_PATH = os.path.join(DATA_DIR, "threats.json")
 CUSTOM_THREATS_DIR = os.path.join(DATA_DIR, "custom_threats")
 DEFAULT_BOSS_PATH = os.path.join(DATA_DIR, "bosses.json")
+DEFAULT_UPGRADES_PATH = os.path.join(DATA_DIR, "upgrades.json")
+DEFAULT_WEAPONS_PATH = os.path.join(DATA_DIR, "weapons.json")
 THREAT_IMAGE_DIRS = [
     os.path.join(BASE_DIR, "..", "frontend", "src", "images", "cards", "threats"),
 ]
 CUSTOM_IMAGE_DIR = os.path.join(DATA_DIR, "custom_threat_images")
 CUSTOM_BOSS_DIR = os.path.join(DATA_DIR, "custom_bosses")
+DEFAULT_MARKET_PATH = os.path.join(DATA_DIR, "market.json")
+CUSTOM_MARKET_DIR = os.path.join(DATA_DIR, "custom_market")
+CUSTOM_UPGRADES_DIR = os.path.join(DATA_DIR, "custom_upgrades")
+CUSTOM_WEAPONS_DIR = os.path.join(DATA_DIR, "custom_weapons")
 
 
 def ensure_dirs():
     os.makedirs(CUSTOM_THREATS_DIR, exist_ok=True)
     os.makedirs(CUSTOM_IMAGE_DIR, exist_ok=True)
     os.makedirs(CUSTOM_BOSS_DIR, exist_ok=True)
+    os.makedirs(CUSTOM_MARKET_DIR, exist_ok=True)
+    os.makedirs(CUSTOM_UPGRADES_DIR, exist_ok=True)
+    os.makedirs(CUSTOM_WEAPONS_DIR, exist_ok=True)
 
 
 def list_json_files(folder: str) -> List[str]:
@@ -39,10 +48,25 @@ def save_json(path: str, data: Dict[str, Any]):
         json.dump(data, f, indent=2)
 
 
+def rename_deck_file(folder: str, current: str, target: str):
+    if current == "default":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot rename default deck")
+    if not target:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Target name required")
+    src = os.path.join(folder, f"{current}.json")
+    dest = os.path.join(folder, f"{target}.json")
+    if not os.path.isfile(src):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Deck not found")
+    if os.path.isfile(dest):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Target name already exists")
+    os.rename(src, dest)
+
+
 router = APIRouter(prefix="/api/custom")
 DEFAULT_CONTENT_STATE = {
     "active_threat_deck": "default",
     "active_boss_deck": "default",
+    "active_market_deck": "default",
 }
 
 
@@ -50,7 +74,10 @@ def _content_state():
     # Store in fake_users_db to persist in-memory alongside other fake data
     if "_content_state" not in fake_users_db:
         fake_users_db["_content_state"] = DEFAULT_CONTENT_STATE.copy()
-    return fake_users_db["_content_state"]
+    state = fake_users_db["_content_state"]
+    for key, val in DEFAULT_CONTENT_STATE.items():
+        state.setdefault(key, val)
+    return state
 
 
 @router.get("/threat-decks")
@@ -122,6 +149,14 @@ def clone_threat_deck(name: str, payload: Dict[str, Any]):
     return {"status": "ok", "name": target}
 
 
+@router.post("/threat-decks/{name}/rename")
+def rename_threat_deck(name: str, payload: Dict[str, Any]):
+    ensure_dirs()
+    target = payload.get("target")
+    rename_deck_file(CUSTOM_THREATS_DIR, name, target)
+    return {"status": "ok", "name": target}
+
+
 @router.get("/active-threat-deck")
 def get_active_threat_deck():
     ensure_dirs()
@@ -141,6 +176,248 @@ def set_active_threat_deck(payload: Dict[str, Any]):
     if not os.path.isfile(path):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Deck not found")
     _content_state()["active_threat_deck"] = name
+    return {"status": "ok", "name": name}
+
+
+# --- MARKET DECK MANAGEMENT ---
+@router.get("/market-decks")
+def list_market_decks():
+    ensure_dirs()
+    decks = [{"name": "default", "editable": False, "path": DEFAULT_MARKET_PATH}]
+    for filename in list_json_files(CUSTOM_MARKET_DIR):
+        name = os.path.splitext(filename)[0]
+        decks.append({"name": name, "editable": True})
+    return {"decks": decks}
+
+
+@router.get("/market-decks/{name}")
+def get_market_deck(name: str):
+    ensure_dirs()
+    if name == "default":
+        return load_json(DEFAULT_MARKET_PATH)
+    path = os.path.join(CUSTOM_MARKET_DIR, f"{name}.json")
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Deck not found")
+    return load_json(path)
+
+
+@router.post("/market-decks/{name}")
+def save_market_deck(name: str, deck: Dict[str, Any]):
+    ensure_dirs()
+    if name == "default":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Default deck is read-only")
+    path = os.path.join(CUSTOM_MARKET_DIR, f"{name}.json")
+    save_json(path, deck)
+    return {"status": "ok", "name": name}
+
+
+@router.delete("/market-decks/{name}")
+def delete_market_deck(name: str):
+    ensure_dirs()
+    if name == "default":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete default deck")
+    path = os.path.join(CUSTOM_MARKET_DIR, f"{name}.json")
+    if os.path.isfile(path):
+        os.remove(path)
+        return {"status": "deleted"}
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Deck not found")
+
+
+@router.post("/market-decks/{name}/clone")
+def clone_market_deck(name: str, payload: Dict[str, Any]):
+    ensure_dirs()
+    target = payload.get("target")
+    if not target:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Target name required")
+    if target == "default":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot overwrite default")
+
+    if name == "default":
+        source_path = DEFAULT_MARKET_PATH
+    else:
+        source_path = os.path.join(CUSTOM_MARKET_DIR, f"{name}.json")
+
+    if not os.path.isfile(source_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source deck not found")
+
+    dest_path = os.path.join(CUSTOM_MARKET_DIR, f"{target}.json")
+    with open(source_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    save_json(dest_path, data)
+    return {"status": "ok", "name": target}
+
+
+# --- UPGRADE DECK MANAGEMENT ---
+@router.get("/upgrade-decks")
+def list_upgrade_decks():
+    ensure_dirs()
+    decks = [{"name": "default", "editable": False, "path": DEFAULT_UPGRADES_PATH}]
+    for filename in list_json_files(CUSTOM_UPGRADES_DIR):
+        name = os.path.splitext(filename)[0]
+        decks.append({"name": name, "editable": True})
+    return {"decks": decks}
+
+
+@router.get("/upgrade-decks/{name}")
+def get_upgrade_deck(name: str):
+    ensure_dirs()
+    if name == "default":
+        return load_json(DEFAULT_UPGRADES_PATH)
+    path = os.path.join(CUSTOM_UPGRADES_DIR, f"{name}.json")
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Deck not found")
+    return load_json(path)
+
+
+@router.post("/upgrade-decks/{name}")
+def save_upgrade_deck(name: str, deck: Dict[str, Any]):
+    ensure_dirs()
+    if name == "default":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Default deck is read-only")
+    path = os.path.join(CUSTOM_UPGRADES_DIR, f"{name}.json")
+    save_json(path, deck)
+    return {"status": "ok", "name": name}
+
+
+@router.delete("/upgrade-decks/{name}")
+def delete_upgrade_deck(name: str):
+    ensure_dirs()
+    if name == "default":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete default deck")
+    path = os.path.join(CUSTOM_UPGRADES_DIR, f"{name}.json")
+    if os.path.isfile(path):
+        os.remove(path)
+        return {"status": "deleted"}
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Deck not found")
+
+
+@router.post("/upgrade-decks/{name}/clone")
+def clone_upgrade_deck(name: str, payload: Dict[str, Any]):
+    ensure_dirs()
+    target = payload.get("target")
+    if not target:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Target name required")
+    if target == "default":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot overwrite default")
+
+    if name == "default":
+        source_path = DEFAULT_UPGRADES_PATH
+    else:
+        source_path = os.path.join(CUSTOM_UPGRADES_DIR, f"{name}.json")
+
+    if not os.path.isfile(source_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source deck not found")
+
+    dest_path = os.path.join(CUSTOM_UPGRADES_DIR, f"{target}.json")
+    with open(source_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    save_json(dest_path, data)
+    return {"status": "ok", "name": target}
+
+
+@router.post("/upgrade-decks/{name}/rename")
+def rename_upgrade_deck(name: str, payload: Dict[str, Any]):
+    ensure_dirs()
+    target = payload.get("target")
+    rename_deck_file(CUSTOM_UPGRADES_DIR, name, target)
+    return {"status": "ok", "name": target}
+
+
+# --- WEAPON DECK MANAGEMENT ---
+@router.get("/weapon-decks")
+def list_weapon_decks():
+    ensure_dirs()
+    decks = [{"name": "default", "editable": False, "path": DEFAULT_WEAPONS_PATH}]
+    for filename in list_json_files(CUSTOM_WEAPONS_DIR):
+        name = os.path.splitext(filename)[0]
+        decks.append({"name": name, "editable": True})
+    return {"decks": decks}
+
+
+@router.get("/weapon-decks/{name}")
+def get_weapon_deck(name: str):
+    ensure_dirs()
+    if name == "default":
+        return load_json(DEFAULT_WEAPONS_PATH)
+    path = os.path.join(CUSTOM_WEAPONS_DIR, f"{name}.json")
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Deck not found")
+    return load_json(path)
+
+
+@router.post("/weapon-decks/{name}")
+def save_weapon_deck(name: str, deck: Dict[str, Any]):
+    ensure_dirs()
+    if name == "default":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Default deck is read-only")
+    path = os.path.join(CUSTOM_WEAPONS_DIR, f"{name}.json")
+    save_json(path, deck)
+    return {"status": "ok", "name": name}
+
+
+@router.delete("/weapon-decks/{name}")
+def delete_weapon_deck(name: str):
+    ensure_dirs()
+    if name == "default":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete default deck")
+    path = os.path.join(CUSTOM_WEAPONS_DIR, f"{name}.json")
+    if os.path.isfile(path):
+        os.remove(path)
+        return {"status": "deleted"}
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Deck not found")
+
+
+@router.post("/weapon-decks/{name}/clone")
+def clone_weapon_deck(name: str, payload: Dict[str, Any]):
+    ensure_dirs()
+    target = payload.get("target")
+    if not target:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Target name required")
+    if target == "default":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot overwrite default")
+
+    if name == "default":
+        source_path = DEFAULT_WEAPONS_PATH
+    else:
+        source_path = os.path.join(CUSTOM_WEAPONS_DIR, f"{name}.json")
+
+    if not os.path.isfile(source_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source deck not found")
+
+    dest_path = os.path.join(CUSTOM_WEAPONS_DIR, f"{target}.json")
+    with open(source_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    save_json(dest_path, data)
+    return {"status": "ok", "name": target}
+
+
+@router.post("/weapon-decks/{name}/rename")
+def rename_weapon_deck(name: str, payload: Dict[str, Any]):
+    ensure_dirs()
+    target = payload.get("target")
+    rename_deck_file(CUSTOM_WEAPONS_DIR, name, target)
+    return {"status": "ok", "name": target}
+
+
+@router.get("/active-market-deck")
+def get_active_market_deck():
+    ensure_dirs()
+    return {"name": _content_state().get("active_market_deck", "default")}
+
+
+@router.post("/active-market-deck")
+def set_active_market_deck(payload: Dict[str, Any]):
+    ensure_dirs()
+    name = payload.get("name")
+    if not name:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Name required")
+    if name == "default":
+        _content_state()["active_market_deck"] = "default"
+        return {"status": "ok", "name": name}
+    path = os.path.join(CUSTOM_MARKET_DIR, f"{name}.json")
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Deck not found")
+    _content_state()["active_market_deck"] = name
     return {"status": "ok", "name": name}
 
 

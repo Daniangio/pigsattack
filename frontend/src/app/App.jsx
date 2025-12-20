@@ -19,6 +19,11 @@ import ProfilePage from "../pages/ProfilePage.jsx";
 import PostGamePage from "../pages/PostGamePage.jsx";
 import ThreatForgePage from "../pages/ThreatForgePage.jsx";
 import ThreatDeckEditPage from "../pages/ThreatDeckEditPage.jsx";
+import MarketForgePage from "../pages/MarketForgePage.jsx";
+import UpgradeForgePage from "../pages/UpgradeForgePage.jsx";
+import WeaponForgePage from "../pages/WeaponForgePage.jsx";
+import UpgradeDeckEditPage from "../pages/UpgradeDeckEditPage.jsx";
+import WeaponDeckEditPage from "../pages/WeaponDeckEditPage.jsx";
 
 /**
  * This component enforces the core navigation rules.
@@ -195,6 +200,26 @@ function AppContent() {
       <Route
         path="/forge/threats/:deckName"
         element={token ? <ThreatDeckEditPage /> : <Navigate to="/auth" />}
+      />
+      <Route
+        path="/forge/market"
+        element={token ? <MarketForgePage /> : <Navigate to="/auth" />}
+      />
+      <Route
+        path="/forge/upgrades"
+        element={token ? <UpgradeForgePage /> : <Navigate to="/auth" />}
+      />
+      <Route
+        path="/forge/upgrades/:deckName"
+        element={token ? <UpgradeDeckEditPage /> : <Navigate to="/auth" />}
+      />
+      <Route
+        path="/forge/weapons"
+        element={token ? <WeaponForgePage /> : <Navigate to="/auth" />}
+      />
+      <Route
+        path="/forge/weapons/:deckName"
+        element={token ? <WeaponDeckEditPage /> : <Navigate to="/auth" />}
       />
 
       {/* Default route */}

@@ -224,6 +224,8 @@ async def websocket_endpoint(websocket: WebSocket):
                     payload.get("depth"),
                     connection_manager,
                 )
+            elif action == "set_room_decks":
+                await room_manager.set_room_decks(user, payload, connection_manager)
             
             # 'request_view' is gone.
                 

@@ -113,6 +113,13 @@ const LobbyPage = ({ onLogout }) => { // --- REFACTOR: Added roomState ---
           >
             Threat Forge
           </button>
+          <button
+            onClick={() => navigate("/forge/market")}
+            className={btnInfoAlt}
+            title="Crea o modifica mazzi di armi e upgrade"
+          >
+            Market Forge
+          </button>
           <button onClick={onLogout} className={btnDanger}>
             Logout
           </button>

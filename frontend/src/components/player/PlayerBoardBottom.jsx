@@ -368,7 +368,6 @@ export default function PlayerBoardBottom({
     { key: "conversion", label: "Conversion", color: "border-blue-400 text-blue-200 bg-blue-400/10", img: conversionToken },
     { key: "wild", label: "Wild", color: "border-amber-400 text-amber-200 bg-amber-400/10", img: wildToken },
     { key: "mass", label: "Mass", color: "border-green-400 text-green-200 bg-green-400/10", img: massToken },
-    { key: "boss", label: "Boss", color: "border-purple-400 text-purple-200 bg-purple-400/10" },
   ];
 
   const tokenCount = (key) => player.tokens?.[key] ?? player.tokens?.[key?.toUpperCase?.()] ?? 0;

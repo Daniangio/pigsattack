@@ -35,6 +35,10 @@ class Room(BaseModel):
     spectators: List[User] = Field(default_factory=list)
     status: str = "lobby"  # 'lobby', 'in_game'
     game_record_id: Optional[str] = None
+    threat_deck: str = "default"
+    boss_deck: str = "default"
+    upgrade_deck: str = "default"
+    weapon_deck: str = "default"
 
 class LobbyState(BaseModel):
     users: List[dict]

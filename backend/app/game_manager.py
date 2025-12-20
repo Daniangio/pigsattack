@@ -16,7 +16,7 @@ from game_core import GameSession, GamePhase, PlayerStatus
 from game_core.session import InvalidActionError
 from game_core.data_loader import GameDataLoader
 from .routers import fake_games_db 
-from .custom_content import CUSTOM_THREATS_DIR
+from .custom_content import CUSTOM_THREATS_DIR, CUSTOM_BOSS_DIR, CUSTOM_UPGRADES_DIR, CUSTOM_WEAPONS_DIR
 from .bot_planner import BotPlanner
 from asyncio import Task
 
@@ -46,7 +46,13 @@ class GameManager:
                 return room
         return None
 
-    async def create_game(self, game_id: str, participants: List[GameParticipant], bot_depth: Optional[int] = None):
+    async def create_game(
+        self,
+        game_id: str,
+        participants: List[GameParticipant],
+        bot_depth: Optional[int] = None,
+        deck_selection: Optional[Dict[str, str]] = None,
+    ):
         """
         Creates a new GameInstance and stores it.
         """
@@ -67,17 +73,32 @@ class GameManager:
             # Determine threats file based on active selection
             threats_file = None
             bosses_file = None
-            from .custom_content import _content_state
-            state = _content_state()
-            active_threat = state.get("active_threat_deck", "default")
-            active_boss = state.get("active_boss_deck", "default")
+            selection = deck_selection or {}
+            active_threat = selection.get("threat_deck") or "default"
+            active_boss = selection.get("boss_deck") or "default"
+            active_upgrade = selection.get("upgrade_deck") or "default"
+            active_weapon = selection.get("weapon_deck") or "default"
+
             if active_threat != "default":
                 candidate = Path(CUSTOM_THREATS_DIR) / f"{active_threat}.json"
                 threats_file = str(candidate)
             if active_boss != "default":
-                candidate = Path(CUSTOM_THREATS_DIR) / f"{active_boss}.json"
+                candidate = Path(CUSTOM_BOSS_DIR) / f"{active_boss}.json"
                 bosses_file = str(candidate)
-            loader = GameDataLoader(threats_file=threats_file, bosses_file=bosses_file)
+            upgrade_file = None
+            weapon_file = None
+            if active_upgrade != "default":
+                candidate = Path(CUSTOM_UPGRADES_DIR) / f"{active_upgrade}.json"
+                upgrade_file = str(candidate)
+            if active_weapon != "default":
+                candidate = Path(CUSTOM_WEAPONS_DIR) / f"{active_weapon}.json"
+                weapon_file = str(candidate)
+            loader = GameDataLoader(
+                threats_file=threats_file,
+                bosses_file=bosses_file,
+                upgrade_file=upgrade_file,
+                weapon_file=weapon_file,
+            )
             game = GameSession(game_id, session_players, data_loader=loader)
             # 2. Perform async setup (draw resources, start first round)
             await game.async_setup()

@@ -394,7 +394,6 @@ export default function ThreatDeckEditPage() {
                           <option value="CONVERSION">Conversion</option>
                           <option value="MASS">Mass</option>
                           <option value="WILD">Wild</option>
-                          <option value="BOSS">Boss</option>
                         </select>
                         <input
                           type="number"

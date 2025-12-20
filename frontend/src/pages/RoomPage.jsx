@@ -1,12 +1,58 @@
-import React from "react"; // --- REFACTOR: Removed useEffect and useRef
+import React, { useEffect, useState } from "react";
 import { useStore } from "../store.js";
 import { useParams, useNavigate } from "react-router-dom";
 
+const apiBase = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
 const RoomPage = ({ onLogout }) => {
-  const { user, roomState } = useStore();
+  const { user, roomState, token } = useStore();
   const sendMessage = useStore((state) => state.sendMessage);
   const { roomId } = useParams();
   const navigate = useNavigate();
+  const [deckOptions, setDeckOptions] = useState({
+    threats: [{ name: "default" }],
+    bosses: [{ name: "default" }],
+    upgrades: [{ name: "default" }],
+    weapons: [{ name: "default" }],
+  });
+  const [deckError, setDeckError] = useState(null);
+
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const loadDecks = async () => {
+      try {
+        const [threatRes, bossRes, upgradeRes, weaponRes] = await Promise.all([
+          fetch(`${apiBase}/api/custom/threat-decks`, { headers }),
+          fetch(`${apiBase}/api/custom/boss-decks`, { headers }),
+          fetch(`${apiBase}/api/custom/upgrade-decks`, { headers }),
+          fetch(`${apiBase}/api/custom/weapon-decks`, { headers }),
+        ]);
+        const [threatJson, bossJson, upgradeJson, weaponJson] = await Promise.all([
+          threatRes.json(),
+          bossRes.json(),
+          upgradeRes.json(),
+          weaponRes.json(),
+        ]);
+        if (cancelled) return;
+        const withDefault = (list) => (Array.isArray(list) && list.length ? list : [{ name: "default" }]);
+        setDeckOptions({
+          threats: withDefault(threatJson.decks),
+          bosses: withDefault(bossJson.decks),
+          upgrades: withDefault(upgradeJson.decks),
+          weapons: withDefault(weaponJson.decks),
+        });
+        setDeckError(null);
+      } catch (e) {
+        if (!cancelled) setDeckError("Failed to load deck lists.");
+      }
+    };
+    loadDecks();
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   // --- REFACTOR: Removed the complex useEffect and hasLoadedRoom ref ---
   // The StateGuard in App.jsx now handles all navigation logic:
@@ -97,6 +143,16 @@ const RoomPage = ({ onLogout }) => {
     { value: "top3", label: "Top 3 (uniform)" },
     { value: "softmax5", label: "Top 5 (softmax)" },
   ];
+
+  const handleDeckChange = (key, value) => {
+    if (!sendMessage) return;
+    sendMessage({
+      action: "set_room_decks",
+      payload: { [key]: value },
+    });
+  };
+
+  const deckSelectDisabled = !isHost || roomState.status !== "lobby";
 
   return (
     <div className="animate-fade-in">
@@ -222,6 +278,75 @@ const RoomPage = ({ onLogout }) => {
                 </button>
               </div>
             )}
+            <div className="mt-6">
+              <h3 className="text-lg font-semibold text-gray-100 mb-2">Deck Selection</h3>
+              {deckError && <p className="text-xs text-rose-300 mb-2">{deckError}</p>}
+              <div className="space-y-2">
+                <label className="block text-xs text-gray-400 uppercase tracking-[0.18em]">
+                  Threats
+                  <select
+                    className="mt-1 w-full text-sm bg-gray-800 border border-gray-600 rounded px-2 py-1 text-gray-100"
+                    value={roomState.threat_deck || "default"}
+                    onChange={(e) => handleDeckChange("threat_deck", e.target.value)}
+                    disabled={deckSelectDisabled}
+                  >
+                    {(deckOptions.threats || []).map((deck) => (
+                      <option key={deck.name} value={deck.name}>
+                        {deck.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-xs text-gray-400 uppercase tracking-[0.18em]">
+                  Bosses
+                  <select
+                    className="mt-1 w-full text-sm bg-gray-800 border border-gray-600 rounded px-2 py-1 text-gray-100"
+                    value={roomState.boss_deck || "default"}
+                    onChange={(e) => handleDeckChange("boss_deck", e.target.value)}
+                    disabled={deckSelectDisabled}
+                  >
+                    {(deckOptions.bosses || []).map((deck) => (
+                      <option key={deck.name} value={deck.name}>
+                        {deck.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-xs text-gray-400 uppercase tracking-[0.18em]">
+                  Upgrades
+                  <select
+                    className="mt-1 w-full text-sm bg-gray-800 border border-gray-600 rounded px-2 py-1 text-gray-100"
+                    value={roomState.upgrade_deck || "default"}
+                    onChange={(e) => handleDeckChange("upgrade_deck", e.target.value)}
+                    disabled={deckSelectDisabled}
+                  >
+                    {(deckOptions.upgrades || []).map((deck) => (
+                      <option key={deck.name} value={deck.name}>
+                        {deck.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-xs text-gray-400 uppercase tracking-[0.18em]">
+                  Weapons
+                  <select
+                    className="mt-1 w-full text-sm bg-gray-800 border border-gray-600 rounded px-2 py-1 text-gray-100"
+                    value={roomState.weapon_deck || "default"}
+                    onChange={(e) => handleDeckChange("weapon_deck", e.target.value)}
+                    disabled={deckSelectDisabled}
+                  >
+                    {(deckOptions.weapons || []).map((deck) => (
+                      <option key={deck.name} value={deck.name}>
+                        {deck.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {deckSelectDisabled && (
+                  <p className="text-xs text-gray-400">Only the host can change decks before the game starts.</p>
+                )}
+              </div>
+            </div>
           </div>
           <button
             onClick={handleLeaveRoom}
