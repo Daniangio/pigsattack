@@ -308,16 +308,7 @@ class GameSession:
             self.state.turn_order = [last_player_id] + remaining
 
         self.state.round += 1
-        active_humans = [
-            p for p in self.state.players.values()
-            if not getattr(p, "is_bot", False) and p.status == PlayerStatus.ACTIVE
-        ]
-        active_bots = [
-            p for p in self.state.players.values()
-            if getattr(p, "is_bot", False) and p.status == PlayerStatus.ACTIVE
-        ]
-        force_game_over = not active_humans and bool(active_bots)
-        await self._check_game_over(force=force_game_over)
+        await self._check_game_over(force=False)
         if self.state.phase == GamePhase.GAME_OVER:
             return
 
@@ -729,16 +720,7 @@ class GameSession:
             player.tokens[TokenType.WILD] = min(3, current_wild + 1)
             self.state.add_log(f"{player.username} gains 1 wild token at end of turn.")
 
-        active_humans = [
-            p for p in self.state.players.values()
-            if not getattr(p, "is_bot", False) and p.status == PlayerStatus.ACTIVE
-        ]
-        active_bots = [
-            p for p in self.state.players.values()
-            if getattr(p, "is_bot", False) and p.status == PlayerStatus.ACTIVE
-        ]
-        force_game_over = not active_humans and bool(active_bots)
-        await self._check_game_over(force=force_game_over)
+        await self._check_game_over(force=False)
         if self.state.phase == GamePhase.GAME_OVER:
             return
         if self.state.boss_mode and self.state.boss_thresholds_state and all(e.get("defeated") for e in self.state.boss_thresholds_state):
@@ -918,11 +900,6 @@ class GameSession:
         total_humans = [p for p in self.state.players.values() if not getattr(p, "is_bot", False)]
         active_humans = [p for p in total_humans if p.status == PlayerStatus.ACTIVE]
         active_bots = [p for p in self.state.players.values() if getattr(p, "is_bot", False) and p.status == PlayerStatus.ACTIVE]
-        if not force and not active_humans and active_bots:
-            active_id = self.state.get_active_player_id()
-            active_player = self.state.players.get(active_id) if active_id else None
-            if active_player and getattr(active_player, "is_bot", False) and self.state.phase in {GamePhase.PLAYER_TURN, GamePhase.BOSS}:
-                return
         if self.state.boss_mode and active_humans and not force:
             return
         if self.threat_manager:
@@ -931,7 +908,9 @@ class GameSession:
             all_threats_defeated = all(not row for row in self.state.threat_rows)
         active_players = [p for p in self.state.players.values() if p.status == PlayerStatus.ACTIVE]
 
-        end_for_humans = len(active_humans) == 0 or (len(active_humans) == 1 and len(active_bots) == 0)
+        end_for_humans = (len(active_humans) == 0 and not active_bots) or (
+            len(active_humans) == 1 and len(active_bots) == 0
+        )
         if force or all_threats_defeated or len(active_players) <= 1 or end_for_humans:
             self.state.phase = GamePhase.GAME_OVER
             winner = None

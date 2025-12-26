@@ -24,6 +24,7 @@ import UpgradeForgePage from "../pages/UpgradeForgePage.jsx";
 import WeaponForgePage from "../pages/WeaponForgePage.jsx";
 import UpgradeDeckEditPage from "../pages/UpgradeDeckEditPage.jsx";
 import WeaponDeckEditPage from "../pages/WeaponDeckEditPage.jsx";
+import BotSimulationPage from "../pages/BotSimulationPage.jsx";
 
 /**
  * This component enforces the core navigation rules.
@@ -220,6 +221,10 @@ function AppContent() {
       <Route
         path="/forge/weapons/:deckName"
         element={token ? <WeaponDeckEditPage /> : <Navigate to="/auth" />}
+      />
+      <Route
+        path="/simulations/bots"
+        element={token ? <BotSimulationPage /> : <Navigate to="/auth" />}
       />
 
       {/* Default route */}

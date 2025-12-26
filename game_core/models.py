@@ -368,6 +368,7 @@ class GameState:
     boss_stage: str = "day"
     boss_thresholds_state: List[Dict[str, Any]] = field(default_factory=list)
     boss_index: int = 0
+    simulation_mode: bool = False
     turn_order: List[str] = field(default_factory=list)
     active_player_index: int = 0
     log: List[str] = field(default_factory=list)

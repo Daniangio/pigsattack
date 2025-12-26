@@ -484,7 +484,7 @@ class RoomManager:
             is_bot=True,
             personality="greedy",
             bot_depth=2,
-            planning_profile="fight_buy",
+            planning_profile="full",
         )
         room.players.append(bot_user)
         fake_users_db[bot_id] = bot_user

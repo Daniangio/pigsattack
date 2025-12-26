@@ -9,6 +9,7 @@ from .server_models import User
 from .routers import router as auth_router
 from .custom_content import router as custom_content_router
 from .player_router import router as player_router
+from .bot_simulation_router import router as bot_simulation_router
 from .routers import fake_users_db 
 from .security import get_current_user
 
@@ -30,6 +31,7 @@ app.add_middleware(
 
 app.include_router(auth_router, prefix="/api")
 app.include_router(player_router, prefix="/api")
+app.include_router(bot_simulation_router, prefix="/api")
 app.include_router(custom_content_router)
 
 
