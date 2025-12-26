@@ -1,7 +1,7 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime
-from .server_models import User, GameParticipant
+from .server_models import User, GameParticipant, PlayerReport
 
 class UserPublic(BaseModel):
     """A schema for user information that is safe to be exposed to clients."""
@@ -38,6 +38,7 @@ class GameRecordDetails(BaseModel):
     started_at: datetime
     ended_at: Optional[datetime] = None
     status: str # e.g., 'in_progress', 'completed'
+    final_stats: List[PlayerReport] = Field(default_factory=list)
 
     class Config:
         json_encoders = {

@@ -103,6 +103,9 @@ class Reward:
             player.wounds = max(0, player.wounds - self.amount)
         elif self.kind == "token" and tok:
             player.tokens[tok] = player.tokens.get(tok, 0) + self.amount
+        elif self.kind in {"stance_change", "free_stance_change"}:
+            delta = self.amount if self.amount else 1
+            player.free_stance_changes = max(0, player.free_stance_changes + delta)
         elif self.kind == "slot" and self.slot_type:
             if self.slot_type == "upgrade":
                 player.upgrade_slots = min(4, player.upgrade_slots + self.amount)
@@ -143,6 +146,9 @@ class Reward:
                 else str(self.token).capitalize()
             )
             return f"{name} Token x{self.amount}"
+        if self.kind in {"stance_change", "free_stance_change"}:
+            amount = self.amount if self.amount else 1
+            return f"Free Stance Change x{amount}" if amount != 1 else "Free Stance Change"
         if self.kind == "resource" and self.resources:
             parts = []
             for res, amt in (self.resources or {}).items():
@@ -277,10 +283,12 @@ class PlayerBoard:
     vp: int = 0
     wounds: int = 0
     threats_defeated: int = 0
+    defeated_threats: List[str] = field(default_factory=list)
     action_used: bool = False
     buy_used: bool = False
     extend_used: bool = False
     active_used: Dict[str, bool] = field(default_factory=dict)
+    free_stance_changes: int = 0
     status: PlayerStatus = PlayerStatus.ACTIVE
 
     def produce(self):
@@ -333,10 +341,12 @@ class PlayerBoard:
             "vp": self.vp,
             "wounds": self.wounds,
             "threats_defeated": self.threats_defeated,
+            "defeated_threats": list(self.defeated_threats or []),
             "action_used": self.action_used,
             "buy_used": self.buy_used,
             "extend_used": self.extend_used,
             "active_used": self.active_used,
+            "free_stance_changes": self.free_stance_changes,
             "status": self.status.value,
         }
 

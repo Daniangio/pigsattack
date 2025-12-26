@@ -120,6 +120,7 @@ export default function App({
         weapons: p.weapons || [],
         upgradeSlots: p.upgrade_slots ?? p.upgradeSlots ?? 1,
         weaponSlots: p.weapon_slots ?? p.weaponSlots ?? 1,
+        freeStanceChanges: p.free_stance_changes ?? p.freeStanceChanges ?? 0,
         status: p.status,
         icon,
       };
@@ -177,6 +178,7 @@ export default function App({
   const activePlayer = players.find(p => p.id === activePlayerId);
   const me = players.find((p) => p.id === userId);
   const mainActionUsed = !!me?.actionUsed;
+  const freeStanceChanges = me?.freeStanceChanges ?? 0;
   const buyUsed = !!me?.buyUsed;
   const extendUsed = !!me?.extendUsed;
   const threatRows = gameData?.threat_rows || gameData?.threatRows;
@@ -614,7 +616,8 @@ export default function App({
       onLocalToast?.("Select your board to change stance.", "amber");
       return;
     }
-    if (me?.actionUsed) {
+    const hasFreeStanceChange = freeStanceChanges > 0;
+    if (me?.actionUsed && !hasFreeStanceChange) {
       onLocalToast?.("Main action already used this turn.", "amber");
       return;
     }
@@ -627,7 +630,9 @@ export default function App({
     updatePlayerStance(target);
     setPromptSafe({
       type: "stance",
-      message: `Spend your action to change stance to ${target}?`,
+      message: hasFreeStanceChange
+        ? `Use a free stance change to switch to ${target}?`
+        : `Spend your action to change stance to ${target}?`,
       onConfirm: () => {
         onRealign?.(target.toUpperCase());
         setStanceMenuOpen(false);

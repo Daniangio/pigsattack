@@ -60,6 +60,9 @@ def parse_reward_text(raw: str) -> List[Reward]:
         if "wound" in lower_part and ("ignore" in lower_part or "remove" in lower_part or "heal" in lower_part):
             rewards.append(Reward(kind="heal_wound", amount=amount))
             continue
+        if "stance" in lower_part and ("change" in lower_part or "realign" in lower_part):
+            rewards.append(Reward(kind="stance_change", amount=amount))
+            continue
         for key, token in token_map.items():
             if key in lower_part:
                 rewards.append(Reward(kind="token", token=token, amount=amount))
@@ -292,6 +295,15 @@ class GameDataLoader:
                                     spoils.append(Reward(kind="resource", resources=res_map))
                             except Exception:
                                 pass
+                        elif tag.startswith("stance_change") or tag.startswith("free_stance_change"):
+                            parts = tag.split(":")
+                            amt = 1
+                            if len(parts) >= 2:
+                                try:
+                                    amt = int(parts[1])
+                                except Exception:
+                                    amt = 1
+                            spoils.append(Reward(kind="stance_change", amount=amt))
             elif raw.get("reward"):
                 spoils = parse_reward_text(raw.get("reward", ""))
             threats.append(

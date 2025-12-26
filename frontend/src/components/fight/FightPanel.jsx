@@ -84,6 +84,10 @@ export default function FightPanel({
     wild: wildToken,
   };
   const threatImage = getThreatImage(threat?.image);
+  const threatSpoils = Array.isArray(threat?.spoils) ? threat.spoils : [];
+  const spoilsLabel = threatSpoils.length
+    ? threatSpoils.map((s) => s?.label || s?.kind || "Reward").join(" • ")
+    : "";
 
   useEffect(() => {
     if (!setAttackUsed || !setWildAllocation) return;
@@ -548,7 +552,10 @@ export default function FightPanel({
               {threat?.name}
               <span className="text-sm text-amber-300 font-semibold">{threat?.vp} VP</span>
             </div>
-            <div className="text-xs text-slate-400">{threat?.type} • Reward: {threat?.reward}</div>
+            <div className="text-xs text-slate-400">
+              {threat?.type}
+              {spoilsLabel ? ` • Spoils: ${spoilsLabel}` : threat?.reward ? ` • Reward: ${threat.reward}` : ""}
+            </div>
           </div>
         </div>
         <button
@@ -654,17 +661,8 @@ export default function FightPanel({
               </div>
               {error && <div className="text-xs text-amber-300 mt-2">Preview error: {error}</div>}
               {isLoading && <div className="text-xs text-slate-400 mt-2">Updating preview…</div>}
-              {!isLoading && preview?.message && (
+              {!isLoading && preview?.message && preview.message !== "ok" && (
                 <div className="text-xs text-slate-400 mt-2">{preview.message}</div>
-              )}
-              {canConfirm && (
-                <button
-                  type="button"
-                  onClick={handleSubmit}
-                  className="mt-3 w-full px-3 py-2 rounded-lg border border-emerald-400 bg-emerald-400/10 text-emerald-200 text-[11px] uppercase tracking-[0.15em] hover:bg-emerald-400/20"
-                >
-                  Confirm Fight
-                </button>
               )}
             </div>
         </div>

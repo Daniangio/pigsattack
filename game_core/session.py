@@ -420,6 +420,12 @@ class GameSession:
         attack_used = result["attack_used"]
         wild_used = result["wild_used"]
         played_weapon_ids = set(payload.get("played_weapons") or [])
+        played_weapon_effects: List[CardEffect] = []
+        if played_weapon_ids:
+            for weapon in player.weapons or []:
+                weapon_id = getattr(weapon, "id", None)
+                if weapon_id in played_weapon_ids:
+                    played_weapon_effects.extend(self._card_effects(weapon))
 
         # Consume tokens and resources
         player.tokens[TokenType.ATTACK] -= attack_used
@@ -465,6 +471,8 @@ class GameSession:
                 if int(entry.get("index", -1)) == idx:
                     entry["defeated"] = True
             player.threats_defeated += 1
+            threat_name = getattr(threat, "name", None) or getattr(threat, "label", None) or "Boss Threshold"
+            player.defeated_threats.append(str(threat_name))
         else:
             player.vp += threat.vp
             enrage_tokens = getattr(threat, "enrage_tokens", 0) or 0
@@ -478,21 +486,29 @@ class GameSession:
             else:
                 self._apply_reward(player, threat.reward)
             player.threats_defeated += 1
+            if getattr(threat, "name", None):
+                player.defeated_threats.append(str(threat.name))
             if not self.threat_manager:
                 raise InvalidActionError("Threat manager unavailable.")
             self.threat_manager.remove_threat(result["row_index"], threat.id)
             # On-kill upgrade effects (e.g., Catalyst Array)
-            kill_effects = []
+            kill_effects: List[CardEffect] = []
             for card in player.upgrades or []:
-                for eff in self._card_effects(card):
-                    if eff.kind == "on_kill_conversion" and eff.amount:
-                        kill_effects.append(eff)
+                kill_effects.extend(self._card_effects(card))
+            kill_effects.extend(played_weapon_effects)
             for eff in kill_effects:
-                current = player.tokens.get(TokenType.CONVERSION, 0)
-                gained = min(eff.amount, max(0, 3 - current))
-                if gained:
-                    player.tokens[TokenType.CONVERSION] = current + gained
-                    self.state.add_log(f"{player.username} gained {gained} conversion token(s) from {eff.source_name or 'an upgrade'}.")
+                source_name = eff.source_name or "a card"
+                if eff.kind == "on_kill_conversion" and eff.amount:
+                    current = player.tokens.get(TokenType.CONVERSION, 0)
+                    gained = min(eff.amount, max(0, 3 - current))
+                    if gained:
+                        player.tokens[TokenType.CONVERSION] = current + gained
+                        self.state.add_log(f"{player.username} gained {gained} conversion token(s) from {source_name}.")
+                if eff.kind == "on_kill_stance_change" and eff.amount:
+                    gained = max(0, eff.amount)
+                    if gained:
+                        player.free_stance_changes = max(0, player.free_stance_changes + gained)
+                        self.state.add_log(f"{player.username} gained {gained} free stance change(s) from {source_name}.")
 
             self._sync_threat_rows()
             self.state.add_log(f"{player.username} defeated {threat.name} for {threat.vp} VP.")
@@ -652,8 +668,15 @@ class GameSession:
         except KeyError:
             raise InvalidActionError("Unknown stance.")
 
-        self._consume_main_action(player)
+        used_free = False
+        if getattr(player, "free_stance_changes", 0) > 0:
+            player.free_stance_changes = max(0, player.free_stance_changes - 1)
+            used_free = True
+        else:
+            self._consume_main_action(player)
         player.stance = target_stance
+        if used_free:
+            self.state.add_log(f"{player.username} used a free stance change.")
         self.state.add_log(f"{player.username} realigned to {player.stance.value}.")
 
     async def _handle_convert(self, player: PlayerBoard, payload: Dict[str, Any]):
@@ -959,6 +982,38 @@ class GameSession:
             raise InvalidActionError("Boss threshold not found.")
         threshold: BossThreshold = boss.thresholds[idx]
         cost = dict(threshold.cost)
+        # Normalize stored cards to avoid attribute errors if state contained raw strings/dicts
+        player.upgrades = self._ensure_market_cards(player.upgrades, CardType.UPGRADE)
+        player.weapons = self._ensure_market_cards(player.weapons, CardType.WEAPON)
+
+        played_weapon_ids = set(payload.get("played_weapons") or [])
+        active_weapons: List[MarketCard] = []
+        for card in (player.weapons or []):
+            card_id = getattr(card, "id", None) or (str(card) if card else None)
+            if card_id in played_weapon_ids:
+                active_weapons.append(card)
+        active_effects: List[CardEffect] = []
+        for card in active_weapons:
+            active_effects.extend(self._card_effects(card))
+        # Passive range weapons (e.g., Snipe Scope) always grant fight_range:any
+        for card in (player.weapons or []):
+            for eff in self._card_effects(card):
+                if eff.kind == "fight_range" and eff.value == "any":
+                    active_effects.append(eff)
+
+        # Include upgrades with fight tags (e.g., stance-based reductions)
+        active_upgrades: List[MarketCard] = player.upgrades or []
+        for card in active_upgrades:
+            active_effects.extend(self._card_effects(card))
+
+        # Mass tokens are permanent reductions on green
+        mass_tokens = player.tokens.get(TokenType.MASS, 0)
+        if mass_tokens:
+            # Mass Core may boost defense value; default reduction is 2 per token
+            defense_boosts = [eff.amount for eff in active_effects if eff.kind == "mass_token_defense" and eff.amount]
+            reduction_per = max(defense_boosts) if defense_boosts else 2
+            cost[ResourceType.GREEN] = max(0, cost.get(ResourceType.GREEN, 0) - reduction_per * mass_tokens)
+
         use_tokens = payload.get("use_tokens", {}) or {}
         attack_used = int(use_tokens.get("attack", 0))
         if attack_used > player.tokens.get(TokenType.ATTACK, 0):
@@ -973,6 +1028,57 @@ class GameSession:
             cost[res_type] = max(0, cost.get(res_type, 0) - int(amount))
         if wild_allocated > player.tokens.get(TokenType.WILD, 0):
             raise InvalidActionError("Not enough wild tokens.")
+
+        # Apply tag-driven fight effects
+        applied_effects: List[CardEffect] = []
+        # Optional stance choice for Balanced (Precision Optics)
+        stance_choice_raw = payload.get("stance_choice")
+        stance_choice_res: Optional[ResourceType] = None
+        if stance_choice_raw:
+            try:
+                stance_choice_res = parse_resource_key(stance_choice_raw, InvalidActionError)
+            except InvalidActionError:
+                stance_choice_res = None
+        for eff in active_effects:
+            if eff.kind == "fight_cost_reduction" and eff.value and eff.amount:
+                if eff.context:
+                    era = getattr(self.threat_manager.deck, "phase", None) if self.threat_manager else None
+                    if era and eff.context.lower() != str(era).lower():
+                        continue
+                res_type = parse_resource_key(eff.value, InvalidActionError)
+                cost[res_type] = max(0, cost.get(res_type, 0) - eff.amount)
+                applied_effects.append(eff)
+            if eff.kind == "fight_cost_reduction_stance" and eff.amount:
+                if eff.context:
+                    era = getattr(self.threat_manager.deck, "phase", None) if self.threat_manager else None
+                    if era and eff.context.lower() != str(era).lower():
+                        continue
+                stance = player.stance
+                stance_map = {
+                    Stance.AGGRESSIVE: ResourceType.RED,
+                    Stance.TACTICAL: ResourceType.BLUE,
+                    Stance.HUNKERED: ResourceType.GREEN,
+                }
+                if stance in stance_map:
+                    target_res = stance_map[stance]
+                else:
+                    # Balanced: choose provided stance choice if valid, otherwise the highest current cost
+                    if stance_choice_res:
+                        target_res = stance_choice_res
+                    else:
+                        ranked = sorted(cost.items(), key=lambda kv: kv[1], reverse=True)
+                        target_res = ranked[0][0] if ranked else ResourceType.RED
+                cost[target_res] = max(0, cost.get(target_res, 0) - eff.amount)
+                applied_effects.append(
+                    CardEffect(
+                        kind=eff.kind,
+                        value=target_res.value,
+                        amount=eff.amount,
+                        context=eff.context,
+                        source_id=eff.source_id,
+                        source_name=eff.source_name,
+                    )
+                )
 
         adjusted_cost = clamp_cost(cost)
         can_afford = player.can_pay(adjusted_cost)
@@ -1002,8 +1108,8 @@ class GameSession:
             "attack_used": attack_used,
             "wild_used": wild_allocated,
             "remaining_resources": remaining,
-            "effects": [],
-            "applied_effects": [],
+            "effects": [effect_to_wire(eff) for eff in active_effects],
+            "applied_effects": [effect_to_wire(eff) for eff in applied_effects],
             "boss_threshold": idx,
         }
 

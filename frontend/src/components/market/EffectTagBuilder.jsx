@@ -145,6 +145,11 @@ const EFFECT_TREES = {
           label: "conversion",
           children: makeAmountTagNodes((amount) => `on_kill:conversion:${amount}`),
         },
+        {
+          id: "stance_change",
+          label: "stance_change",
+          children: makeAmountTagNodes((amount) => `on_kill:stance_change:${amount}`),
+        },
       ],
     },
     {
@@ -240,6 +245,13 @@ export const describeEffectTag = (tag) => {
     const amount = parseInt(tag.split(":")[2], 10);
     if (!Number.isNaN(amount)) {
       return `On kill: gain ${amount} Conversion token${amount === 1 ? "" : "s"}.`;
+    }
+  }
+  if (tag.startsWith("on_kill:stance_change")) {
+    const parts = tag.split(":");
+    const amount = parts.length >= 3 ? parseInt(parts[2], 10) : 1;
+    if (!Number.isNaN(amount)) {
+      return `On kill: gain ${amount} free stance change${amount === 1 ? "" : "s"}.`;
     }
   }
   if (tag.startsWith("spec:")) {

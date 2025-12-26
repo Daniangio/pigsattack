@@ -76,6 +76,8 @@ export default function PlayerBoardBottom({
   const currentStance = player.stance;
   const stanceInfo = STANCE_CONFIG[currentStance] || STANCE_CONFIG[normalizeStance(currentStance)];
   const wildTokens = player?.tokens?.wild ?? player?.tokens?.WILD ?? 0;
+  const freeStanceChanges = player?.freeStanceChanges ?? player?.free_stance_changes ?? 0;
+  const canUseFreeStanceChange = freeStanceChanges > 0;
   const isActiveTurn = activePlayerId === player.id;
   const canExtendThisTurn = isMyBoard && isActiveTurn && !extendUsed && wildTokens > 0;
   const playerIndex = useMemo(
@@ -625,8 +627,8 @@ export default function PlayerBoardBottom({
                     <button
                       type="button"
                       onClick={onEndTurn}
-                      disabled={!onEndTurn}
-                      className="px-2 py-1 rounded-md border border-amber-400 text-amber-200 hover:bg-amber-400/10 text-[10px] uppercase tracking-[0.12em] disabled:opacity-50 w-full"
+                      disabled={!onEndTurn || !isMyTurnGlobal}
+                      className="px-2 py-1 rounded-md border border-amber-400 text-amber-200 hover:bg-amber-400/10 text-[10px] uppercase tracking-[0.12em] disabled:opacity-50 disabled:cursor-not-allowed w-full"
                     >
                       End Turn
                     </button>
@@ -692,19 +694,24 @@ export default function PlayerBoardBottom({
                   <button
                     type="button"
                     onClick={() => {
-                      if (!isMyBoard || !isActiveTurn || mainActionUsed || !canChangeStance) return;
+                      if (!isMyBoard || !isActiveTurn || (mainActionUsed && !canUseFreeStanceChange) || !canChangeStance) return;
                       onToggleStance?.();
                     }}
-                    disabled={!isMyBoard || !isActiveTurn || mainActionUsed || !canChangeStance}
+                    disabled={!isMyBoard || !isActiveTurn || (mainActionUsed && !canUseFreeStanceChange) || !canChangeStance}
                     className={`relative rounded-xl ${
-                      !isMyBoard || !isActiveTurn || mainActionUsed
+                      !isMyBoard || !isActiveTurn || (mainActionUsed && !canUseFreeStanceChange)
                         ? "grayscale opacity-60 cursor-not-allowed"
                         : "hover:ring-2 hover:ring-emerald-300"
-                    }`}
+                    } ${canUseFreeStanceChange ? "ring-2 ring-amber-300 shadow-[0_0_18px_rgba(251,191,36,0.35)] animate-pulse" : ""}`}
                     style={{ width: 100, height: 90 }}
                   >
                     <img src={schemeCard} alt="Scheme" className="w-full h-full object-contain" />
-                    {!isMyBoard || !isActiveTurn || mainActionUsed || !canChangeStance ? (
+                    {canUseFreeStanceChange ? (
+                      <div className="absolute -top-2 -right-2 px-2 py-0.5 rounded-full bg-amber-400 text-slate-900 text-[9px] uppercase tracking-[0.2em]">
+                        Free{freeStanceChanges > 1 ? ` x${freeStanceChanges}` : ""}
+                      </div>
+                    ) : null}
+                    {!isMyBoard || !isActiveTurn || (mainActionUsed && !canUseFreeStanceChange) || !canChangeStance ? (
                       <div className="absolute inset-0 bg-slate-900/40 rounded-xl" />
                     ) : null}
                   </button>

@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime
 from enum import Enum
+from typing import Dict
 
 # --- START NEW ADDITIONS ---
 class PlayerStatus(str, Enum):
@@ -24,6 +25,22 @@ class GameParticipant(BaseModel):
     """Represents a player's state within a specific game."""
     user: User
     status: PlayerStatus = PlayerStatus.ACTIVE
+
+class PlayerReport(BaseModel):
+    """Summary of a player's final state for postgame reports."""
+    user_id: str
+    username: str
+    status: Optional[str] = None
+    vp: int = 0
+    score: int = 0
+    wounds: int = 0
+    tokens: Dict[str, int] = Field(default_factory=dict)
+    resources: Dict[str, int] = Field(default_factory=dict)
+    threats_defeated: int = 0
+    defeated_threats: List[str] = Field(default_factory=list)
+    upgrades: List[str] = Field(default_factory=list)
+    weapons: List[dict] = Field(default_factory=list)
+    stance: Optional[str] = None
 
 class Token(BaseModel):
     access_token: str
@@ -56,6 +73,7 @@ class GameRecord(BaseModel):
     started_at: datetime
     ended_at: Optional[datetime] = None
     status: str = "in_progress" # 'in_progress', 'completed'
+    final_stats: List[PlayerReport] = Field(default_factory=list)
 
     class Config:
         json_encoders = {

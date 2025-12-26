@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .room_manager import RoomManager
 
-from .server_models import User, Room, GameParticipant, PlayerStatus as ServerPlayerStatus
+from .server_models import User, Room, GameParticipant, PlayerReport, PlayerStatus as ServerPlayerStatus
 from game_core import GameSession, GamePhase, PlayerStatus
 from game_core.session import InvalidActionError
 from game_core.data_loader import GameDataLoader
@@ -45,6 +45,49 @@ class GameManager:
             if room.game_record_id == game_id:
                 return room
         return None
+
+    def _build_final_stats(self, final_state: Any) -> List[PlayerReport]:
+        stats: List[PlayerReport] = []
+        players = getattr(final_state, "players", {}) or {}
+        for player in players.values():
+            data = player.to_public_dict() if hasattr(player, "to_public_dict") else {}
+            wounds = int(data.get("wounds", 0) or 0)
+            vp = int(data.get("vp", 0) or 0)
+            penalty = 20 if wounds >= 10 else 10 if wounds >= 5 else 0
+            score = vp - penalty
+            upgrades = [
+                (u.get("name") or u.get("id") or "Unknown")
+                for u in (data.get("upgrades") or [])
+                if isinstance(u, dict)
+            ]
+            weapons = []
+            for w in (data.get("weapons") or []):
+                if not isinstance(w, dict):
+                    continue
+                weapons.append(
+                    {
+                        "name": w.get("name") or w.get("id") or "Unknown",
+                        "uses": w.get("uses"),
+                    }
+                )
+            stats.append(
+                PlayerReport(
+                    user_id=str(data.get("user_id") or data.get("id") or ""),
+                    username=str(data.get("username") or data.get("user_id") or "Unknown"),
+                    status=str(data.get("status") or ""),
+                    vp=vp,
+                    score=score,
+                    wounds=wounds,
+                    tokens=dict(data.get("tokens") or {}),
+                    resources=dict(data.get("resources") or {}),
+                    threats_defeated=int(data.get("threats_defeated") or 0),
+                    defeated_threats=list(data.get("defeated_threats") or []),
+                    upgrades=upgrades,
+                    weapons=weapons,
+                    stance=str(data.get("stance") or ""),
+                )
+            )
+        return stats
 
     async def create_game(
         self,
@@ -353,6 +396,7 @@ class GameManager:
             print(f"Error: GameRecord {game_id} not found. Cannot update stats.")
             await self.remove_game(game_id)
             return
+        record.final_stats = self._build_final_stats(final_state)
 
         # 3. Find the Room
         # --- FIX: Use internal helper ---

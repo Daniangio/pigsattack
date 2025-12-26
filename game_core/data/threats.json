@@ -21,81 +21,8 @@
         },
         {
           "kind": "token",
-          "token": "CONVERSION",
-          "amount": 1
-        }
-      ]
-    },
-    {
-      "id": "day-cunning-1",
-      "name": "Clever Piglet",
-      "type": "Cunning",
-      "cost": {
-        "R": 3,
-        "B": 7,
-        "G": 0
-      },
-      "vp": 3,
-      "reward": "",
-      "copies": 4,
-      "image": "threat-clever-piglet.jpg",
-      "spoils": [
-        {
-          "kind": "token",
-          "amount": 2,
-          "token": "CONVERSION"
-        }
-      ]
-    },
-    {
-      "id": "day-massive-1",
-      "name": "Sturdy Swine",
-      "type": "Massive",
-      "cost": {
-        "R": 0,
-        "B": 2,
-        "G": 8
-      },
-      "vp": 3,
-      "reward": "",
-      "copies": 4,
-      "image": "threat-sturdy-swine.jpg",
-      "spoils": [
-        {
-          "kind": "token",
-          "amount": 1,
-          "token": "MASS"
-        },
-        {
-          "kind": "token",
-          "token": "WILD",
-          "amount": 1
-        }
-      ]
-    },
-    {
-      "id": "day-hybrid-1",
-      "name": "Elusive Forager",
-      "type": "Hybrid",
-      "cost": {
-        "R": 4,
-        "B": 4,
-        "G": 3
-      },
-      "vp": 3,
-      "reward": "",
-      "copies": 4,
-      "image": "threat-elusive-forager.jpg",
-      "spoils": [
-        {
-          "kind": "token",
           "amount": 1,
           "token": "CONVERSION"
-        },
-        {
-          "kind": "token",
-          "token": "WILD",
-          "amount": 1
         }
       ]
     },
@@ -104,7 +31,7 @@
       "name": "Razorback",
       "type": "Feral",
       "cost": {
-        "R": 10,
+        "R": 9,
         "B": 1,
         "G": 0
       },
@@ -117,6 +44,10 @@
           "kind": "token",
           "amount": 2,
           "token": "ATTACK"
+        },
+        {
+          "kind": "stance_change",
+          "amount": 1
         }
       ]
     },
@@ -126,7 +57,7 @@
       "type": "Feral",
       "cost": {
         "R": 7,
-        "B": 3,
+        "B": 2,
         "G": 0
       },
       "vp": 2,
@@ -138,6 +69,12 @@
           "kind": "token",
           "amount": 2,
           "token": "WILD"
+        },
+        {
+          "kind": "resource",
+          "resources": {
+            "R": 1
+          }
         }
       ]
     },
@@ -168,32 +105,1090 @@
           }
         }
       ]
+    },
+    {
+      "id": "day-feral-5",
+      "name": "Bristle Runner",
+      "type": "Feral",
+      "cost": {
+        "R": 5,
+        "B": 1,
+        "G": 0
+      },
+      "vp": 1,
+      "reward": "",
+      "copies": 1,
+      "image": "threat-wary-boar.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "ATTACK"
+        },
+        {
+          "kind": "resource",
+          "resources": {
+            "R": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "day-feral-6",
+      "name": "Thorn Tusker",
+      "type": "Feral",
+      "cost": {
+        "R": 7,
+        "B": 0,
+        "G": 1
+      },
+      "vp": 2,
+      "reward": "",
+      "copies": 1,
+      "image": "threat-wary-boar.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "ATTACK"
+        },
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "WILD"
+        }
+      ]
+    },
+    {
+      "id": "day-feral-7",
+      "name": "Sunlit Charger",
+      "type": "Feral",
+      "cost": {
+        "R": 8,
+        "B": 1,
+        "G": 0
+      },
+      "vp": 2,
+      "reward": "",
+      "copies": 1,
+      "image": "threat-wary-boar.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 2,
+          "token": "ATTACK"
+        }
+      ]
+    },
+    {
+      "id": "day-feral-8",
+      "name": "Rusted Tusk",
+      "type": "Feral",
+      "cost": {
+        "R": 9,
+        "B": 0,
+        "G": 1
+      },
+      "vp": 3,
+      "reward": "",
+      "copies": 1,
+      "image": "threat-wary-boar.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 2,
+          "token": "ATTACK"
+        },
+        {
+          "kind": "stance_change",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "day-cunning-1",
+      "name": "Clever Piglet",
+      "type": "Cunning",
+      "cost": {
+        "R": 3,
+        "B": 7,
+        "G": 0
+      },
+      "vp": 3,
+      "reward": "",
+      "copies": 3,
+      "image": "threat-clever-piglet.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 2,
+          "token": "CONVERSION"
+        }
+      ]
+    },
+    {
+      "id": "day-cunning-2",
+      "name": "Fence Sneak",
+      "type": "Cunning",
+      "cost": {
+        "R": 1,
+        "B": 6,
+        "G": 0
+      },
+      "vp": 2,
+      "reward": "",
+      "copies": 2,
+      "image": "threat-clever-piglet.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "CONVERSION"
+        },
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "WILD"
+        }
+      ]
+    },
+    {
+      "id": "day-cunning-3",
+      "name": "Market Spy",
+      "type": "Cunning",
+      "cost": {
+        "R": 2,
+        "B": 5,
+        "G": 0
+      },
+      "vp": 2,
+      "reward": "",
+      "copies": 2,
+      "image": "threat-clever-piglet.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "CONVERSION"
+        },
+        {
+          "kind": "resource",
+          "resources": {
+            "R": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "day-cunning-4",
+      "name": "Rooted Schemer",
+      "type": "Cunning",
+      "cost": {
+        "R": 2,
+        "B": 8,
+        "G": 0
+      },
+      "vp": 3,
+      "reward": "",
+      "copies": 1,
+      "image": "threat-clever-piglet.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 2,
+          "token": "CONVERSION"
+        },
+        {
+          "kind": "stance_change",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "day-cunning-5",
+      "name": "Lantern Thief",
+      "type": "Cunning",
+      "cost": {
+        "R": 1,
+        "B": 4,
+        "G": 0
+      },
+      "vp": 1,
+      "reward": "",
+      "copies": 2,
+      "image": "threat-clever-piglet.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "CONVERSION"
+        },
+        {
+          "kind": "resource",
+          "resources": {
+            "B": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "day-cunning-6",
+      "name": "Orchard Mimic",
+      "type": "Cunning",
+      "cost": {
+        "R": 2,
+        "B": 6,
+        "G": 1
+      },
+      "vp": 2,
+      "reward": "",
+      "copies": 1,
+      "image": "threat-clever-piglet.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "CONVERSION"
+        },
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "WILD"
+        }
+      ]
+    },
+    {
+      "id": "day-cunning-7",
+      "name": "Quickstep Sow",
+      "type": "Cunning",
+      "cost": {
+        "R": 0,
+        "B": 5,
+        "G": 1
+      },
+      "vp": 2,
+      "reward": "",
+      "copies": 1,
+      "image": "threat-clever-piglet.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "CONVERSION"
+        },
+        {
+          "kind": "stance_change",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "day-cunning-8",
+      "name": "Sly Forager",
+      "type": "Cunning",
+      "cost": {
+        "R": 3,
+        "B": 6,
+        "G": 0
+      },
+      "vp": 2,
+      "reward": "",
+      "copies": 1,
+      "image": "threat-clever-piglet.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "CONVERSION"
+        },
+        {
+          "kind": "resource",
+          "resources": {
+            "G": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "day-massive-1",
+      "name": "Sturdy Swine",
+      "type": "Massive",
+      "cost": {
+        "R": 0,
+        "B": 2,
+        "G": 8
+      },
+      "vp": 3,
+      "reward": "",
+      "copies": 3,
+      "image": "threat-sturdy-swine.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "MASS"
+        },
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "WILD"
+        }
+      ]
+    },
+    {
+      "id": "day-massive-2",
+      "name": "Boulderback",
+      "type": "Massive",
+      "cost": {
+        "R": 0,
+        "B": 1,
+        "G": 7
+      },
+      "vp": 2,
+      "reward": "",
+      "copies": 2,
+      "image": "threat-sturdy-swine.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "MASS"
+        },
+        {
+          "kind": "resource",
+          "resources": {
+            "G": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "day-massive-3",
+      "name": "Ironhide Hogg",
+      "type": "Massive",
+      "cost": {
+        "R": 1,
+        "B": 2,
+        "G": 8
+      },
+      "vp": 3,
+      "reward": "",
+      "copies": 1,
+      "image": "threat-sturdy-swine.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 2,
+          "token": "MASS"
+        }
+      ]
+    },
+    {
+      "id": "day-massive-4",
+      "name": "Mudstone Goliath",
+      "type": "Massive",
+      "cost": {
+        "R": 0,
+        "B": 1,
+        "G": 9
+      },
+      "vp": 3,
+      "reward": "",
+      "copies": 1,
+      "image": "threat-sturdy-swine.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "MASS"
+        },
+        {
+          "kind": "stance_change",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "day-massive-5",
+      "name": "Grove Guardian",
+      "type": "Massive",
+      "cost": {
+        "R": 1,
+        "B": 1,
+        "G": 7
+      },
+      "vp": 2,
+      "reward": "",
+      "copies": 1,
+      "image": "threat-sturdy-swine.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "WILD"
+        },
+        {
+          "kind": "resource",
+          "resources": {
+            "G": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "day-massive-6",
+      "name": "Granite Grunter",
+      "type": "Massive",
+      "cost": {
+        "R": 0,
+        "B": 3,
+        "G": 8
+      },
+      "vp": 3,
+      "reward": "",
+      "copies": 1,
+      "image": "threat-sturdy-swine.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "MASS"
+        },
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "WILD"
+        }
+      ]
+    },
+    {
+      "id": "day-massive-7",
+      "name": "Mossback Hulk",
+      "type": "Massive",
+      "cost": {
+        "R": 0,
+        "B": 2,
+        "G": 9
+      },
+      "vp": 3,
+      "reward": "",
+      "copies": 1,
+      "image": "threat-sturdy-swine.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "MASS"
+        },
+        {
+          "kind": "resource",
+          "resources": {
+            "B": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "day-massive-8",
+      "name": "Timber Borer",
+      "type": "Massive",
+      "cost": {
+        "R": 0,
+        "B": 1,
+        "G": 6
+      },
+      "vp": 2,
+      "reward": "",
+      "copies": 1,
+      "image": "threat-sturdy-swine.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "MASS"
+        },
+        {
+          "kind": "resource",
+          "resources": {
+            "G": 1
+          }
+        },
+        {
+          "kind": "stance_change",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "day-hybrid-1",
+      "name": "Elusive Forager",
+      "type": "Hybrid",
+      "cost": {
+        "R": 4,
+        "B": 4,
+        "G": 3
+      },
+      "vp": 3,
+      "reward": "",
+      "copies": 2,
+      "image": "threat-elusive-forager.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "CONVERSION"
+        },
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "WILD"
+        }
+      ]
+    },
+    {
+      "id": "day-hybrid-2",
+      "name": "Duskbound Rustler",
+      "type": "Hybrid",
+      "cost": {
+        "R": 5,
+        "B": 3,
+        "G": 2
+      },
+      "vp": 3,
+      "reward": "",
+      "copies": 1,
+      "image": "threat-elusive-forager.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "WILD"
+        },
+        {
+          "kind": "resource",
+          "resources": {
+            "R": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "day-hybrid-3",
+      "name": "Thorned Stalker",
+      "type": "Hybrid",
+      "cost": {
+        "R": 3,
+        "B": 3,
+        "G": 4
+      },
+      "vp": 3,
+      "reward": "",
+      "copies": 1,
+      "image": "threat-elusive-forager.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "CONVERSION"
+        },
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "MASS"
+        }
+      ]
+    },
+    {
+      "id": "day-hybrid-4",
+      "name": "Crosswind Brute",
+      "type": "Hybrid",
+      "cost": {
+        "R": 4,
+        "B": 2,
+        "G": 4
+      },
+      "vp": 2,
+      "reward": "",
+      "copies": 1,
+      "image": "threat-elusive-forager.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "WILD"
+        },
+        {
+          "kind": "stance_change",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "day-hybrid-5",
+      "name": "Reedshadow Hunter",
+      "type": "Hybrid",
+      "cost": {
+        "R": 3,
+        "B": 5,
+        "G": 2
+      },
+      "vp": 3,
+      "reward": "",
+      "copies": 1,
+      "image": "threat-elusive-forager.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "CONVERSION"
+        },
+        {
+          "kind": "resource",
+          "resources": {
+            "G": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "day-hybrid-6",
+      "name": "Splitjaw Raider",
+      "type": "Hybrid",
+      "cost": {
+        "R": 5,
+        "B": 2,
+        "G": 3
+      },
+      "vp": 3,
+      "reward": "",
+      "copies": 1,
+      "image": "threat-elusive-forager.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "ATTACK"
+        },
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "WILD"
+        }
+      ]
     }
   ],
   "night_threats": [
+    {
+      "id": "night-feral-1",
+      "name": "Aggressive Boar",
+      "type": "Feral",
+      "cost": {
+        "R": 13,
+        "B": 0,
+        "G": 2
+      },
+      "vp": 7,
+      "reward": "",
+      "copies": 3,
+      "image": "threat-aggressive-boar.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 3,
+          "token": "WILD"
+        },
+        {
+          "kind": "stance_change",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "night-feral-2",
+      "name": "Night Razor",
+      "type": "Feral",
+      "cost": {
+        "R": 11,
+        "B": 1,
+        "G": 2
+      },
+      "vp": 5,
+      "reward": "",
+      "copies": 2,
+      "image": "threat-aggressive-boar.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 2,
+          "token": "ATTACK"
+        },
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "WILD"
+        }
+      ]
+    },
+    {
+      "id": "night-feral-3",
+      "name": "Bloodtusk Marauder",
+      "type": "Feral",
+      "cost": {
+        "R": 12,
+        "B": 0,
+        "G": 3
+      },
+      "vp": 6,
+      "reward": "",
+      "copies": 2,
+      "image": "threat-aggressive-boar.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 2,
+          "token": "ATTACK"
+        },
+        {
+          "kind": "stance_change",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "night-feral-4",
+      "name": "Emberhide Charger",
+      "type": "Feral",
+      "cost": {
+        "R": 10,
+        "B": 2,
+        "G": 2
+      },
+      "vp": 5,
+      "reward": "",
+      "copies": 2,
+      "image": "threat-aggressive-boar.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "ATTACK"
+        },
+        {
+          "kind": "token",
+          "amount": 2,
+          "token": "WILD"
+        }
+      ]
+    },
+    {
+      "id": "night-feral-5",
+      "name": "Howling Runner",
+      "type": "Feral",
+      "cost": {
+        "R": 9,
+        "B": 2,
+        "G": 1
+      },
+      "vp": 4,
+      "reward": "",
+      "copies": 2,
+      "image": "threat-aggressive-boar.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "ATTACK"
+        },
+        {
+          "kind": "resource",
+          "resources": {
+            "R": 2
+          }
+        }
+      ]
+    },
+    {
+      "id": "night-feral-6",
+      "name": "Iron Fang",
+      "type": "Feral",
+      "cost": {
+        "R": 11,
+        "B": 1,
+        "G": 1
+      },
+      "vp": 5,
+      "reward": "",
+      "copies": 1,
+      "image": "threat-aggressive-boar.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 2,
+          "token": "ATTACK"
+        }
+      ]
+    },
+    {
+      "id": "night-feral-7",
+      "name": "Nightfall Devourer",
+      "type": "Feral",
+      "cost": {
+        "R": 14,
+        "B": 0,
+        "G": 1
+      },
+      "vp": 7,
+      "reward": "",
+      "copies": 1,
+      "image": "threat-aggressive-boar.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 3,
+          "token": "ATTACK"
+        },
+        {
+          "kind": "stance_change",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "night-feral-8",
+      "name": "Scorchback",
+      "type": "Feral",
+      "cost": {
+        "R": 10,
+        "B": 3,
+        "G": 1
+      },
+      "vp": 5,
+      "reward": "",
+      "copies": 1,
+      "image": "threat-aggressive-boar.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "ATTACK"
+        },
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "WILD"
+        }
+      ]
+    },
     {
       "id": "night-cunning-1",
       "name": "Cunning Matriarch",
       "type": "Cunning",
       "cost": {
         "R": 3,
-        "B": 11,
+        "B": 10,
         "G": 0
       },
       "vp": 5,
       "reward": "",
-      "copies": 4,
+      "copies": 3,
       "image": "threat-cunning-matriarch.jpg",
       "spoils": [
         {
           "kind": "token",
           "amount": 2,
-          "token": "conversion",
-          "slot_type": null,
+          "token": "CONVERSION"
+        },
+        {
+          "kind": "stance_change",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "night-cunning-2",
+      "name": "Moonlit Trickster",
+      "type": "Cunning",
+      "cost": {
+        "R": 2,
+        "B": 9,
+        "G": 1
+      },
+      "vp": 5,
+      "reward": "",
+      "copies": 2,
+      "image": "threat-cunning-matriarch.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 2,
+          "token": "CONVERSION"
+        },
+        {
+          "kind": "resource",
           "resources": {
-            "R": 0,
-            "B": 0,
-            "G": 0
+            "B": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "night-cunning-3",
+      "name": "Veilstep Sow",
+      "type": "Cunning",
+      "cost": {
+        "R": 3,
+        "B": 8,
+        "G": 1
+      },
+      "vp": 4,
+      "reward": "",
+      "copies": 2,
+      "image": "threat-cunning-matriarch.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "CONVERSION"
+        },
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "WILD"
+        }
+      ]
+    },
+    {
+      "id": "night-cunning-4",
+      "name": "Graveyard Snatcher",
+      "type": "Cunning",
+      "cost": {
+        "R": 1,
+        "B": 8,
+        "G": 2
+      },
+      "vp": 4,
+      "reward": "",
+      "copies": 2,
+      "image": "threat-cunning-matriarch.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "CONVERSION"
+        },
+        {
+          "kind": "stance_change",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "night-cunning-5",
+      "name": "Whispered Schemer",
+      "type": "Cunning",
+      "cost": {
+        "R": 2,
+        "B": 10,
+        "G": 0
+      },
+      "vp": 5,
+      "reward": "",
+      "copies": 1,
+      "image": "threat-cunning-matriarch.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 3,
+          "token": "CONVERSION"
+        }
+      ]
+    },
+    {
+      "id": "night-cunning-6",
+      "name": "Blackglass Seer",
+      "type": "Cunning",
+      "cost": {
+        "R": 4,
+        "B": 9,
+        "G": 0
+      },
+      "vp": 5,
+      "reward": "",
+      "copies": 1,
+      "image": "threat-cunning-matriarch.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 2,
+          "token": "CONVERSION"
+        },
+        {
+          "kind": "resource",
+          "resources": {
+            "R": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "night-cunning-7",
+      "name": "Omen Picker",
+      "type": "Cunning",
+      "cost": {
+        "R": 1,
+        "B": 7,
+        "G": 1
+      },
+      "vp": 4,
+      "reward": "",
+      "copies": 1,
+      "image": "threat-cunning-matriarch.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "CONVERSION"
+        },
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "WILD"
+        },
+        {
+          "kind": "resource",
+          "resources": {
+            "B": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "night-cunning-8",
+      "name": "Gutter Oracle",
+      "type": "Cunning",
+      "cost": {
+        "R": 3,
+        "B": 9,
+        "G": 2
+      },
+      "vp": 5,
+      "reward": "",
+      "copies": 1,
+      "image": "threat-cunning-matriarch.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "CONVERSION"
+        },
+        {
+          "kind": "stance_change",
+          "amount": 1
+        },
+        {
+          "kind": "resource",
+          "resources": {
+            "G": 1
           }
         }
       ]
@@ -205,77 +1200,21 @@
       "cost": {
         "R": 0,
         "B": 4,
-        "G": 12
+        "G": 11
       },
       "vp": 6,
       "reward": "",
-      "copies": 4,
+      "copies": 3,
       "image": "threat-plated-brute.jpg",
       "spoils": [
         {
           "kind": "token",
           "amount": 2,
-          "token": "mass",
-          "slot_type": null,
-          "resources": {
-            "R": 0,
-            "B": 0,
-            "G": 0
-          }
-        }
-      ]
-    },
-    {
-      "id": "night-feral-1",
-      "name": "Aggressive Boar",
-      "type": "Feral",
-      "cost": {
-        "R": 14,
-        "B": 0,
-        "G": 2
-      },
-      "vp": 7,
-      "reward": "",
-      "copies": 4,
-      "image": "threat-aggressive-boar.jpg",
-      "spoils": [
+          "token": "MASS"
+        },
         {
-          "kind": "token",
-          "amount": 3,
-          "token": "wild",
-          "slot_type": null,
-          "resources": {
-            "R": 0,
-            "B": 0,
-            "G": 0
-          }
-        }
-      ]
-    },
-    {
-      "id": "night-hybrid-1",
-      "name": "Stalking Boar",
-      "type": "Hybrid",
-      "cost": {
-        "R": 9,
-        "B": 9,
-        "G": 5
-      },
-      "vp": 6,
-      "reward": "",
-      "copies": 4,
-      "image": "threat-stalking-boar.jpg",
-      "spoils": [
-        {
-          "kind": "token",
-          "amount": 2,
-          "token": "wild",
-          "slot_type": null,
-          "resources": {
-            "R": 0,
-            "B": 0,
-            "G": 0
-          }
+          "kind": "stance_change",
+          "amount": 1
         }
       ]
     },
@@ -286,22 +1225,342 @@
       "cost": {
         "R": 3,
         "B": 2,
-        "G": 13
+        "G": 12
       },
       "vp": 6,
       "reward": "",
-      "copies": 4,
+      "copies": 3,
       "image": "threat-brute-boar.jpg",
       "spoils": [
         {
           "kind": "slot",
           "amount": 1,
-          "token": null,
-          "slot_type": "weapon",
+          "slot_type": "weapon"
+        },
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "MASS"
+        }
+      ]
+    },
+    {
+      "id": "night-massive-3",
+      "name": "Obsidian Bulk",
+      "type": "Massive",
+      "cost": {
+        "R": 0,
+        "B": 3,
+        "G": 12
+      },
+      "vp": 6,
+      "reward": "",
+      "copies": 2,
+      "image": "threat-plated-brute.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 2,
+          "token": "MASS"
+        },
+        {
+          "kind": "resource",
           "resources": {
-            "R": 0,
-            "B": 0,
-            "G": 0
+            "G": 2
+          }
+        }
+      ]
+    },
+    {
+      "id": "night-massive-4",
+      "name": "Ironclad Behemoth",
+      "type": "Massive",
+      "cost": {
+        "R": 1,
+        "B": 2,
+        "G": 13
+      },
+      "vp": 7,
+      "reward": "",
+      "copies": 1,
+      "image": "threat-plated-brute.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 3,
+          "token": "MASS"
+        }
+      ]
+    },
+    {
+      "id": "night-massive-5",
+      "name": "Dreadroot Colossus",
+      "type": "Massive",
+      "cost": {
+        "R": 2,
+        "B": 3,
+        "G": 10
+      },
+      "vp": 6,
+      "reward": "",
+      "copies": 1,
+      "image": "threat-plated-brute.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "MASS"
+        },
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "WILD"
+        },
+        {
+          "kind": "stance_change",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "night-massive-6",
+      "name": "Stonewake Titan",
+      "type": "Massive",
+      "cost": {
+        "R": 0,
+        "B": 4,
+        "G": 12
+      },
+      "vp": 7,
+      "reward": "",
+      "copies": 1,
+      "image": "threat-plated-brute.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 2,
+          "token": "MASS"
+        },
+        {
+          "kind": "resource",
+          "resources": {
+            "B": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "night-massive-7",
+      "name": "Gravebound Juggernaut",
+      "type": "Massive",
+      "cost": {
+        "R": 0,
+        "B": 2,
+        "G": 14
+      },
+      "vp": 7,
+      "reward": "",
+      "copies": 1,
+      "image": "threat-plated-brute.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 3,
+          "token": "MASS"
+        },
+        {
+          "kind": "stance_change",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "night-massive-8",
+      "name": "Nightfall Bulwark",
+      "type": "Massive",
+      "cost": {
+        "R": 0,
+        "B": 5,
+        "G": 11
+      },
+      "vp": 6,
+      "reward": "",
+      "copies": 1,
+      "image": "threat-plated-brute.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 2,
+          "token": "MASS"
+        },
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "WILD"
+        }
+      ]
+    },
+    {
+      "id": "night-hybrid-1",
+      "name": "Stalking Boar",
+      "type": "Hybrid",
+      "cost": {
+        "R": 8,
+        "B": 8,
+        "G": 5
+      },
+      "vp": 6,
+      "reward": "",
+      "copies": 3,
+      "image": "threat-stalking-boar.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 2,
+          "token": "WILD"
+        },
+        {
+          "kind": "stance_change",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "night-hybrid-2",
+      "name": "Nightshade Stalker",
+      "type": "Hybrid",
+      "cost": {
+        "R": 7,
+        "B": 7,
+        "G": 6
+      },
+      "vp": 6,
+      "reward": "",
+      "copies": 2,
+      "image": "threat-stalking-boar.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "WILD"
+        },
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "CONVERSION"
+        }
+      ]
+    },
+    {
+      "id": "night-hybrid-3",
+      "name": "Ashen Ravager",
+      "type": "Hybrid",
+      "cost": {
+        "R": 8,
+        "B": 6,
+        "G": 6
+      },
+      "vp": 6,
+      "reward": "",
+      "copies": 2,
+      "image": "threat-stalking-boar.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "ATTACK"
+        },
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "WILD"
+        }
+      ]
+    },
+    {
+      "id": "night-hybrid-4",
+      "name": "Riftwalker Brute",
+      "type": "Hybrid",
+      "cost": {
+        "R": 6,
+        "B": 8,
+        "G": 6
+      },
+      "vp": 6,
+      "reward": "",
+      "copies": 1,
+      "image": "threat-stalking-boar.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "CONVERSION"
+        },
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "MASS"
+        },
+        {
+          "kind": "stance_change",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "id": "night-hybrid-5",
+      "name": "Gloomfang Hunter",
+      "type": "Hybrid",
+      "cost": {
+        "R": 7,
+        "B": 9,
+        "G": 4
+      },
+      "vp": 6,
+      "reward": "",
+      "copies": 1,
+      "image": "threat-stalking-boar.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 2,
+          "token": "CONVERSION"
+        },
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "WILD"
+        }
+      ]
+    },
+    {
+      "id": "night-hybrid-6",
+      "name": "Venomroot Prowler",
+      "type": "Hybrid",
+      "cost": {
+        "R": 6,
+        "B": 7,
+        "G": 7
+      },
+      "vp": 6,
+      "reward": "",
+      "copies": 1,
+      "image": "threat-stalking-boar.jpg",
+      "spoils": [
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "MASS"
+        },
+        {
+          "kind": "token",
+          "amount": 1,
+          "token": "WILD"
+        },
+        {
+          "kind": "resource",
+          "resources": {
+            "G": 1
           }
         }
       ]

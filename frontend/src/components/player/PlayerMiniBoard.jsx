@@ -1,4 +1,5 @@
 import React from "react";
+import { ResourceIcon } from "../resources/ResourceCost";
 
 export default function PlayerMiniBoard({ player, isActive, isTurn, onSelect }) {
   return (
@@ -23,8 +24,19 @@ export default function PlayerMiniBoard({ player, isActive, isTurn, onSelect }) 
       </div>
 
       <div className="flex justify-between text-[10px] text-slate-300">
-        <span>
-          R/B/G: {player.resources?.R || 0}/{player.resources?.B || 0}/{player.resources?.G || 0}
+        <span className="inline-flex items-center gap-2">
+          <span className="inline-flex items-center gap-1">
+            <ResourceIcon resource="R" size={12} />
+            {player.resources?.R || 0}
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <ResourceIcon resource="B" size={12} />
+            {player.resources?.B || 0}
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <ResourceIcon resource="G" size={12} />
+            {player.resources?.G || 0}
+          </span>
         </span>
         <span>VP: {player.vp}</span>
       </div>

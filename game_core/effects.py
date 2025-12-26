@@ -39,6 +39,7 @@ def parse_effect_tags(card: Dict) -> List[CardEffect]:
       - "active:mass_token:once_per_turn"  -> Action: spend any token + 2G to gain 1 Mass token (once/turn)
       - "active:convert_split"             -> Action: convert 1 cube into 1 of each other color
       - "on_kill:conversion:1"             -> Gain 1 conversion token when defeating a threat
+      - "on_kill:stance_change"            -> Gain 1 free stance change when defeating a threat
       - "spec:red"                         -> thematic specialization hint
     """
     tags = card.get("tags") or []
@@ -100,6 +101,15 @@ def parse_effect_tags(card: Dict) -> List[CardEffect]:
             except ValueError:
                 continue
             parsed.append(CardEffect(kind="on_kill_conversion", amount=amt, source_id=source_id, source_name=source_name))
+        elif raw.startswith("on_kill:stance_change"):
+            parts = raw.split(":")
+            amt = 1
+            if len(parts) >= 3:
+                try:
+                    amt = int(parts[-1])
+                except ValueError:
+                    continue
+            parsed.append(CardEffect(kind="on_kill_stance_change", amount=amt, source_id=source_id, source_name=source_name))
         elif raw.startswith("production:"):
             payload = raw.split("production:")[-1]
             parts = payload.split(":")

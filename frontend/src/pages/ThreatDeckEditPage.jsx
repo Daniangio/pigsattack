@@ -189,6 +189,8 @@ export default function ThreatDeckEditPage() {
         next.push({ kind: "token", token: payload.token || "ATTACK", amount: payload.amount || 1 });
       } else if (kind === "resource") {
         next.push({ kind: "resource", resources: payload.resources || { R: 0, B: 0, G: 0 } });
+      } else if (kind === "stance_change") {
+        next.push({ kind: "stance_change", amount: payload.amount || 1 });
       }
       return next;
     });
@@ -379,6 +381,12 @@ export default function ThreatDeckEditPage() {
                   >
                     + Resources
                   </button>
+                  <button
+                    onClick={() => addSpoil(idx, "stance_change", { amount: 1 })}
+                    className="px-2 py-1 rounded border border-sky-400 text-sky-200 text-[10px] hover:bg-sky-400/10"
+                  >
+                    + Stance
+                  </button>
                 </div>
               </div>
               <div className="space-y-1">
@@ -427,6 +435,25 @@ export default function ThreatDeckEditPage() {
                             />
                           </label>
                         ))}
+                        <button
+                          onClick={() => removeSpoil(idx, sIdx)}
+                          className="ml-auto px-2 py-1 text-[10px] rounded border border-rose-400 text-rose-200 hover:bg-rose-400/10"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    );
+                  }
+                  if (s.kind === "stance_change") {
+                    return (
+                      <div key={sIdx} className="flex items-center gap-2 bg-slate-900/60 rounded px-2 py-1">
+                        <span className="text-[11px] text-slate-200">Free stance change</span>
+                        <input
+                          type="number"
+                          className="w-16 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-200 text-[11px]"
+                          value={s.amount || 1}
+                          onChange={(e) => updateTokenSpoil(idx, sIdx, "amount", parseInt(e.target.value || 0, 10))}
+                        />
                         <button
                           onClick={() => removeSpoil(idx, sIdx)}
                           className="ml-auto px-2 py-1 text-[10px] rounded border border-rose-400 text-rose-200 hover:bg-rose-400/10"
