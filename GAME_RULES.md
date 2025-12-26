@@ -93,7 +93,7 @@ Each player board shows:
 - **Weight Token** ⏫  
   - Placed on **Massive threats**  
   - Each Weight increases that threat’s **Green cost by +1G**
-  - Threats cannot have more than 5 *Weight tokens** placed on
+  - Threats cannot have more than 3 *Weight tokens** placed on
 
 - **Enrage Token** 🔥  
   - Placed on **any threat** that becomes Enraged  
@@ -309,7 +309,7 @@ At the end of your turn, in order:
 1. **Massive Weight Growth**
 
    * For each **Massive threat** in **Front** row:
-     * Add **1 Weight token** to that threat, only if the number of **Weight tokens** already present is smaller than 5
+     * Add **1 Weight token** to that threat, only if the number of **Weight tokens** already present is smaller than 3
      * Each Weight token increases its **G** cost by **+1G**
 
 
@@ -460,7 +460,7 @@ Each threat card includes:
 #### Massive (🟩)
 
 * Represents heavily armored, slow-moving behemoths
-* Gains **Weight tokens** after each player turn while in Front row, just before attacking. Cannot have more than 5 **Weight tokens** placed on.
+* Gains **Weight tokens** after each player turn while in Front row, just before attacking. Cannot have more than 3 **Weight tokens** placed on.
 * Attack effect:
 
   * If the Massive threat has **3 or more Weight tokens**
@@ -533,7 +533,7 @@ Enrage tokens remain on a threat until it is defeated.
 
 * Whenever a **Massive threat** is in **Front row** at the **end of a player’s turn**:
 
-  * If the number of **Weight tokens** is < 5, it gains **+1 Weight token** ⏫
+  * If the number of **Weight tokens** is < 3, it gains **+1 Weight token** ⏫
 
 Each Weight token:
 

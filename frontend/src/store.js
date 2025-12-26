@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { jwtDecode } from "jwt-decode";
+import { buildApiUrl } from "./utils/connection";
 
 export const useStore = create((set, get) => ({
   // State
@@ -136,7 +137,7 @@ export const useStore = create((set, get) => ({
       return { error: guestMessage };
     }
 
-    const url = `http://localhost:8000/api/game/${gameId}/${endpoint}`;
+    const url = buildApiUrl(`/api/game/${gameId}/${endpoint}`);
 
     try {
       const response = await fetch(url, {

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import GameApp from "../app/GameApp.jsx";
 import { useStore } from "../store.js";
 import { useParams, useNavigate } from "react-router-dom";
+import { apiBaseUrl } from "../utils/connection";
 
 const bannerText = (gameState) => {
   if (!gameState) return "Connecting to game...";
@@ -31,7 +32,7 @@ export default function GamePage() {
   const prevLogLength = useRef(0);
   const toastTimers = useRef([]);
   const prevActivePlayer = useRef(activePlayerId);
-  const apiBase = import.meta.env.VITE_API_URL || "http://localhost:8000";
+  const apiBase = apiBaseUrl;
   const recordCheckRef = useRef(false);
 
   useEffect(() => {

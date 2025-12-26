@@ -2,8 +2,9 @@ import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useStore } from "../store";
 import { getThreatImage } from "../utils/threatImages";
+import { apiBaseUrl } from "../utils/connection";
 
-const apiBase = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const apiBase = apiBaseUrl;
 
 const emptyThreat = () => ({
   id: `t-${Date.now()}`,

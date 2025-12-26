@@ -1,6 +1,7 @@
 // pages/AuthPage.jsx
 import React, { useState } from "react";
 import { useStore } from "../store";
+import { buildApiUrl } from "../utils/connection";
 
 const AuthPage = ({ onGuestLogin }) => {
   const [isLogin, setIsLogin] = useState(true);
@@ -14,9 +15,7 @@ const AuthPage = ({ onGuestLogin }) => {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const url = isLogin
-      ? "http://localhost:8000/api/token"
-      : "http://localhost:8000/api/register";
+    const url = isLogin ? buildApiUrl("/api/token") : buildApiUrl("/api/register");
       
     try {
       if (isLogin) {

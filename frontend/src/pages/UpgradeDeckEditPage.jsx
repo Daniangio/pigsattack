@@ -2,8 +2,9 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useStore } from "../store";
 import EffectTagBuilder, { buildEffectTextFromTags } from "../components/market/EffectTagBuilder";
+import { apiBaseUrl } from "../utils/connection";
 
-const apiBase = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const apiBase = apiBaseUrl;
 
 const numberOrZero = (val) => {
   const parsed = parseInt(val ?? 0, 10);

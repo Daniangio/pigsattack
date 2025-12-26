@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { useStore } from "../store.js";
 import { useParams, useNavigate } from "react-router-dom";
+import { apiBaseUrl } from "../utils/connection";
 
-const apiBase = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const apiBase = apiBaseUrl;
 
 const RoomPage = ({ onLogout }) => {
   const { user, roomState, token } = useStore();

@@ -241,7 +241,7 @@ class ThreatBoard:
         logs: List[str] = []
         for idx, threat in self.front_threats_with_index():
             if threat.type_key == "massive":
-                if threat.weight < 5:
+                if threat.weight < 3:
                     threat.weight += 1
                     logs.append(f"Front Massive threat {threat.name} in lane {idx + 1} grows heavier (weight {threat.weight}).")
         return logs

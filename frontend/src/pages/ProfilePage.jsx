@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useStore } from "../store";
 import { useParams, useNavigate } from "react-router-dom"; // Import hooks
 import { playerIcons as availablePlayerIcons } from "./game/GameConstants";
+import { apiBaseUrl } from "../utils/connection";
 
 const CurrentRoomBanner = () => {
   const { roomState, gameState } = useStore();
@@ -43,7 +44,7 @@ const ProfilePage = ({ onLogout }) => {
   const btnSecondary = `${btn} bg-gray-600 hover:bg-gray-500 text-white`;
   const btnDanger = `${btn} bg-red-700 hover:bg-red-800 text-white`;
   const btnGhost = `${btn} bg-gray-700 hover:bg-gray-600 text-white border border-gray-600`;
-  const apiBase = import.meta.env.VITE_API_URL || "http://localhost:8000";
+  const apiBase = apiBaseUrl;
 
   useEffect(() => {
     // Use the userId from the URL param, fall back to current user if missing

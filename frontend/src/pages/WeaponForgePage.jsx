@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useStore } from "../store";
+import { apiBaseUrl } from "../utils/connection";
 
-const apiBase = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const apiBase = apiBaseUrl;
 
 export default function WeaponForgePage() {
   const token = useStore((state) => state.token);

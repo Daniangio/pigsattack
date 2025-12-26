@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useStore } from "../store";
+import { apiBaseUrl } from "../utils/connection";
 
 const PostGamePage = () => {
   const navigate = useNavigate();
@@ -16,7 +17,7 @@ const PostGamePage = () => {
   const setGameResult = useStore((state) => state.handleGameResult);
   const clearGameResult = useStore((state) => state.clearGameResult);
   const roomState = useStore((state) => state.roomState);
-  const apiBase = import.meta.env.VITE_API_URL || "http://localhost:8000";
+  const apiBase = apiBaseUrl;
   const inFlightRef = useRef(false);
 
   // Sync store gameResult into local record when it matches

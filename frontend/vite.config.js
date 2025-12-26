@@ -24,6 +24,11 @@ export default defineConfig({
         target: "http://backend:8000",
         changeOrigin: true,
       },
+      "/ws": {
+        target: "ws://backend:8000",
+        ws: true,
+        changeOrigin: true,
+      },
     },
     // We bind to 0.0.0.0 to make the server accessible from outside the container.
     host: "0.0.0.0",

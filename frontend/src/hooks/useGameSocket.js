@@ -1,5 +1,6 @@
 import { useRef, useCallback, useEffect } from "react";
 import { useStore } from "../store.js";
+import { buildWsUrl } from "../utils/connection";
 
 const useGameSocket = (navigate) => {
   const socketRef = useRef(null);
@@ -42,7 +43,7 @@ const useGameSocket = (navigate) => {
         return;
       }
 
-      const WS_URL = "ws://localhost:8000/ws";
+      const WS_URL = buildWsUrl("/ws");
       console.log(`Connecting to WebSocket at ${WS_URL}`);
       const ws = new WebSocket(WS_URL);
       socketRef.current = ws;
