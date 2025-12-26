@@ -26,6 +26,7 @@ const BotSimulationPage = () => {
   const [simulations, setSimulations] = useState("100");
   const [botCount, setBotCount] = useState("4");
   const [botDepth, setBotDepth] = useState("2");
+  const [parallelism, setParallelism] = useState("32");
   const [maxActions, setMaxActions] = useState("400");
   const [maxTurns, setMaxTurns] = useState("200");
   const [personality, setPersonality] = useState("greedy");
@@ -61,6 +62,7 @@ const BotSimulationPage = () => {
       simulations: toNumber(simulations, 100),
       bot_count: toNumber(botCount, 4),
       bot_depth: toNumber(botDepth, 2),
+      parallelism: toNumber(parallelism, 32),
       max_actions_per_run: toNumber(maxActions, 400),
       max_turns: toNumber(maxTurns, 200),
       planning_profile: planningProfile,
@@ -303,6 +305,7 @@ const BotSimulationPage = () => {
   const statusElapsed = jobStatus?.elapsed_ms ? `${Math.round(jobStatus.elapsed_ms / 1000)}s` : "--";
   const statusEta = jobStatus?.eta_ms ? `${Math.round(jobStatus.eta_ms / 1000)}s` : "--";
   const botCountDisplay = jobConfig?.bot_count ?? botCount;
+  const processDisplay = jobConfig?.parallelism ?? parallelism;
   const progressPlayers = Array.from({ length: Number(botCountDisplay) || 0 }, (_, idx) => {
     const id = `bot_${idx + 1}`;
     return {
@@ -364,6 +367,17 @@ const BotSimulationPage = () => {
               max="5"
               value={botDepth}
               onChange={(event) => setBotDepth(event.target.value)}
+              className="px-3 py-2 rounded-md bg-gray-900 border border-gray-700 text-gray-100"
+            />
+          </label>
+          <label className="text-sm text-gray-300 flex flex-col gap-2">
+            Processes
+            <input
+              type="number"
+              min="1"
+              max="64"
+              value={parallelism}
+              onChange={(event) => setParallelism(event.target.value)}
               className="px-3 py-2 rounded-md bg-gray-900 border border-gray-700 text-gray-100"
             />
           </label>
@@ -464,6 +478,7 @@ const BotSimulationPage = () => {
               <div>Elapsed: {statusElapsed}</div>
               <div>ETA: {statusEta}</div>
               <div>Bots: {botCountDisplay}</div>
+              <div>Processes: {processDisplay}</div>
             </div>
             <div className="space-y-1">
               <div>Avg actions/run: {jobStatus.avg_actions?.toFixed(1)}</div>

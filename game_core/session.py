@@ -222,9 +222,21 @@ class GameSession:
                     "reward": th.reward,
                     "spoils": [r.to_public_dict() for r in th.spoils],
                     "defeated": False,
+                    "defeated_by": [],
                 }
             )
         return thresholds
+
+    def _prepare_boss_turns(self):
+        """Boss phase behaves like a full round start: all active players produce resources."""
+        for p in self.state.players.values():
+            if p.status == PlayerStatus.ACTIVE:
+                p.produce()
+                self._apply_upgrade_production(p)
+                p.turn_initial_stance = p.stance
+                p.action_used = False
+                p.buy_used = False
+                p.extend_used = False
 
     async def _start_boss_phase(self, stage: str):
         # Always play Day boss first, then Night boss, regardless of deck phase drift.
@@ -251,6 +263,7 @@ class GameSession:
         self.state.active_player_index = 0
         # Clear threats display during boss
         self.state.threat_rows = []
+        self._prepare_boss_turns()
         await self._skip_inactive_players()
         self._begin_player_turn()
 
@@ -460,15 +473,21 @@ class GameSession:
             idx = result.get("boss_threshold")
             for entry in self.state.boss_thresholds_state:
                 if int(entry.get("index", -1)) == idx:
-                    entry["defeated"] = True
+                    defeated_by = entry.get("defeated_by")
+                    if defeated_by is None:
+                        defeated_by = []
+                        entry["defeated_by"] = defeated_by
+                    if player.user_id not in defeated_by:
+                        defeated_by.append(player.user_id)
             player.threats_defeated += 1
             threat_name = getattr(threat, "name", None) or getattr(threat, "label", None) or "Boss Threshold"
             player.defeated_threats.append(str(threat_name))
         else:
-            player.vp += threat.vp
+            base_vp = int(getattr(threat, "vp", 0) or 0)
             enrage_tokens = getattr(threat, "enrage_tokens", 0) or 0
-            if enrage_tokens > 0:
-                player.vp += 1
+            bonus_vp = 1 if enrage_tokens > 0 else 0
+            player.vp += base_vp + bonus_vp
+            if bonus_vp:
                 self.state.add_log(f"{player.username} gains +1 VP for defeating an enraged threat.")
             if getattr(threat, "spoils", None):
                 for reward in threat.spoils:
@@ -502,7 +521,8 @@ class GameSession:
                         self.state.add_log(f"{player.username} gained {gained} free stance change(s) from {source_name}.")
 
             self._sync_threat_rows()
-            self.state.add_log(f"{player.username} defeated {threat.name} for {threat.vp} VP.")
+            total_vp = base_vp + bonus_vp
+            self.state.add_log(f"{player.username} defeated {threat.name} for {total_vp} VP.")
             await self._check_game_over()
 
     async def _handle_buy_upgrade(self, player: PlayerBoard, payload: Dict[str, Any]):
@@ -954,8 +974,11 @@ class GameSession:
             raise InvalidActionError("Invalid boss threshold.")
         thresholds_state = self.state.boss_thresholds_state or []
         state_entry = next((t for t in thresholds_state if int(t.get("index", -1)) == idx), None)
-        if not state_entry or state_entry.get("defeated"):
+        if not state_entry:
             raise InvalidActionError("That threshold is already defeated.")
+        defeated_by = state_entry.get("defeated_by") or []
+        if player.user_id in defeated_by:
+            raise InvalidActionError("You already defeated that threshold.")
         boss = self._boss_card_for_stage(self.state.boss_stage)
         if not boss or idx < 0 or idx >= len(boss.thresholds):
             raise InvalidActionError("Boss threshold not found.")

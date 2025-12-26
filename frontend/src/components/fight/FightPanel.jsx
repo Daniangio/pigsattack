@@ -77,6 +77,8 @@ export default function FightPanel({
   const wildAlloc = wildAllocation || { R: 0, B: 0, G: 0 };
   const threatWeight = Number(threat?.weight || 0);
   const enrageTokens = Number(threat?.enrage_tokens || 0);
+  const bonusVp = enrageTokens > 0 ? 1 : 0;
+  const displayVp = Number(threat?.vp || 0) + bonusVp;
   const tokenImages = {
     attack: ferocityToken,
     conversion: conversionToken,
@@ -550,7 +552,13 @@ export default function FightPanel({
             <div className="text-xl font-bold text-slate-50 flex items-center gap-2">
               <Swords size={18} className="text-amber-300" />
               {threat?.name}
-              <span className="text-sm text-amber-300 font-semibold">{threat?.vp} VP</span>
+              <span
+                className={`text-sm font-semibold ${
+                  bonusVp ? "text-orange-300" : "text-amber-300"
+                }`}
+              >
+                {displayVp} VP
+              </span>
             </div>
             <div className="text-xs text-slate-400">
               {threat?.type}

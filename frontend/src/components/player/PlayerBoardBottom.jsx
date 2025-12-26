@@ -91,17 +91,18 @@ export default function PlayerBoardBottom({
     const source = (cardCatalog && cardCatalog.length ? cardCatalog : [...MarketData.upgrades, ...MarketData.weapons]);
     // Also include the player's owned cards so preview works even if not in market catalog
     const owned = [...(player.upgrades || []), ...(player.weapons || [])];
-    return source.reduce((map, card) => {
+    const baseMap = source.reduce((map, card) => {
       if (card.name) map[card.name] = card;
       if (card.id) map[card.id] = card;
       return map;
-    }, owned.reduce((map, card) => {
+    }, {});
+    return owned.reduce((map, card) => {
       if (!card) return map;
       const entry = typeof card === "string" ? { id: card, name: card } : card;
       if (entry.name) map[entry.name] = entry;
       if (entry.id) map[entry.id] = entry;
       return map;
-    }, {}));
+    }, baseMap);
   }, [cardCatalog, player.upgrades, player.weapons]);
   const previewCard = (cardName, lock = false) => {
     const card = cardLookup[cardName];
@@ -283,14 +284,14 @@ export default function PlayerBoardBottom({
           if (onCardToggleForFight) {
             onCardToggleForFight({ ...card, type: type === "upgrade" ? "Upgrade" : "Weapon" });
           } else {
-            previewCard(card.name, true);
+            previewCard(card.id || card.name, true);
           }
         };
         slots.push(
           <div
             key={`${type}-${i}`}
             className={`${baseClasses} bg-slate-900 border-slate-700 cursor-pointer ${isStaged ? "border-emerald-400" : ""}`}
-            onMouseEnter={() => previewCard(card.name)}
+            onMouseEnter={() => previewCard(card.id || card.name)}
             onMouseLeave={clearPreview}
             onClick={handleCardClick}
           >

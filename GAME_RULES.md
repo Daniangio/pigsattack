@@ -330,6 +330,7 @@ After **all players** have taken one turn in the Round:
      receives **1 Enrage token** 🔥:
      * Its cost gains **+2R**
      * It is now **Enraged** and **cannot be avoided by stance**; every stance is weak to it. Threats can become enraged only once.
+     * Defeating an Enraged threat grants **+1 additional VP**.
 
 2. **Threat Advance**
 
@@ -573,19 +574,16 @@ Each Boss card shows several **Thresholds**. Each threshold has:
 * A **reward** (VP, tokens, slots, etc.)
 * A **penalty** if unpaid (Wounds, resource loss, etc.)
 
-### 8.3 Boss Phase (Simultaneous)
+### 8.3 Boss Phase (Turn-Based)
 
-During the Boss Phase:
+During the Boss Phase, each player takes a **full turn**:
 
-1. Each player independently chooses **which thresholds** they will attempt to pay
-2. For each chosen threshold:
+1. **Production** — gain resources as normal.
+2. **Main action** — you may **realign** or **pick a token** (choose one).
+3. **Market** — you may **buy** one item (as in a normal turn).
+4. **Boss thresholds** — you may fight any thresholds you **haven’t defeated yet**.
 
-   * If the player can pay the cost:
-     * They gain the **reward**
-   * If they do not pay that threshold:
-     * They suffer the **penalty**
-
-Players resolve all thresholds they choose (or fail) in any order they prefer.
+Each player can defeat **each threshold once per player** (not once total).  
 The Boss does not occupy lanes and does not gain Weight or Enrage tokens.
 
 ### 8.4 Transition Between Eras
@@ -700,9 +698,10 @@ After all players have taken 1 turn:
   - Lists a **cost** (pay like a normal fight; tokens may reduce costs).
   - Grants its **spoil** immediately when defeated.
 - On your turn during the Boss Phase:
-  - You may fight any undefeated threshold; if you win, you may attempt another threshold in the same turn.
+  - You gain resources, may **realign** or **pick a token**, and may **buy** once.
+  - You may fight any threshold you **haven’t defeated yet**; if you win, you may attempt another threshold in the same turn.
   - End your turn when done.
-- When all players have taken a turn in the Boss Phase *or* all thresholds are defeated:
+- When all players have taken a turn in the Boss Phase:
   - After the **Day Boss**, set up the **Night deck**, draw 3 threats, and begin **Night Round 1**.
   - After the **Night Boss**, the game ends; total VP to determine the winner.
 

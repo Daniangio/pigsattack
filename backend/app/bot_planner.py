@@ -81,7 +81,10 @@ class BotPlanner:
         best_runs: List[Dict[str, Any]] = []
         best_runs: List[Dict[str, Any]] = []
         score_cache: Dict[str, float] = {}
-        active_profile = planning_profile or getattr(game.state.players.get(player_id), "planning_profile", "full") or "full"
+        active_profile = "full"
+        opponent_profile = planning_profile
+        if opponent_profile is None:
+            opponent_profile = getattr(game.state.players.get(player_id), "planning_profile", None)
 
         async def evaluate_turn(session: GameSession, turn_index: int, accumulated_steps: List[Dict[str, Any]]):
             if turn_index >= self.max_depth or session.state.phase == GamePhase.GAME_OVER:
@@ -140,7 +143,12 @@ class BotPlanner:
             scored_plans = scored_plans[: self.top_n]
 
             for _, plan_actions, sim_after_plan, plan_steps in scored_plans:
-                advanced = await self._advance_to_next_bot_turn(sim_after_plan, player_id, personality=personality)
+                advanced = await self._advance_to_next_bot_turn(
+                    sim_after_plan,
+                    player_id,
+                    personality=personality,
+                    opponent_profile=opponent_profile,
+                )
                 await evaluate_turn(advanced, turn_index + 1, accumulated_steps + plan_steps)
 
         await evaluate_turn(self._clone_quiet(game), 0, [])
@@ -637,6 +645,7 @@ class BotPlanner:
         bot_id: str,
         personality: str = "greedy",
         score_cache: Optional[Dict[str, float]] = None,
+        opponent_profile: Optional[str] = None,
     ) -> GameSession:
         """Advance simulation through other players using the planning bot's choice policy."""
         current = self._clone_quiet(sim)
@@ -649,7 +658,7 @@ class BotPlanner:
             if active == bot_id:
                 break
             active_player = current.state.players.get(active)
-            profile = getattr(active_player, "planning_profile", "full") if active_player else "full"
+            profile = opponent_profile or (getattr(active_player, "planning_profile", "full") if active_player else "full")
             plans = await self._enumerate_turn_plans(current, active, profile)
             if not plans:
                 plans = [[{"type": "end_turn", "payload": {}}]]

@@ -8,6 +8,8 @@ import { Weight } from "lucide-react";
 export default function ThreatCardCompact({ threat, onFight, rowIndex, isFront, canFight, isAttacking, weight = 0, position }) {
   const fightAllowed = typeof canFight === "boolean" ? canFight : isFront;
   const enrageTokens = threat?.enrage_tokens ?? threat?.enrageTokens ?? 0;
+  const bonusVp = enrageTokens > 0 ? 1 : 0;
+  const displayVp = (threat?.vp ?? 0) + bonusVp;
   const typeColor = {
     feral: "text-red-300 border-red-400/50 bg-red-900/40",
     cunning: "text-blue-300 border-blue-400/50 bg-blue-900/40",
@@ -67,8 +69,12 @@ export default function ThreatCardCompact({ threat, onFight, rowIndex, isFront, 
             {threat.name}
           </div>
         </div>
-        <span className="px-1 py-1 rounded-full border border-amber-400/80 bg-amber-500/15 text-amber-200 text-[6px] whitespace-nowrap">
-          {threat.vp} VP
+        <span
+          className={`px-1 py-1 rounded-full border text-[6px] whitespace-nowrap ${
+            bonusVp ? "border-orange-400/80 bg-orange-500/20 text-orange-200" : "border-amber-400/80 bg-amber-500/15 text-amber-200"
+          }`}
+        >
+          {displayVp} VP
         </span>
       </div>
       {hovered && (

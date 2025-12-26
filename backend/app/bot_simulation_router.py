@@ -4,6 +4,7 @@ import asyncio
 import random
 import time
 import uuid
+from concurrent.futures import ProcessPoolExecutor
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -25,6 +26,7 @@ class BotSimulationRequest(BaseModel):
     simulations: int = Field(100, ge=1, le=300)
     bot_count: int = Field(4, ge=2, le=6)
     bot_depth: int = Field(2, ge=1, le=5)
+    parallelism: int = Field(32, ge=1, le=64)
     max_actions_per_run: int = Field(400, ge=50, le=2000)
     max_turns: int = Field(200, ge=10, le=1000)
     planning_profile: str = "attack_only"
@@ -300,6 +302,16 @@ def _status_payload(job_id: str, job: Dict[str, Any]) -> BotSimulationStatus:
     )
 
 
+def _run_simulation_worker(task: Dict[str, Any]) -> Dict[str, Any]:
+    request = BotSimulationRequest(**task["request"])
+    run_id = int(task["run_id"])
+    base_seed = task.get("base_seed")
+    start = time.time()
+    run = asyncio.run(_run_single_simulation(run_id, request, base_seed))
+    duration_ms = int((time.time() - start) * 1000)
+    return {"run": run.model_dump(), "duration_ms": duration_ms}
+
+
 async def _run_single_simulation(
     run_id: int,
     request: BotSimulationRequest,
@@ -476,11 +488,12 @@ async def _execute_simulations(
     card_index: Dict[str, str] = {}
     total_actions = 0
 
-    for idx in range(request.simulations):
-        run_start = time.time()
-        run = await _run_single_simulation(idx + 1, request, base_seed)
-        run_duration_ms = int((time.time() - run_start) * 1000)
+    completed_runs = 0
+
+    def apply_run(run: SimulationRun, run_duration_ms: int):
+        nonlocal completed_runs, total_actions
         runs.append(run)
+        completed_runs += 1
         if run.winner_id:
             wins[run.winner_id] = wins.get(run.winner_id, 0) + 1
         for action in run.actions:
@@ -491,8 +504,7 @@ async def _execute_simulations(
                     card_index.setdefault(card.name, card.kind)
         total_actions += run.total_actions
         if job is not None:
-            completed = idx + 1
-            job["completed_runs"] = completed
+            job["completed_runs"] = completed_runs
             job["updated_at"] = time.time()
             job["wins"] = dict(wins)
             job["action_counts"] = dict(action_counts)
@@ -506,11 +518,39 @@ async def _execute_simulations(
                 "total_actions": run.total_actions,
                 "duration_ms": run_duration_ms,
             }
-            job["avg_actions"] = (total_actions / completed) if completed else 0.0
-            job["message"] = f"Completed {completed}/{request.simulations}"
-        await asyncio.sleep(0)
+            job["avg_actions"] = (total_actions / completed_runs) if completed_runs else 0.0
+            job["message"] = f"Completed {completed_runs}/{request.simulations}"
+
+    parallelism = max(1, min(int(request.parallelism or 1), request.simulations))
+    if parallelism <= 1:
+        for idx in range(request.simulations):
+            run_start = time.time()
+            run = await _run_single_simulation(idx + 1, request, base_seed)
+            run_duration_ms = int((time.time() - run_start) * 1000)
+            apply_run(run, run_duration_ms)
+            await asyncio.sleep(0)
+    else:
+        loop = asyncio.get_running_loop()
+        task_payload = request.model_dump()
+        with ProcessPoolExecutor(max_workers=parallelism) as executor:
+            tasks = []
+            for idx in range(request.simulations):
+                task = {
+                    "run_id": idx + 1,
+                    "request": task_payload,
+                    "base_seed": base_seed,
+                }
+                tasks.append(loop.run_in_executor(executor, _run_simulation_worker, task))
+            for future in asyncio.as_completed(tasks):
+                result = await future
+                run_data = result.get("run") or {}
+                run_duration_ms = int(result.get("duration_ms") or 0)
+                run = SimulationRun(**run_data)
+                apply_run(run, run_duration_ms)
+                await asyncio.sleep(0)
 
     simulations = len(runs)
+    runs.sort(key=lambda r: r.id)
     win_rates = {
         player_id: (count / simulations if simulations else 0.0) for player_id, count in wins.items()
     }

@@ -19,6 +19,8 @@ export default function ThreatCardDetail({ threat, actionLabel, actionDisabled, 
       hybrid: "text-zinc-200 border-zinc-400/50 bg-zinc-900/40",
     }[String(threat.type || "").toLowerCase()] || "text-slate-200 border-slate-500/60 bg-slate-800/40";
   const enrageTokens = threat?.enrage_tokens ?? threat?.enrageTokens ?? 0;
+  const bonusVp = enrageTokens > 0 ? 1 : 0;
+  const displayVp = (threat?.vp ?? 0) + bonusVp;
   const weightTokens = threat?.weight ?? threat?.weight ?? 0;
   const eraLabel = threat?.era ? `Era ${threat.era}` : null;
   const laneLabel = threat?.position || threat?.lane || threat?.slot || null;
@@ -33,8 +35,12 @@ export default function ThreatCardDetail({ threat, actionLabel, actionDisabled, 
             <div className="absolute inset-0 bg-slate-800" />
           )}
           <div className="absolute inset-0 bg-gradient-to-b from-black/15 via-black/35 to-black/70" />
-          <div className="absolute top-3 right-3 px-3 py-1 rounded-full border border-amber-400/70 bg-amber-500/15 text-amber-200 text-sm font-semibold">
-            {threat.vp} VP
+          <div
+            className={`absolute top-3 right-3 px-3 py-1 rounded-full border text-sm font-semibold ${
+              bonusVp ? "border-orange-400/80 bg-orange-500/20 text-orange-200" : "border-amber-400/70 bg-amber-500/15 text-amber-200"
+            }`}
+          >
+            {displayVp} VP
           </div>
         </div>
 

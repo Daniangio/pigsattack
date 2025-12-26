@@ -13,6 +13,7 @@ export default function ThreatsPanel({
   compact,
   rows,
   boss,
+  bossThresholds,
   bossMode = false,
   bossStage = "day",
   canFightAny = false,
@@ -25,6 +26,7 @@ export default function ThreatsPanel({
   isZoomed = false,
 }) {
   const bossCard = boss || ThreatData.boss;
+  const thresholds = bossThresholds || bossCard?.thresholds || [];
   const threatRows = rows && rows.length ? rows : ThreatData.rows;
   const laneOrder = ["back", "mid", "front"];
   const frontPriority = ["front", "mid", "back"];
@@ -63,7 +65,7 @@ export default function ThreatsPanel({
         <div className="flex-1 flex flex-col gap-1 overflow-y-auto">
           <BossCard boss={bossCard} enablePreview compact />
           <div className="grid gap-2 sm:grid-cols-2">
-            {(boss.thresholds || []).map((th, idx) => {
+            {thresholds.map((th, idx) => {
               const cost = th.cost || {};
               const defeated = th.defeated;
               return (
@@ -159,7 +161,7 @@ export default function ThreatsPanel({
                 <img src={bossImage} alt={bossCard?.name || "Boss"} className="w-full h-full object-cover" />
               </div>
               <div className="bg-slate-900/70 border border-slate-800 rounded-xl p-2 text-[12px] text-slate-200 flex flex-col gap-3">
-                {(boss.thresholds || []).map((th, idx) => (
+                {thresholds.map((th, idx) => (
                   <button
                     key={th.index ?? idx}
                     disabled={th.defeated}

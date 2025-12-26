@@ -414,6 +414,13 @@ class GameState:
 
     def get_redacted_state(self, viewer_id: str) -> Dict[str, Any]:
         """Public view of the state; nothing secret yet so we return full info."""
+        boss_thresholds = []
+        if self.boss_thresholds_state:
+            for entry in self.boss_thresholds_state:
+                entry_copy = dict(entry)
+                defeated_by = entry_copy.get("defeated_by") or []
+                entry_copy["defeated"] = viewer_id in defeated_by
+                boss_thresholds.append(entry_copy)
         return {
             "game_id": self.game_id,
             "phase": self.phase.value,
@@ -426,7 +433,7 @@ class GameState:
             "bosses": [b.to_public_dict() for b in self.bosses],
             "boss_mode": self.boss_mode,
             "boss_stage": self.boss_stage,
-            "boss_thresholds": self.boss_thresholds_state,
+            "boss_thresholds": boss_thresholds,
             "boss_index": self.boss_index,
             "threat_deck_remaining": self.threat_deck_remaining,
             "era": self.era,

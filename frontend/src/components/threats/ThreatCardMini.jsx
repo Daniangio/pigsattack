@@ -7,6 +7,8 @@ import { getThreatImage } from "../../utils/threatImages";
 export default function ThreatCardMini({ threat, onFight, rowIndex, isFront, canFight, isAttacking, weight = 0, position }) {
   const fightAllowed = typeof canFight === "boolean" ? canFight : isFront;
   const enrageTokens = threat?.enrage_tokens ?? threat?.enrageTokens ?? 0;
+  const bonusVp = enrageTokens > 0 ? 1 : 0;
+  const displayVp = (threat?.vp ?? 0) + bonusVp;
   const typeColor = {
     feral: "text-red-300",
     cunning: "text-blue-300",
@@ -94,8 +96,12 @@ export default function ThreatCardMini({ threat, onFight, rowIndex, isFront, can
             <span className="text-slate-200 text-[10px] uppercase tracking-[0.1em]">Cost</span>
             <span className="flex gap-1 text-[11px] items-center">
               <ResourceCost parts={costParts} iconSize={12} />
-              <span className="px-2 py-1 rounded-full border border-amber-400/80 bg-amber-500/15 text-amber-200 text-[10px] ml-1">
-                {threat.vp} VP
+              <span
+                className={`px-2 py-1 rounded-full border text-[10px] ml-1 ${
+                  bonusVp ? "border-orange-400/80 bg-orange-500/20 text-orange-200" : "border-amber-400/80 bg-amber-500/15 text-amber-200"
+                }`}
+              >
+                {displayVp} VP
               </span>
             </span>
           </div>
