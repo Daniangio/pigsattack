@@ -102,15 +102,15 @@ class Reward:
         elif self.kind == "heal_wound":
             player.wounds = max(0, player.wounds - self.amount)
         elif self.kind == "token" and tok:
-            player.tokens[tok] = player.tokens.get(tok, 0) + self.amount
+            player.tokens[tok] = min(5, player.tokens.get(tok, 0) + self.amount)
         elif self.kind in {"stance_change", "free_stance_change"}:
             delta = self.amount if self.amount else 1
             player.free_stance_changes = max(0, player.free_stance_changes + delta)
         elif self.kind == "slot" and self.slot_type:
             if self.slot_type == "upgrade":
-                player.upgrade_slots = min(4, player.upgrade_slots + self.amount)
+                player.upgrade_slots = min(5, player.upgrade_slots + self.amount)
             elif self.slot_type == "weapon":
-                player.weapon_slots = min(4, player.weapon_slots + self.amount)
+                player.weapon_slots = min(5, player.weapon_slots + self.amount)
         elif self.kind == "resource" and self.resources:
             for res, amt in self.resources.items():
                 player.resources[res] = player.resources.get(res, 0) + max(0, amt)

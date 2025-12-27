@@ -31,6 +31,8 @@ export default function ThreatsPanel({
   const laneOrder = ["back", "mid", "front"];
   const frontPriority = ["front", "mid", "back"];
   const bossImage = bossCard?.image ? getThreatImage(bossCard.image) : null;
+  const emptySlotClass = compact ? "w-[130px] min-w-[130px] max-w-[130px]" : "w-[120px] min-w-[120px] max-w-[120px]";
+  const emptySlotStyle = { aspectRatio: compact ? "1 / 1" : "256 / 354" };
 
   const stanceWeakness = (threatType = "", stance = "") => {
     const type = threatType.toLowerCase();
@@ -239,7 +241,17 @@ export default function ThreatsPanel({
                           weight: threat?.weight || 0,
                           position: pos,
                         };
-                        return threat ? (
+                        if (!threat) {
+                          return (
+                            <div key={`${rowIdx}-${pos}`} className="flex-shrink-0">
+                              <div
+                                className={`${emptySlotClass} rounded-xl border border-dashed border-slate-800 bg-slate-950/30`}
+                                style={emptySlotStyle}
+                              />
+                            </div>
+                          );
+                        }
+                        return (
                           <div key={`${rowIdx}-${pos}`} className="flex-shrink-0">
                             {compact ? (
                               <ThreatCardCompact threat={threat} onFight={onFightRow} {...sharedProps} />
@@ -247,7 +259,7 @@ export default function ThreatsPanel({
                               <ThreatCardMini threat={threat} onFight={onFightRow} {...sharedProps} />
                             )}
                           </div>
-                        ) : null;
+                        );
                       })}
                     </div>
                   </div>
@@ -302,7 +314,17 @@ export default function ThreatsPanel({
                         weight: threat?.weight || 0,
                         position: pos,
                       };
-                      return threat ? (
+                      if (!threat) {
+                        return (
+                          <div key={`${rowIdx}-${pos}`} className="flex-shrink-0">
+                            <div
+                              className={`${emptySlotClass} rounded-xl border border-dashed border-slate-800 bg-slate-950/30`}
+                              style={emptySlotStyle}
+                            />
+                          </div>
+                        );
+                      }
+                      return (
                         <div key={`${rowIdx}-${pos}`} className="flex-shrink-0">
                           {compact ? (
                             <ThreatCardCompact threat={threat} onFight={onFightRow} {...sharedProps} />
@@ -310,7 +332,7 @@ export default function ThreatsPanel({
                             <ThreatCardMini threat={threat} onFight={onFightRow} {...sharedProps} />
                           )}
                         </div>
-                      ) : null;
+                      );
                     })}
                   </div>
                 </div>

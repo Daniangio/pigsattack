@@ -121,11 +121,11 @@ const LobbyPage = ({ onLogout }) => { // --- REFACTOR: Added roomState ---
             Market Forge
           </button>
           <button
-            onClick={() => navigate("/simulations/bots")}
+            onClick={() => navigate("/balance-lab")}
             className={btnInfoAlt}
-            title="Run bot-only simulations and review results"
+            title="Compare math balance with simulation outcomes"
           >
-            Bot Simulation
+            Balance Lab
           </button>
           <button onClick={onLogout} className={btnDanger}>
             Logout

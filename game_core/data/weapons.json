@@ -15,15 +15,15 @@
         "fight:cost_reduction:B3",
         "spec:red"
       ],
-      "copies": 3
+      "copies": 1
     },
     {
       "type": "Weapon",
       "name": "Thermal Lance",
       "cost": {
-        "R": 2,
-        "B": 2,
-        "G": 1
+        "R": 3,
+        "B": 0,
+        "G": 2
       },
       "vp": 0,
       "uses": 2,
@@ -31,7 +31,7 @@
       "tags": [
         "fight:cost_reduction:B3",
         "fight:cost_reduction:G3",
-        "spec:all"
+        "spec:red"
       ],
       "copies": 3
     },
@@ -40,8 +40,8 @@
       "name": "Snipe Scope",
       "cost": {
         "R": 0,
-        "B": 1,
-        "G": 1
+        "B": 3,
+        "G": 0
       },
       "vp": 0,
       "uses": 1,
@@ -58,16 +58,17 @@
       "type": "Weapon",
       "name": "Prismatic Bomb",
       "cost": {
-        "R": 1,
+        "R": 2,
         "B": 2,
-        "G": 0
+        "G": 2
       },
       "vp": 0,
       "uses": 2,
-      "effect": "In a fight: reduce cost by B2/G1",
+      "effect": "In a fight: reduce cost by R2/B2/G2",
       "tags": [
+        "fight:cost_reduction:R2",
         "fight:cost_reduction:B2",
-        "fight:cost_reduction:G1",
+        "fight:cost_reduction:G2",
         "spec:all"
       ],
       "copies": 2
@@ -76,8 +77,8 @@
       "type": "Weapon",
       "name": "Gyro Hammer",
       "cost": {
-        "R": 0,
-        "B": 1,
+        "R": 1,
+        "B": 0,
         "G": 2
       },
       "vp": 0,
@@ -99,9 +100,9 @@
       },
       "vp": 0,
       "uses": 2,
-      "effect": "In a fight: reduce cost by G6",
+      "effect": "In a fight: reduce cost by G8",
       "tags": [
-        "fight:cost_reduction:G6",
+        "fight:cost_reduction:G8",
         "spec:red"
       ],
       "copies": 2
@@ -111,11 +112,11 @@
       "name": "Neural Spike",
       "cost": {
         "R": 1,
-        "B": 4,
+        "B": 3,
         "G": 0
       },
       "vp": 0,
-      "uses": 2,
+      "uses": 1,
       "effect": "In a fight: reduce cost by R5. On kill: gain 1 free stance change.",
       "tags": [
         "fight:cost_reduction:R5",
@@ -130,14 +131,14 @@
       "cost": {
         "R": 0,
         "B": 1,
-        "G": 6
+        "G": 5
       },
       "vp": 0,
-      "uses": 2,
-      "effect": "Day: reduce cost by B7. Night: reduce cost by B9. On kill: gain 1 free stance change.",
+      "uses": 1,
+      "effect": "Day: reduce cost by B7. Night: reduce cost by B10. On kill: gain 1 free stance change.",
       "tags": [
         "fight:cost_reduction:B7:day",
-        "fight:cost_reduction:B9:night",
+        "fight:cost_reduction:B10:night",
         "on_kill:stance_change:1",
         "spec:green"
       ],
@@ -147,18 +148,18 @@
       "type": "Weapon",
       "name": "Chromatic Twinblade (RG)",
       "cost": {
-        "R": 3,
+        "R": 2,
         "B": 0,
         "G": 2
       },
       "vp": 0,
       "uses": 2,
-      "effect": "Day: reduce cost by B3/G3. Night: reduce cost by B4/G4",
+      "effect": "Day: reduce cost by B3/G3. Night: reduce cost by B5/G5",
       "tags": [
         "fight:cost_reduction:B3:day",
         "fight:cost_reduction:G3:day",
-        "fight:cost_reduction:B4:night",
-        "fight:cost_reduction:G4:night",
+        "fight:cost_reduction:B5:night",
+        "fight:cost_reduction:G5:night",
         "spec:red",
         "spec:green"
       ],

@@ -44,8 +44,8 @@ Each player board shows:
   - Blue (Cunning)
   - Green (Mass)
 - Slots for:
-  - **Upgrades** (start with 1 slot, max 4)
-  - **Weapons** (start with 1 slot, max 4)
+  - **Upgrades** (start with 1 slot, max 5)
+  - **Weapons** (start with 1 slot, max 5)
 
 ---
 
@@ -103,7 +103,7 @@ Each player board shows:
   - **Bonus VP:** Defeating an enraged threat grants **+1 additional VP**
 
 > **Token Limit:**  
-> Each player may hold at most **3** of each positive token type (Wild, Attack, Conversion, Mass).
+> Each player may hold at most **5** of each positive token type (Wild, Attack, Conversion, Mass).
 
 ---
 
@@ -223,8 +223,8 @@ Markets are **not** refilled immediately after purchases; availability only chan
 6. **Markets**
 
    * Shuffle Upgrades Deck and Weapons Deck separately
-   * Reveal **N_players + 1** **Upgrades** into **New Stock (Top Lane)**
-   * Reveal **N_players + 1** **Weapons** into **New Stock (Top Lane)**
+   * Reveal **N_players + 2** **Upgrades** into **New Stock (Top Lane)**
+   * Reveal **N_players + 2** **Weapons** into **New Stock (Top Lane)**
    * **Carryover (Bottom Lane)** starts empty
 
 7. **Round & Turn Order**
@@ -248,7 +248,7 @@ At the **start of each Round** (Day or Night):
 
    * **Discard** all cards in **Carryover (Bottom Lane)**
    * **Move** all cards from **New Stock (Top Lane)** into **Carryover**
-   * **Refill New Stock** back up to `N_players + 1` cards
+   * **Refill New Stock** back up to `N_players + 2` cards
    * If a market deck runs out, **shuffle its discarded cards** to rebuild it
 
 2. **(Night Only)**
@@ -285,7 +285,7 @@ You must choose **one** of the following main actions:
      * Wild token
    * If you own an upgrade that unlocks Mass tokens:
      * You may choose a **Mass token** instead
-   * You cannot choose a token for which you already possess max number of copies (which is 3 by default)
+   * You cannot choose a token for which you already possess max number of copies (which is 5 by default)
 
 #### 3. Optional Action (Once Per Turn)
 
@@ -299,13 +299,13 @@ At **any time** during your turn (before or after your main action), you may:
 *(You may not buy more than 1 card per turn.)*
 
 * **Extend Slot**:
-   * Pay 1 Wild Token -> Gain **+1 Upgrade slot** **or** **+1 Weapon slot** (max 4 each)
+   * Pay 1 Wild Token -> Gain **+1 Upgrade slot** **or** **+1 Weapon slot** (max 5 each)
 
 #### 4. End of Turn — Threat Attacks & Massive Growth
 
 At the end of your turn, in order:
 
-1. **Gain 1 Wild token** (capped at 3 total)
+1. **Gain 1 Wild token** (capped at 5 total)
 1. **Massive Weight Growth**
 
    * For each **Massive threat** in **Front** row:
@@ -661,7 +661,7 @@ Use tiebreakers listed in **Section 1** if needed.
 
 **End of Turn**
 
-* Gain 1 Wild token (max 3)
+* Gain 1 Wild token (max 5)
 * Front Massive threats each gain **+1 Weight**
 * Front threats attack (based on vulnerabilities & Enrage)
 
@@ -684,8 +684,8 @@ After all players have taken 1 turn:
 
 ### 10.3 Start of Round Summary
 
-* Refill Upgrade Market to `N_players + 1` cards
-* Refill Weapon Market to `N_players + 1` cards
+* Refill Upgrade Market to `N_players + 2` cards
+* Refill Weapon Market to `N_players + 2` cards
 * (If beginning the Night Era) Set up Night Threats and reset Round count
 
 ---

@@ -166,7 +166,7 @@ export default function PlayerBoardBottom({
   const showReturnToMyBoard = !!onViewMyBoard && !isMyBoard;
   const showFollowActive = !!onFollowActivePlayer && !isFollowingActive && !(isMyBoard && isMyTurnGlobal);
 
-  const maxSlots = 4;
+  const maxSlots = 5;
   const upgradeSlots = Math.min(player.upgradeSlots ?? maxSlots, maxSlots);
   const weaponSlots = Math.min(player.weaponSlots ?? maxSlots, maxSlots);
   const upgradeCards = (player.upgrades || []).map(resolveCard).filter(Boolean);

@@ -224,3 +224,6 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Bot simulation results
+backend/app/simulation_results/

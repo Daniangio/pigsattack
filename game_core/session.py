@@ -510,7 +510,7 @@ class GameSession:
                 source_name = eff.source_name or "a card"
                 if eff.kind == "on_kill_conversion" and eff.amount:
                     current = player.tokens.get(TokenType.CONVERSION, 0)
-                    gained = min(eff.amount, max(0, 3 - current))
+                    gained = min(eff.amount, max(0, 5 - current))
                     if gained:
                         player.tokens[TokenType.CONVERSION] = current + gained
                         self.state.add_log(f"{player.username} gained {gained} conversion token(s) from {source_name}.")
@@ -578,9 +578,9 @@ class GameSession:
         if not token_type:
             raise InvalidActionError("Unknown token type.")
         current = player.tokens.get(token_type, 0)
-        if current >= 3:
+        if current >= 5:
             raise InvalidActionError("You already have the maximum of that token.")
-        player.tokens[token_type] = min(3, current + 1)
+        player.tokens[token_type] = min(5, current + 1)
         self.state.add_log(f"{player.username} picked a {token_type.value} token.")
 
     async def _handle_extend_slot(self, player: PlayerBoard, payload: Dict[str, Any]):
@@ -593,10 +593,10 @@ class GameSession:
             raise InvalidActionError("You need a wild token to extend a slot.")
 
         if slot_type == "upgrade":
-            if player.upgrade_slots >= 4:
+            if player.upgrade_slots >= 5:
                 raise InvalidActionError("Upgrade slots already at max.")
         else:
-            if player.weapon_slots >= 4:
+            if player.weapon_slots >= 5:
                 raise InvalidActionError("Weapon slots already at max.")
 
         self._consume_extend_action(player)
@@ -640,13 +640,13 @@ class GameSession:
                 raise InvalidActionError("Selected token not available.")
             if player.resources.get(ResourceType.GREEN, 0) < 2:
                 raise InvalidActionError("Not enough green resources (need 2G).")
-            if player.tokens.get(TokenType.MASS, 0) >= 3:
+            if player.tokens.get(TokenType.MASS, 0) >= 5:
                 raise InvalidActionError("You already have the maximum Mass tokens.")
 
             # Consume costs
             player.tokens[token_type] = max(0, player.tokens.get(token_type, 0) - 1)
             player.resources[ResourceType.GREEN] = max(0, player.resources.get(ResourceType.GREEN, 0) - 2)
-            player.tokens[TokenType.MASS] = min(3, player.tokens.get(TokenType.MASS, 0) + 1)
+            player.tokens[TokenType.MASS] = min(5, player.tokens.get(TokenType.MASS, 0) + 1)
             self.state.add_log(f"{player.username} activated {self._card_name(card)} to forge a Mass token (spent 1 token and 2G).")
 
         elif has_split_active:
@@ -734,10 +734,10 @@ class GameSession:
                 self.state.add_log(msg)
             self._sync_threat_rows()
 
-        # End-of-turn wild token income (capped at 3)
+        # End-of-turn wild token income (capped at 5)
         current_wild = player.tokens.get(TokenType.WILD, 0)
-        if current_wild < 3:
-            player.tokens[TokenType.WILD] = min(3, current_wild + 1)
+        if current_wild < 5:
+            player.tokens[TokenType.WILD] = min(5, current_wild + 1)
             self.state.add_log(f"{player.username} gains 1 wild token at end of turn.")
 
         await self._check_game_over(force=False)
@@ -799,12 +799,14 @@ class GameSession:
         }
         token_type = reward_map.get(reward)
         if token_type:
-            player.tokens[token_type] = min(3, player.tokens.get(token_type, 0) + 1)
+            player.tokens[token_type] = min(5, player.tokens.get(token_type, 0) + 1)
             self.state.add_log(f"{player.username} gained a {token_type.value} token.")
         # Effect-driven rewards (e.g., Catalyst Array)
         for eff in self._card_effects(reward):
             if eff.kind == "on_kill_conversion" and eff.amount:
-                player.tokens[TokenType.CONVERSION] = min(3, player.tokens.get(TokenType.CONVERSION, 0) + eff.amount)
+                player.tokens[TokenType.CONVERSION] = min(
+                    5, player.tokens.get(TokenType.CONVERSION, 0) + eff.amount
+                )
                 self.state.add_log(f"{player.username} gained {eff.amount} conversion token(s) from {eff.source_name or 'an upgrade'}.")
 
     def _init_market(self):
@@ -840,10 +842,10 @@ class GameSession:
         return drawn
 
     def _refill_market_top(self):
-        """Ensure the top lanes have N_players + 1 cards."""
+        """Ensure the top lanes have N_players + 2 cards."""
         if not self.state.market:
             return
-        desired = max(1, len(self.state.players) + 1)
+        desired = max(1, len(self.state.players) + 2)
         market = self.state.market
         upgrade_needed = max(0, desired - len(market.upgrades_top))
         weapon_needed = max(0, desired - len(market.weapons_top))

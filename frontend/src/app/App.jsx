@@ -25,6 +25,7 @@ import WeaponForgePage from "../pages/WeaponForgePage.jsx";
 import UpgradeDeckEditPage from "../pages/UpgradeDeckEditPage.jsx";
 import WeaponDeckEditPage from "../pages/WeaponDeckEditPage.jsx";
 import BotSimulationPage from "../pages/BotSimulationPage.jsx";
+import BalanceLabPage from "../pages/BalanceLabPage.jsx";
 
 /**
  * This component enforces the core navigation rules.
@@ -225,6 +226,10 @@ function AppContent() {
       <Route
         path="/simulations/bots"
         element={token ? <BotSimulationPage /> : <Navigate to="/auth" />}
+      />
+      <Route
+        path="/balance-lab"
+        element={token ? <BalanceLabPage /> : <Navigate to="/auth" />}
       />
 
       {/* Default route */}

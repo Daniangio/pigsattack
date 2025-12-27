@@ -660,7 +660,7 @@ export default function App({
     }
     const key = slotType === "weapon" ? "weaponSlots" : "upgradeSlots";
     const current = activePlayer[key] ?? 1;
-    if (current >= 4) {
+    if (current >= 5) {
       onLocalToast?.("All slots are already extended.", "amber");
       return;
     }
@@ -681,7 +681,7 @@ export default function App({
               const nextWild = Math.max(0, currentWild - 1);
               return {
                 ...p,
-                [key]: Math.min(4, current + 1),
+                [key]: Math.min(5, current + 1),
                 tokens: { ...tokens, wild: nextWild, WILD: nextWild },
                 extendUsed: true,
               };

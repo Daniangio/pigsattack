@@ -60,11 +60,13 @@ class BotPlanner:
         top_n: int = 10,
         max_branches: int = 150,
         rng: Optional[random.Random] = None,
+        randomness: float = 0.0,
     ):
         self.max_depth = max_depth  # number of this bot's future turns to explore
         self.top_n = top_n
         self.max_branches = max_branches
         self.rng = rng or random.Random()
+        self.randomness = max(0.0, min(float(randomness or 0.0), 1.0))
         self._quiet = True  # disable logging in simulation clones
         self._score_cache: Dict[str, float] = {}
 
@@ -86,7 +88,12 @@ class BotPlanner:
         if opponent_profile is None:
             opponent_profile = getattr(game.state.players.get(player_id), "planning_profile", None)
 
-        async def evaluate_turn(session: GameSession, turn_index: int, accumulated_steps: List[Dict[str, Any]]):
+        async def evaluate_turn(
+            session: GameSession,
+            turn_index: int,
+            accumulated_steps: List[Dict[str, Any]],
+            root_actions: Optional[List[Dict[str, Any]]],
+        ):
             if turn_index >= self.max_depth or session.state.phase == GamePhase.GAME_OVER:
                 score = self._score_state_cached(session, player_id, score_cache)
                 best_runs.append(
@@ -95,7 +102,7 @@ class BotPlanner:
                         "era": getattr(session.state, "era", base_era),
                         "start_score": start_score,
                         "score": score,
-                        "actions": [s["action"] for s in accumulated_steps],
+                        "actions": list(root_actions or []),
                         "steps": accumulated_steps,
                     }
                 )
@@ -143,15 +150,16 @@ class BotPlanner:
             scored_plans = scored_plans[: self.top_n]
 
             for _, plan_actions, sim_after_plan, plan_steps in scored_plans:
+                next_root = root_actions if root_actions is not None else list(plan_actions)
                 advanced = await self._advance_to_next_bot_turn(
                     sim_after_plan,
                     player_id,
                     personality=personality,
                     opponent_profile=opponent_profile,
                 )
-                await evaluate_turn(advanced, turn_index + 1, accumulated_steps + plan_steps)
+                await evaluate_turn(advanced, turn_index + 1, accumulated_steps + plan_steps, next_root)
 
-        await evaluate_turn(self._clone_quiet(game), 0, [])
+        await evaluate_turn(self._clone_quiet(game), 0, [], None)
 
         best_runs = sorted(best_runs, key=lambda r: r.get("score", -1e9), reverse=True)
         for i, run in enumerate(best_runs, start=1):
@@ -206,12 +214,12 @@ class BotPlanner:
         can_extend_upgrade = (
             not player.extend_used
             and player.tokens.get(TokenType.WILD, 0) > 0
-            and player.upgrade_slots < 4
+            and player.upgrade_slots < 5
         )
         can_extend_weapon = (
             not player.extend_used
             and player.tokens.get(TokenType.WILD, 0) > 0
-            and player.weapon_slots < 4
+            and player.weapon_slots < 5
         )
 
         if allow_buys and not player.buy_used:
@@ -594,24 +602,45 @@ class BotPlanner:
     def _choose_run_by_personality(self, runs: List[Dict[str, Any]], personality: str) -> Optional[Dict[str, Any]]:
         if not runs:
             return None
+        if personality == "random":
+            return self.rng.choice(runs)
+
+        scores = [r.get("score", -1e9) for r in runs]
+        spread = (max(scores) - min(scores)) if scores else 0.0
+        if spread <= 0:
+            spread = max(1.0, abs(scores[0]) if scores else 1.0)
+
+        adjusted_scores: Dict[int, float] = {}
+        for idx, run in enumerate(runs):
+            base = run.get("score", -1e9)
+            if self.randomness > 0:
+                base += self.rng.uniform(-1.0, 1.0) * self.randomness * spread
+            adjusted_scores[idx] = base
+
+        def adjusted_score(index: int) -> float:
+            return adjusted_scores.get(index, -1e9)
+
         if personality == "top3":
-            pool = runs[: min(3, len(runs))]
+            ranked = sorted(enumerate(runs), key=lambda pair: adjusted_score(pair[0]), reverse=True)
+            pool = [run for _, run in ranked[: min(3, len(ranked))]]
             return self.rng.choice(pool)
         if personality == "softmax5":
-            pool = runs[: min(5, len(runs))]
-            scores = [r.get("score", -1e9) for r in pool]
-            max_s = max(scores) if scores else 0.0
-            exp_scores = [math.exp(s - max_s) for s in scores]
+            ranked = sorted(enumerate(runs), key=lambda pair: adjusted_score(pair[0]), reverse=True)
+            pool = ranked[: min(5, len(ranked))]
+            adj_scores = [adjusted_score(idx) for idx, _ in pool]
+            max_s = max(adj_scores) if adj_scores else 0.0
+            exp_scores = [math.exp(s - max_s) for s in adj_scores]
             total = sum(exp_scores) or 1.0
             probs = [v / total for v in exp_scores]
             pick = self.rng.random()
             acc = 0.0
-            for run, p in zip(pool, probs):
+            for (_, run), p in zip(pool, probs):
                 acc += p
                 if pick <= acc:
                     return run
-            return pool[-1]
-        return runs[0]
+            return pool[-1][1] if pool else runs[-1]
+        ranked = sorted(enumerate(runs), key=lambda pair: adjusted_score(pair[0]), reverse=True)
+        return ranked[0][1] if ranked else runs[0]
 
     def _clone_quiet(self, session: GameSession) -> GameSession:
         try:
