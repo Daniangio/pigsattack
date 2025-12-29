@@ -20,6 +20,7 @@ from .bot_planner import BotPlanner
 from .security import get_current_user
 from .server_models import PlayerReport, User
 from game_core import GamePhase, GameSession, GameDataLoader
+from game_core.data_loader import EMPTY_DECK_NAME
 from game_core.session import InvalidActionError
 from .custom_content import (
     CUSTOM_BOSS_DIR,
@@ -110,12 +111,27 @@ class SimulationAction(BaseModel):
     forced: bool = False
 
 
+class RoundPlayerSnapshot(BaseModel):
+    player_id: str
+    player_name: str
+    vp: int = 0
+    wounds: int = 0
+    stance: str = ""
+
+
+class RoundSnapshot(BaseModel):
+    round: int
+    era: str = ""
+    players: List[RoundPlayerSnapshot] = Field(default_factory=list)
+
+
 class SimulationRun(BaseModel):
     id: int
     winner_id: Optional[str] = None
     winner_name: Optional[str] = None
     final_stats: List[PlayerReport] = Field(default_factory=list)
     actions: List[SimulationAction] = Field(default_factory=list)
+    round_snapshots: List[RoundSnapshot] = Field(default_factory=list)
     total_actions: int = 0
     truncated: bool = False
     ended_reason: str = "game_over"
@@ -134,6 +150,7 @@ class BotSimulationSummary(BaseModel):
     card_usage: Dict[str, int] = Field(default_factory=dict)
     card_index: Dict[str, str] = Field(default_factory=dict)
     card_balance_data: Dict[str, CardStats] = Field(default_factory=dict)
+    threat_index: Dict[str, str] = Field(default_factory=dict)
     runs: List[SimulationRun] = Field(default_factory=list)
     config: Dict[str, Any] = Field(default_factory=dict)
     duration_ms: int = 0
@@ -184,6 +201,29 @@ def _sanitize_payload(value: Any) -> Any:
     if isinstance(value, list):
         return [_sanitize_payload(v) for v in value]
     return value
+
+
+def resolve_deck_path(name: Optional[str], custom_dir: Path, allow_empty: bool = False) -> Optional[str]:
+    if allow_empty and name == EMPTY_DECK_NAME:
+        return EMPTY_DECK_NAME
+    if not name or name == "default":
+        return None
+    candidate = Path(custom_dir) / f"{name}.json"
+    return str(candidate) if candidate.exists() else None
+
+
+def _build_threat_index(request: BotSimulationRequest) -> Dict[str, str]:
+    loader = GameDataLoader(
+        threats_file=resolve_deck_path(request.threat_deck, Path(CUSTOM_THREATS_DIR)),
+        bosses_file=resolve_deck_path(request.boss_deck, Path(CUSTOM_BOSS_DIR)),
+    )
+    data = loader.load_threats()
+    threat_index: Dict[str, str] = {}
+    for card in (data.day_threats or []):
+        threat_index[str(card.id)] = str(card.name)
+    for card in (data.night_threats or []):
+        threat_index[str(card.id)] = str(card.name)
+    return threat_index
 
 
 def _cancel_requested(job: Optional[Dict[str, Any]]) -> bool:
@@ -515,12 +555,6 @@ async def _run_single_simulation(
     progress_map: Optional[Dict[int, int]] = None,
     progress_units: int = PROGRESS_UNITS_PER_RUN,
 ) -> SimulationRun:
-    def resolve_deck_path(name: Optional[str], custom_dir: Path) -> Optional[str]:
-        if not name or name == "default":
-            return None
-        candidate = Path(custom_dir) / f"{name}.json"
-        return str(candidate) if candidate.exists() else None
-
     personality_mix: List[str] = []
     if request.personality_mix and len(request.personality_mix) == request.bot_count:
         personality_mix = [str(entry) for entry in request.personality_mix]
@@ -546,11 +580,32 @@ async def _run_single_simulation(
     loader = GameDataLoader(
         threats_file=resolve_deck_path(request.threat_deck, Path(CUSTOM_THREATS_DIR)),
         bosses_file=resolve_deck_path(request.boss_deck, Path(CUSTOM_BOSS_DIR)),
-        upgrade_file=resolve_deck_path(request.upgrade_deck, Path(CUSTOM_UPGRADES_DIR)),
-        weapon_file=resolve_deck_path(request.weapon_deck, Path(CUSTOM_WEAPONS_DIR)),
+        upgrade_file=resolve_deck_path(request.upgrade_deck, Path(CUSTOM_UPGRADES_DIR), allow_empty=True),
+        weapon_file=resolve_deck_path(request.weapon_deck, Path(CUSTOM_WEAPONS_DIR), allow_empty=True),
     )
     session = GameSession(f"sim_{run_id}", bot_players, data_loader=loader, verbose=False)
     session.state.simulation_mode = True
+    round_snapshots: List[RoundSnapshot] = []
+
+    def capture_round_snapshot(round_number: int, era_label: str):
+        players_snapshot: List[RoundPlayerSnapshot] = []
+        for pid, player in session.state.players.items():
+            stance_value = getattr(player, "stance", "")
+            stance_label = stance_value.value if hasattr(stance_value, "value") else str(stance_value)
+            players_snapshot.append(
+                RoundPlayerSnapshot(
+                    player_id=str(pid),
+                    player_name=str(getattr(player, "username", pid)),
+                    vp=int(getattr(player, "vp", 0) or 0),
+                    wounds=int(getattr(player, "wounds", 0) or 0),
+                    stance=stance_label,
+                )
+            )
+        round_snapshots.append(
+            RoundSnapshot(round=int(round_number or 0), era=str(era_label or ""), players=players_snapshot)
+        )
+
+    session.round_end_hook = capture_round_snapshot
     seed = base_seed + run_id if base_seed is not None else None
     if seed is not None:
         session.rng = random.Random(seed)
@@ -872,12 +927,14 @@ async def _run_single_simulation(
                 stats.delta_vp_late_samples += 1
 
     winner_id = _pick_winner(session)
+    round_snapshots.sort(key=lambda snap: snap.round)
     run = SimulationRun(
         id=run_id,
         winner_id=winner_id,
         winner_name=_winner_name(session, winner_id),
         final_stats=final_stats,
         actions=action_log,
+        round_snapshots=round_snapshots,
         total_actions=total_actions,
         truncated=truncated,
         ended_reason=ended_reason,
@@ -1084,6 +1141,7 @@ async def _execute_simulations(
                 }
             )
 
+        threat_index = _build_threat_index(request)
         baseline_win_rate = (1.0 / request.bot_count) if request.bot_count else 0.0
         for stats in card_balance_data.values():
             if stats.games_with_card > 0:
@@ -1111,6 +1169,7 @@ async def _execute_simulations(
             card_usage=card_usage,
             card_index=card_index,
             card_balance_data=card_balance_data,
+            threat_index=threat_index,
             runs=runs,
             config=request.model_dump(),
             duration_ms=int((time.time() - start) * 1000),

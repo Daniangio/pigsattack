@@ -31,12 +31,88 @@ const toNumber = (value, fallback = 0) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+const computeBinSize = (maxValue) => {
+  if (maxValue <= 10) return 1;
+  if (maxValue <= 20) return 2;
+  if (maxValue <= 40) return 5;
+  if (maxValue <= 80) return 10;
+  return 20;
+};
+
+const buildBins = (values) => {
+  let maxValue = 0;
+  values.forEach((value) => {
+    const numeric = toNumber(value, 0);
+    if (numeric > maxValue) maxValue = numeric;
+  });
+  const binSize = computeBinSize(maxValue);
+  const bins = [];
+  if (maxValue === 0) {
+    return { bins: [{ start: 0, end: 0, label: "0" }], binSize, maxValue };
+  }
+  for (let start = 0; start <= maxValue; start += binSize) {
+    const end = start + binSize - 1;
+    const label = binSize === 1 ? `${start}` : `${start}-${end}`;
+    bins.push({ start, end, label });
+  }
+  return { bins, binSize, maxValue };
+};
+
+const countByBins = (values, bins, binSize) => {
+  const counts = {};
+  bins.forEach((bin) => {
+    counts[bin.label] = 0;
+  });
+  values.forEach((value) => {
+    const numeric = toNumber(value, 0);
+    const idx = Math.min(bins.length - 1, Math.max(0, Math.floor(numeric / binSize)));
+    const label = bins[idx]?.label;
+    if (label !== undefined) {
+      counts[label] = (counts[label] || 0) + 1;
+    }
+  });
+  return counts;
+};
+
+const ERA_ROUND_COUNT = 7;
+
+const getAbsoluteRound = (round, era) => {
+  const numeric = toNumber(round, 0);
+  if (!numeric) return 0;
+  const eraLabel = String(era || "").toLowerCase();
+  if (eraLabel.includes("night")) return numeric + ERA_ROUND_COUNT;
+  return numeric;
+};
+
+const formatRoundLabel = (round) => {
+  const numeric = toNumber(round, 0);
+  if (!numeric) return { label: "--", isNight: false };
+  const isNight = numeric > ERA_ROUND_COUNT;
+  const eraRound = isNight ? numeric - ERA_ROUND_COUNT : numeric;
+  const isBoss = eraRound === ERA_ROUND_COUNT;
+  const label = isBoss ? `${isNight ? "N" : "D"}B` : `${isNight ? "N" : "D"}${eraRound}`;
+  return { label, isNight, isBoss };
+};
+
+const colorForIndex = (index, total, hueOffset = 0) => {
+  if (!total) return "hsl(210, 65%, 45%)";
+  const hue = (hueOffset + (index * 360) / total) % 360;
+  return `hsl(${hue}, 65%, 45%)`;
+};
+
 const formatPayload = (payload) => {
   if (!payload || Object.keys(payload).length === 0) return "";
   const text = JSON.stringify(payload);
   if (text.length <= 120) return text;
   return `${text.slice(0, 117)}...`;
 };
+
+const LoadingIndicator = ({ label }) => (
+  <span className="inline-flex items-center gap-2 text-xs text-gray-400">
+    <span className="h-3 w-3 animate-spin rounded-full border-2 border-gray-400 border-t-transparent" />
+    <span>{label}</span>
+  </span>
+);
 
 const escapeCsvValue = (value) => {
   if (value === null || value === undefined) return "";
@@ -339,10 +415,14 @@ const BotSimulationResultsPanel = ({ autoLoadResultId = "", autoLoadWhenEmpty = 
   const [activeResultSource, setActiveResultSource] = useState("none");
   const [resultsLibrary, setResultsLibrary] = useState([]);
   const [libraryError, setLibraryError] = useState("");
+  const [isLibraryLoading, setIsLibraryLoading] = useState(false);
+  const [isResultLoading, setIsResultLoading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [uploadName, setUploadName] = useState("");
   const [actionFilter, setActionFilter] = useState("");
   const [cardFilter, setCardFilter] = useState("");
+  const [threatFilter, setThreatFilter] = useState("");
+  const [roundView, setRoundView] = useState("all");
   const [selectedRunId, setSelectedRunId] = useState(null);
   const [fullLogOpen, setFullLogOpen] = useState(false);
   const [fullLogQuery, setFullLogQuery] = useState("");
@@ -352,6 +432,7 @@ const BotSimulationResultsPanel = ({ autoLoadResultId = "", autoLoadWhenEmpty = 
   const resetFilters = () => {
     setActionFilter("");
     setCardFilter("");
+    setThreatFilter("");
   };
 
   useEffect(() => {
@@ -377,36 +458,46 @@ const BotSimulationResultsPanel = ({ autoLoadResultId = "", autoLoadWhenEmpty = 
   };
 
   const refreshResultsLibrary = async () => {
-    const data = await fetchResultsLibrary();
-    setResultsLibrary(data?.results || []);
-    setLibraryError("");
-    return data;
+    setIsLibraryLoading(true);
+    try {
+      const data = await fetchResultsLibrary();
+      setResultsLibrary(data?.results || []);
+      setLibraryError("");
+      return data;
+    } finally {
+      setIsLibraryLoading(false);
+    }
   };
 
   const loadStoredResult = async (resultId, source = "stored") => {
     if (!resultId) return;
-    const response = await fetch(buildApiUrl(`/api/simulations/bots/results/${resultId}`), {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
-    if (!response.ok) {
-      let detail = "Failed to load saved result.";
-      try {
-        const err = await response.json();
-        detail = err?.detail || err?.message || detail;
-      } catch (parseError) {
-        detail = response.statusText || detail;
+    setIsResultLoading(true);
+    try {
+      const response = await fetch(buildApiUrl(`/api/simulations/bots/results/${resultId}`), {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!response.ok) {
+        let detail = "Failed to load saved result.";
+        try {
+          const err = await response.json();
+          detail = err?.detail || err?.message || detail;
+        } catch (parseError) {
+          detail = response.statusText || detail;
+        }
+        throw new Error(detail);
       }
-      throw new Error(detail);
+      const data = await response.json();
+      setActiveResult(data);
+      setActiveResultId(resultId);
+      setActiveResultSource(source);
+      setLibraryError("");
+      setUploadName("");
+      setUploadError("");
+      resetFilters();
+      setSelectedRunId(data?.runs?.[0]?.id ?? null);
+    } finally {
+      setIsResultLoading(false);
     }
-    const data = await response.json();
-    setActiveResult(data);
-    setActiveResultId(resultId);
-    setActiveResultSource(source);
-    setLibraryError("");
-    setUploadName("");
-    setUploadError("");
-    resetFilters();
-    setSelectedRunId(data?.runs?.[0]?.id ?? null);
   };
 
   const handleDownloadStored = async () => {
@@ -511,16 +602,10 @@ const BotSimulationResultsPanel = ({ autoLoadResultId = "", autoLoadWhenEmpty = 
 
   useEffect(() => {
     let cancelled = false;
-    fetchResultsLibrary()
-      .then((data) => {
-        if (cancelled) return;
-        setResultsLibrary(data?.results || []);
-        setLibraryError("");
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setLibraryError(err?.message || "Failed to load saved results.");
-      });
+    refreshResultsLibrary().catch((err) => {
+      if (cancelled) return;
+      setLibraryError(err?.message || "Failed to load saved results.");
+    });
     return () => {
       cancelled = true;
     };
@@ -579,6 +664,14 @@ const BotSimulationResultsPanel = ({ autoLoadResultId = "", autoLoadWhenEmpty = 
   }, [activeResult]);
 
   const normalizeFilter = (value) => value.trim().toLowerCase();
+  const hiddenActionTypes = new Set(["end_turn"]);
+  const shouldHideActionType = (actionType) =>
+    hiddenActionTypes.has(normalizeFilter(String(actionType || "")));
+  const filterByRoundView = (rows) => {
+    if (!rows?.length || roundView === "all") return rows;
+    if (roundView === "day") return rows.filter((row) => row.round <= ERA_ROUND_COUNT);
+    return rows.filter((row) => row.round > ERA_ROUND_COUNT);
+  };
   const actionFilterValue = normalizeFilter(actionFilter);
   const cardFilterValue = normalizeFilter(cardFilter);
 
@@ -720,6 +813,161 @@ const BotSimulationResultsPanel = ({ autoLoadResultId = "", autoLoadWhenEmpty = 
     return counts;
   }, [filteredRuns]);
 
+  const roundSnapshotData = useMemo(() => {
+    const roundMap = new Map();
+    filteredRuns.forEach((run) => {
+      (run.round_snapshots || []).forEach((snapshot) => {
+        const absoluteRound = getAbsoluteRound(snapshot.round, snapshot.era);
+        if (!absoluteRound) return;
+        const entry = roundMap.get(absoluteRound) || {
+          round: absoluteRound,
+          vpValues: [],
+          woundValues: [],
+          stanceCounts: {},
+        };
+        (snapshot.players || []).forEach((player) => {
+          entry.vpValues.push(toNumber(player.vp, 0));
+          entry.woundValues.push(toNumber(player.wounds, 0));
+          const stanceKey = String(player.stance || "UNKNOWN");
+          entry.stanceCounts[stanceKey] = (entry.stanceCounts[stanceKey] || 0) + 1;
+        });
+        roundMap.set(absoluteRound, entry);
+      });
+    });
+    return Array.from(roundMap.values()).sort((a, b) => a.round - b.round);
+  }, [filteredRuns]);
+
+  const vpBins = useMemo(() => buildBins(roundSnapshotData.flatMap((entry) => entry.vpValues)), [roundSnapshotData]);
+  const woundBins = useMemo(() => buildBins(roundSnapshotData.flatMap((entry) => entry.woundValues)), [roundSnapshotData]);
+
+  const vpRoundRows = useMemo(
+    () =>
+      roundSnapshotData.map((entry) => {
+        const counts = countByBins(entry.vpValues, vpBins.bins, vpBins.binSize);
+        return { round: entry.round, counts, total: entry.vpValues.length };
+      }),
+    [roundSnapshotData, vpBins]
+  );
+
+  const vpDayRows = useMemo(() => vpRoundRows.filter((row) => row.round <= ERA_ROUND_COUNT), [vpRoundRows]);
+  const vpNightRows = useMemo(
+    () => vpRoundRows.filter((row) => row.round > ERA_ROUND_COUNT),
+    [vpRoundRows]
+  );
+  const vpRoundRowsFiltered = useMemo(() => filterByRoundView(vpRoundRows), [vpRoundRows, roundView]);
+
+  const woundRoundRows = useMemo(
+    () =>
+      roundSnapshotData.map((entry) => {
+        const counts = countByBins(entry.woundValues, woundBins.bins, woundBins.binSize);
+        return { round: entry.round, counts, total: entry.woundValues.length };
+      }),
+    [roundSnapshotData, woundBins]
+  );
+  const woundRoundRowsFiltered = useMemo(
+    () => filterByRoundView(woundRoundRows),
+    [woundRoundRows, roundView]
+  );
+
+  const stanceOrder = ["AGGRESSIVE", "TACTICAL", "HUNKERED", "BALANCED", "UNKNOWN"];
+  const stanceCategories = useMemo(() => {
+    const seen = new Set();
+    roundSnapshotData.forEach((entry) => {
+      Object.keys(entry.stanceCounts || {}).forEach((key) => {
+        if (key) seen.add(key);
+      });
+    });
+    const ordered = stanceOrder.filter((key) => seen.has(key));
+    const extras = Array.from(seen).filter((key) => !stanceOrder.includes(key)).sort();
+    return [...ordered, ...extras];
+  }, [roundSnapshotData]);
+
+  const stanceRoundRows = useMemo(
+    () =>
+      roundSnapshotData.map((entry) => {
+        const counts = {};
+        stanceCategories.forEach((stance) => {
+          counts[stance] = entry.stanceCounts[stance] || 0;
+        });
+        const total = Object.values(counts).reduce((sum, val) => sum + val, 0);
+        return { round: entry.round, counts, total };
+      }),
+    [roundSnapshotData, stanceCategories]
+  );
+
+  const actionCategories = useMemo(() => {
+    if (actionOptions.length) return actionOptions.filter((action) => !shouldHideActionType(action));
+    const actionSet = new Set();
+    filteredRuns.forEach((run) => {
+      (run.actions || []).forEach((action) => {
+        if (action.type && !shouldHideActionType(action.type)) actionSet.add(action.type);
+      });
+    });
+    return Array.from(actionSet).sort();
+  }, [actionOptions, filteredRuns]);
+
+  const actionRoundRows = useMemo(() => {
+    const roundMap = new Map();
+    filteredRuns.forEach((run) => {
+      (run.actions || []).forEach((action) => {
+        if (shouldHideActionType(action.type)) return;
+        const absoluteRound = getAbsoluteRound(action.round, action.era);
+        if (!absoluteRound) return;
+        const entry = roundMap.get(absoluteRound) || { round: absoluteRound, counts: {} };
+        const actionType = action.type || "unknown";
+        entry.counts[actionType] = (entry.counts[actionType] || 0) + 1;
+        roundMap.set(absoluteRound, entry);
+      });
+    });
+    return Array.from(roundMap.values())
+      .sort((a, b) => a.round - b.round)
+      .map((entry) => {
+        const counts = {};
+        actionCategories.forEach((action) => {
+          counts[action] = entry.counts[action] || 0;
+        });
+        const total = Object.values(counts).reduce((sum, val) => sum + val, 0);
+        return { round: entry.round, counts, total };
+      });
+  }, [filteredRuns, actionCategories]);
+  const actionRoundRowsFiltered = useMemo(
+    () => filterByRoundView(actionRoundRows),
+    [actionRoundRows, roundView]
+  );
+
+  const threatDefeatData = useMemo(() => {
+    const roundMap = new Map();
+    const totals = {};
+    const roundRunCounts = {};
+    filteredRuns.forEach((run) => {
+      let maxRound = 0;
+      (run.actions || []).forEach((action) => {
+        const actionRound = getAbsoluteRound(action.round, action.era);
+        if (actionRound > maxRound) maxRound = actionRound;
+        if (action.type !== "fight") return;
+        const status = action.status || "ok";
+        if (status !== "ok") return;
+        const payload = action.payload && typeof action.payload === "object" ? action.payload : {};
+        const threatId = payload?.threat_id;
+        if (!threatId) return;
+        const round = actionRound;
+        if (!round) return;
+        const entry = roundMap.get(round) || { round, counts: {} };
+        entry.counts[threatId] = (entry.counts[threatId] || 0) + 1;
+        roundMap.set(round, entry);
+        totals[threatId] = (totals[threatId] || 0) + 1;
+      });
+      if (maxRound) {
+        for (let round = 1; round <= maxRound; round += 1) {
+          roundRunCounts[round] = (roundRunCounts[round] || 0) + 1;
+        }
+      }
+    });
+    const rounds = Array.from(roundMap.values()).sort((a, b) => a.round - b.round);
+    const threatIds = Object.keys(totals).sort((a, b) => (totals[b] || 0) - (totals[a] || 0));
+    return { rounds, totals, threatIds, roundRunCounts };
+  }, [filteredRuns]);
+
   const balancePlot = useMemo(() => {
     const plotCards = filteredBalanceCards.filter(
       (card) => card.timesOffered > 0 && Number.isFinite(card.winRateAdded)
@@ -736,6 +984,56 @@ const BotSimulationResultsPanel = ({ autoLoadResultId = "", autoLoadWhenEmpty = 
       maxAbsWra: Math.max(0.05, maxAbsWra || 0),
     };
   }, [filteredBalanceCards]);
+
+  const threatIndex = activeResult?.threat_index || {};
+  const threatOptions = useMemo(
+    () =>
+      (threatDefeatData.threatIds || []).map((id) => ({
+        id,
+        label: threatIndex[id] || id,
+        total: threatDefeatData.totals?.[id] || 0,
+      })),
+    [threatDefeatData, threatIndex]
+  );
+
+  useEffect(() => {
+    if (!threatFilter) return;
+    if (!threatOptions.some((entry) => entry.id === threatFilter)) {
+      setThreatFilter("");
+    }
+  }, [threatFilter, threatOptions]);
+
+  const threatRoundRows = useMemo(() => {
+    const rows = (threatDefeatData.rounds || []).map((entry) => {
+      const runsInRound =
+        threatDefeatData.roundRunCounts?.[entry.round] || filteredRuns.length || 1;
+      if (!threatFilter) {
+        const count = Object.values(entry.counts || {}).reduce((sum, val) => sum + val, 0);
+        const avgCount = runsInRound ? count / runsInRound : 0;
+        return { round: entry.round, count: avgCount, rawCount: count, runsInRound };
+      }
+      const count = entry.counts?.[threatFilter] || 0;
+      const avgCount = runsInRound ? count / runsInRound : 0;
+      return { round: entry.round, count: avgCount, rawCount: count, runsInRound };
+    });
+    const total = rows.reduce((sum, row) => sum + row.count, 0);
+    return { total, rows };
+  }, [filteredRuns.length, threatDefeatData, threatFilter]);
+  const threatRoundRowsFiltered = useMemo(() => {
+    const rows = filterByRoundView(threatRoundRows.rows);
+    const total = rows.reduce((sum, row) => sum + row.count, 0);
+    return { rows, total };
+  }, [roundView, threatRoundRows]);
+
+  const stanceRoundRowsFiltered = useMemo(
+    () => filterByRoundView(stanceRoundRows),
+    [stanceRoundRows, roundView]
+  );
+
+  const roundViewCount = useMemo(
+    () => filterByRoundView(roundSnapshotData).length,
+    [roundSnapshotData, roundView]
+  );
 
   const filteredActions = useMemo(() => {
     if (!selectedRun?.actions) return [];
@@ -779,12 +1077,95 @@ const BotSimulationResultsPanel = ({ autoLoadResultId = "", autoLoadWhenEmpty = 
     return chartPadding.top + ((wraRange - clamped) / (wraRange * 2)) * plotHeight;
   };
 
+  const renderLegend = (items, colorFn) => (
+    <div className="flex flex-wrap gap-3 text-[11px] text-gray-400">
+      {items.map((item, idx) => (
+        <div key={item} className="flex items-center gap-1">
+          <span
+            className="h-2 w-2 rounded-sm"
+            style={{ backgroundColor: colorFn(item, idx) }}
+          />
+          <span>{item}</span>
+        </div>
+      ))}
+    </div>
+  );
+
+  const renderStackedRows = (rows, categories, colorFn) => (
+    <div className="space-y-2">
+      {rows.map((row) => {
+        const total = row.total ?? Object.values(row.counts || {}).reduce((sum, val) => sum + val, 0);
+        const { label, isNight, isBoss } = formatRoundLabel(row.round);
+        const labelClass = isBoss
+          ? "text-amber-300"
+          : isNight
+            ? "text-fuchsia-300"
+            : "text-sky-300";
+        return (
+          <div key={row.round} className="grid grid-cols-[42px_1fr_auto] items-center gap-2">
+            <div className={`text-[11px] ${labelClass}`}>{label}</div>
+            <div className="flex h-3 w-full overflow-hidden rounded bg-gray-900/60 border border-gray-800">
+              {categories.map((cat, idx) => {
+                const count = row.counts?.[cat] || 0;
+                if (!count || !total) return null;
+                const pct = (count / total) * 100;
+                return (
+                  <div
+                    key={`${row.round}-${cat}`}
+                    className="h-full"
+                    style={{ width: `${pct}%`, backgroundColor: colorFn(cat, idx) }}
+                    title={`${cat}: ${count} (${formatPercent(count / total)})`}
+                  />
+                );
+              })}
+            </div>
+            <div className="text-[10px] text-gray-500">{total}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  const renderSingleRows = (rows, total, color, options = {}) => (
+    <div className="space-y-2">
+      {rows.map((row) => {
+        const pct = total ? row.count / total : 0;
+        const { label, isNight, isBoss } = formatRoundLabel(row.round);
+        const labelClass = isBoss
+          ? "text-amber-300"
+          : isNight
+            ? "text-fuchsia-300"
+            : "text-sky-300";
+        const valueText = options.valueFormatter ? options.valueFormatter(row) : row.count;
+        const titleText = options.titleFormatter
+          ? options.titleFormatter(row, pct)
+          : `${row.count} (${formatPercent(pct)})`;
+        return (
+          <div key={row.round} className="grid grid-cols-[42px_1fr_auto] items-center gap-2">
+            <div className={`text-[11px] ${labelClass}`}>{label}</div>
+            <div className="flex h-3 w-full overflow-hidden rounded bg-gray-900/60 border border-gray-800">
+              <div
+                className="h-full"
+                style={{ width: `${pct * 100}%`, backgroundColor: color }}
+                title={titleText}
+              />
+            </div>
+            <div className="text-[10px] text-gray-500">{valueText}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <div className="bg-gray-800 border border-gray-700 rounded-lg p-5 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-gray-100">Results Library</h2>
-          <span className="text-xs text-gray-400">Saved: {resultsLibrary.length}</span>
+          <div className="flex items-center gap-3">
+            {isLibraryLoading && <LoadingIndicator label="Loading..." />}
+            <span className="text-xs text-gray-400">Saved: {resultsLibrary.length}</span>
+          </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-300">
           <label className="flex flex-col gap-2">
@@ -872,6 +1253,7 @@ const BotSimulationResultsPanel = ({ autoLoadResultId = "", autoLoadWhenEmpty = 
                 ? `Saved result ${activeStoredMeta?.label || activeResultId}`
                 : "None"}
           </span>
+          {isResultLoading && <LoadingIndicator label="Loading simulation..." />}
           {libraryError && <span className="text-rose-300">{libraryError}</span>}
           {uploadError && <span className="text-rose-300">{uploadError}</span>}
         </div>
@@ -908,7 +1290,8 @@ const BotSimulationResultsPanel = ({ autoLoadResultId = "", autoLoadWhenEmpty = 
           </div>
 
           {activeTab === "overview" ? (
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
               <section className="xl:col-span-1 space-y-4">
                 <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-3">
                   <div className="flex items-center justify-between">
@@ -1130,6 +1513,206 @@ const BotSimulationResultsPanel = ({ autoLoadResultId = "", autoLoadWhenEmpty = 
                   </div>
                 </div>
               </section>
+              </div>
+
+              <section className="bg-gray-800 border border-gray-700 rounded-lg p-5 space-y-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-100">Round Distributions</h2>
+                    <p className="text-xs text-gray-400">Normalized per round across filtered runs.</p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-gray-400">
+                    <div className="flex items-center gap-2">
+                      <span>Round view</span>
+                      <div className="flex rounded-md border border-gray-700 overflow-hidden">
+                        {[
+                          { value: "all", label: "All" },
+                          { value: "day", label: "Day" },
+                          { value: "night", label: "Night" },
+                        ].map((option) => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => setRoundView(option.value)}
+                            className={`px-2 py-1 text-[10px] uppercase tracking-wide ${
+                              roundView === option.value
+                                ? "bg-orange-500/20 text-orange-200"
+                                : "text-gray-400 hover:text-gray-200"
+                            }`}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      Rounds tracked: {roundViewCount} / {roundSnapshotData.length || 0}
+                    </div>
+                    <div className="text-[10px] text-gray-500">DB/NB = boss round.</div>
+                  </div>
+                </div>
+
+                {roundSnapshotData.length ? (
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                    <div className="bg-gray-900/40 border border-gray-700 rounded-lg p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-semibold text-gray-200 uppercase tracking-wide">
+                          VP Distribution
+                        </h3>
+                        <span className="text-[10px] text-gray-500">Bin size {vpBins.binSize}</span>
+                      </div>
+                      {vpBins.bins.length ? renderLegend(vpBins.bins.map((bin) => bin.label), (_, idx) => colorForIndex(idx, vpBins.bins.length, 20)) : null}
+                      {roundView === "all" ? (
+                        <div className="space-y-3">
+                          {vpDayRows.length ? (
+                            <div className="space-y-2">
+                              <div className="text-[10px] uppercase tracking-wide text-sky-300">Day Rounds</div>
+                              {renderStackedRows(
+                                vpDayRows,
+                                vpBins.bins.map((bin) => bin.label),
+                                (_, idx) => colorForIndex(idx, vpBins.bins.length, 20)
+                              )}
+                            </div>
+                          ) : null}
+                          {vpNightRows.length ? (
+                            <div className="space-y-2">
+                              <div className="text-[10px] uppercase tracking-wide text-fuchsia-300">
+                                Night Rounds
+                              </div>
+                              {renderStackedRows(
+                                vpNightRows,
+                                vpBins.bins.map((bin) => bin.label),
+                                (_, idx) => colorForIndex(idx, vpBins.bins.length, 20)
+                              )}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <div
+                            className={`text-[10px] uppercase tracking-wide ${
+                              roundView === "day" ? "text-sky-300" : "text-fuchsia-300"
+                            }`}
+                          >
+                            {roundView === "day" ? "Day Rounds" : "Night Rounds"}
+                          </div>
+                          {renderStackedRows(
+                            vpRoundRowsFiltered,
+                            vpBins.bins.map((bin) => bin.label),
+                            (_, idx) => colorForIndex(idx, vpBins.bins.length, 20)
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="bg-gray-900/40 border border-gray-700 rounded-lg p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-semibold text-gray-200 uppercase tracking-wide">
+                          Wounds Distribution
+                        </h3>
+                        <span className="text-[10px] text-gray-500">Bin size {woundBins.binSize}</span>
+                      </div>
+                      {woundBins.bins.length ? renderLegend(woundBins.bins.map((bin) => bin.label), (_, idx) => colorForIndex(idx, woundBins.bins.length, 200)) : null}
+                      {renderStackedRows(
+                        woundRoundRowsFiltered,
+                        woundBins.bins.map((bin) => bin.label),
+                        (_, idx) => colorForIndex(idx, woundBins.bins.length, 200)
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-sm text-gray-400">
+                    Round snapshots are not available for this result. Re-run simulations to enable per-round stats.
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                  <div className="bg-gray-900/40 border border-gray-700 rounded-lg p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-semibold text-gray-200 uppercase tracking-wide">
+                        Action Distribution per Round
+                      </h3>
+                      <span className="text-[10px] text-gray-500">Normalized</span>
+                    </div>
+                    <p className="text-[10px] text-gray-500">End turn is excluded.</p>
+                    {actionRoundRowsFiltered.length ? (
+                      <>
+                        {renderLegend(actionCategories, (_, idx) => colorForIndex(idx, actionCategories.length, 140))}
+                        {renderStackedRows(
+                          actionRoundRowsFiltered,
+                          actionCategories,
+                          (_, idx) => colorForIndex(idx, actionCategories.length, 140)
+                        )}
+                      </>
+                    ) : (
+                      <div className="text-sm text-gray-400">No actions recorded for current filters.</div>
+                    )}
+                  </div>
+
+                  <div className="bg-gray-900/40 border border-gray-700 rounded-lg p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-semibold text-gray-200 uppercase tracking-wide">
+                        Stance Distribution per Round
+                      </h3>
+                      <span className="text-[10px] text-gray-500">Normalized</span>
+                    </div>
+                    {stanceRoundRowsFiltered.length ? (
+                      <>
+                        {renderLegend(stanceCategories, (_, idx) => colorForIndex(idx, stanceCategories.length, 300))}
+                        {renderStackedRows(
+                          stanceRoundRowsFiltered,
+                          stanceCategories,
+                          (_, idx) => colorForIndex(idx, stanceCategories.length, 300)
+                        )}
+                      </>
+                    ) : (
+                      <div className="text-sm text-gray-400">
+                        No stance snapshots available for current filters.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="bg-gray-900/40 border border-gray-700 rounded-lg p-4 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-200 uppercase tracking-wide">
+                        Threat Defeats per Round
+                      </h3>
+                      <p className="text-xs text-gray-500">
+                        Filter to view the marginal distribution for a specific threat. Values show average
+                        defeats per run.
+                      </p>
+                    </div>
+                    <label className="text-xs text-gray-400 flex flex-col gap-1">
+                      Threat
+                      <select
+                        value={threatFilter}
+                        onChange={(event) => setThreatFilter(event.target.value)}
+                        className="px-2 py-1 rounded-md bg-gray-900 border border-gray-700 text-gray-100 text-xs"
+                      >
+                        <option value="">All threats</option>
+                        {threatOptions.map((threat) => (
+                          <option key={threat.id} value={threat.id}>
+                            {threat.label} ({threat.total})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  {threatRoundRowsFiltered.rows.length ? (
+                    renderSingleRows(threatRoundRowsFiltered.rows, threatRoundRowsFiltered.total, "hsl(18, 80%, 50%)", {
+                      valueFormatter: (row) => row.count.toFixed(1),
+                      titleFormatter: (row, pct) =>
+                        `Avg ${row.count.toFixed(1)} (${row.rawCount} total / ${row.runsInRound} runs, ${formatPercent(pct)})`,
+                    })
+                  ) : (
+                    <div className="text-sm text-gray-400">
+                      No threat defeats recorded for current filters.
+                    </div>
+                  )}
+                </div>
+              </section>
             </div>
           ) : (
             <section className="bg-gray-800 border border-gray-700 rounded-lg p-5 space-y-5">
@@ -1238,7 +1821,7 @@ const BotSimulationResultsPanel = ({ autoLoadResultId = "", autoLoadWhenEmpty = 
                           <span className="text-xs text-gray-400">High pick / Low win</span>
                         </div>
                         <div className="flex items-center justify-between">
-                          <span className="text-slate-400">Trash</span>
+                          <span className="text-slate-400">Underpowered</span>
                           <span className="text-xs text-gray-400">Low pick / Low win</span>
                         </div>
                       </div>

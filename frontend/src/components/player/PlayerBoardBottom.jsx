@@ -912,13 +912,13 @@ export default function PlayerBoardBottom({
                   <>
                     <div>
                       <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500 mb-1">Upgrades</div>
-                      <div className="grid grid-cols-4 gap-2">
+                      <div className="grid grid-cols-5 gap-1">
                         {renderSlots(upgradeCards, upgradeSlots, "upgrade")}
                       </div>
                     </div>
                     <div>
                       <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500 mb-1">Weapons</div>
-                      <div className="grid grid-cols-4 gap-2">
+                      <div className="grid grid-cols-5 gap-1">
                         {renderSlots(weaponCards, weaponSlots, "weapon")}
                       </div>
                     </div>

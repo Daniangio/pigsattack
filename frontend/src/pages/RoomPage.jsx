@@ -325,7 +325,7 @@ const RoomPage = ({ onLogout }) => {
                   >
                     {(deckOptions.threats || []).map((deck) => (
                       <option key={deck.name} value={deck.name}>
-                        {deck.name}
+                        {deck.label || deck.name}
                       </option>
                     ))}
                   </select>
@@ -340,7 +340,7 @@ const RoomPage = ({ onLogout }) => {
                   >
                     {(deckOptions.bosses || []).map((deck) => (
                       <option key={deck.name} value={deck.name}>
-                        {deck.name}
+                        {deck.label || deck.name}
                       </option>
                     ))}
                   </select>
@@ -355,7 +355,7 @@ const RoomPage = ({ onLogout }) => {
                   >
                     {(deckOptions.upgrades || []).map((deck) => (
                       <option key={deck.name} value={deck.name}>
-                        {deck.name}
+                        {deck.label || deck.name}
                       </option>
                     ))}
                   </select>
@@ -370,7 +370,7 @@ const RoomPage = ({ onLogout }) => {
                   >
                     {(deckOptions.weapons || []).map((deck) => (
                       <option key={deck.name} value={deck.name}>
-                        {deck.name}
+                        {deck.label || deck.name}
                       </option>
                     ))}
                   </select>

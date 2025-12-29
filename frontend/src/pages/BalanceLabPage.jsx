@@ -114,6 +114,13 @@ const InfoLabel = ({ label, description, onShow, onHide }) => (
   </span>
 );
 
+const LoadingIndicator = ({ label }) => (
+  <span className="inline-flex items-center gap-2 text-xs text-gray-400">
+    <span className="h-3 w-3 animate-spin rounded-full border-2 border-gray-400 border-t-transparent" />
+    <span>{label}</span>
+  </span>
+);
+
 const buildBuyTurnBins = (histogram, maxBins = 10) => {
   if (!histogram) return [];
   const entries = Object.entries(histogram)
@@ -166,6 +173,20 @@ const computeAbsoluteAvgTurn = (dayHistogram, nightHistogram) => {
   return count ? total / count : null;
 };
 
+const computeAvgTurn = (histogram, offset = 0) => {
+  let total = 0;
+  let count = 0;
+  Object.entries(histogram || {}).forEach(([key, value]) => {
+    const turn = Number(key);
+    const amount = Number(value) || 0;
+    if (Number.isFinite(turn) && amount > 0) {
+      total += (turn + offset) * amount;
+      count += amount;
+    }
+  });
+  return count ? total / count : null;
+};
+
 const buildTagDescription = (tag, row) => {
   const ctx = row.tagContext || {};
   const pickRateText = formatPercent(row.pickRate);
@@ -178,26 +199,60 @@ const buildTagDescription = (tag, row) => {
   const dayShareText = formatPercent(row.dayShare);
   const nightShareText = formatPercent(row.nightShare);
   const totalBuys = (row.dayBuys || 0) + (row.nightBuys || 0);
-  const avgBuyTurnText =
-    row.avgBuyTurn !== null && Number.isFinite(row.avgBuyTurn)
-      ? row.avgBuyTurn.toFixed(1)
+  const avgAcquireTurnText =
+    row.avgAcquireTurn !== null && Number.isFinite(row.avgAcquireTurn)
+      ? row.avgAcquireTurn.toFixed(1)
       : "--";
+  const avgDayTurnText =
+    row.avgDayTurn !== null && Number.isFinite(row.avgDayTurn) ? row.avgDayTurn.toFixed(1) : "--";
+  const avgNightTurnText =
+    row.avgNightTurn !== null && Number.isFinite(row.avgNightTurn) ? row.avgNightTurn.toFixed(1) : "--";
+  const buySampleText = totalBuys ? `n=${totalBuys} buys` : "n=0 buys";
   const earlyTurnText = Number.isFinite(ctx.earlyTurn) ? ctx.earlyTurn.toFixed(1) : "--";
   const lateTurnText = Number.isFinite(ctx.lateTurn) ? ctx.lateTurn.toFixed(1) : "--";
+  const deltaCtx = row.deltaVPContext || {};
+  const deltaStrongText = Number.isFinite(deltaCtx.deltaStrong) ? deltaCtx.deltaStrong.toFixed(2) : "--";
+  const deltaWeakText = Number.isFinite(deltaCtx.deltaWeak) ? deltaCtx.deltaWeak.toFixed(2) : "--";
+  const deltaImpact = Number.isFinite(ctx.deltaImpact) ? ctx.deltaImpact : null;
+  const deltaSamples = Number.isFinite(ctx.deltaSamples) ? ctx.deltaSamples : 0;
+  const deltaNote =
+    ctx.deltaUsed && deltaImpact !== null
+      ? ` Delta VP ${formatSignedNumber(deltaImpact, 2)} (n=${deltaSamples}, strong=${deltaStrongText}).`
+      : "";
+
+  if (tag.startsWith("VP ")) {
+    const pattern = tag.slice(3);
+    switch (pattern) {
+      case "Snowball":
+        return `VP Pattern (Snowball): early delta >= ${deltaStrongText} and late delta <= ${deltaWeakText}.`;
+      case "Finisher":
+        return `VP Pattern (Finisher): early delta <= -${deltaWeakText} and late delta >= ${deltaStrongText}.`;
+      case "Delta Trap":
+        return `VP Pattern (Delta Trap): early delta <= -${deltaWeakText} and late delta <= -${deltaWeakText}.`;
+      case "Panic Button":
+        return `VP Pattern (Panic Button): early delta <= ${deltaWeakText} and late delta >= ${deltaWeakText}.`;
+      case "Anchor":
+        return `VP Pattern (Anchor): early delta <= -${deltaWeakText} with late delta near 0.`;
+      default:
+        return "VP pattern derived from early vs late delta VP thresholds.";
+    }
+  }
 
   switch (tag) {
     case "Overpowered":
-      return `Overpowered: WRA ${wraText} >= ${wraStrongText} and pick rate ${pickRateText} >= median ${medianText}.`;
+      return `Overpowered: WRA ${wraText} >= ${wraStrongText} and pick rate ${pickRateText} >= median ${medianText}.${deltaNote}`;
     case "Sleeper":
-      return `Sleeper: WRA ${wraText} >= ${wraStrongText} with pick rate ${pickRateText} below median ${medianText}.`;
+      return `Sleeper: WRA ${wraText} >= ${wraStrongText} with pick rate ${pickRateText} below median ${medianText}.${deltaNote}`;
     case "Trap":
-      return `Trap: WRA ${wraText} <= -${wraStrongText} with pick rate ${pickRateText} >= median ${medianText}.`;
-    case "Trash":
-      return `Trash: WRA ${wraText} <= -${wraStrongText} and pick rate ${pickRateText} below median ${medianText}.`;
+      return `Trap: WRA ${wraText} <= -${wraStrongText} with pick rate ${pickRateText} >= median ${medianText}.${deltaNote}`;
+    case "Underpowered":
+      return `Underpowered: WRA ${wraText} <= -${wraStrongText} and pick rate ${pickRateText} below median ${medianText}.${deltaNote}`;
+    case "Utility":
+      return `Utility: low-cost flexible tool with pick rate ${pickRateText} and WRA ${wraText}.`;
     case "Balanced":
-      return `Balanced: |WRA| ${wraAbsText} <= ${wraWeakText}.`;
+      return `Balanced: |WRA| ${wraAbsText} <= ${wraWeakText}.${ctx.deltaUsed ? ` Delta VP within ±${deltaWeakText}.` : ""}`;
     case "Swingy":
-      return `Swingy: |WRA| ${wraAbsText} between ${wraWeakText} and ${wraStrongText}.`;
+      return `Swingy: |WRA| ${wraAbsText} between ${wraWeakText} and ${wraStrongText}.${deltaNote}`;
     case "Situational": {
       const situationalCutoff = ctx.pickRateMedian ? ctx.pickRateMedian * 0.6 : null;
       const situationalText = formatPercent(situationalCutoff);
@@ -205,14 +260,14 @@ const buildTagDescription = (tag, row) => {
     }
     case "Tempo":
       if (row.dayShare !== null) {
-        return `Tempo: ${dayShareText} of buys happen in day (${row.dayBuys || 0}/${totalBuys}), threshold ${tempoShare}%.`;
+        return `Tempo: ${dayShareText} of buys in day (avg day turn ${avgDayTurnText}, avg turn ${avgAcquireTurnText}), threshold ${tempoShare}%. ${buySampleText}.`;
       }
-      return `Tempo: avg buy turn ${avgBuyTurnText} <= early threshold ${earlyTurnText}.`;
+      return `Tempo: avg acquire turn ${avgAcquireTurnText} (1-12) <= early threshold ${earlyTurnText}. ${buySampleText}.`;
     case "Finisher":
       if (row.nightShare !== null) {
-        return `Finisher: ${nightShareText} of buys happen at night (${row.nightBuys || 0}/${totalBuys}), threshold ${tempoShare}%.`;
+        return `Finisher: ${nightShareText} of buys at night (avg night turn ${avgNightTurnText}, avg turn ${avgAcquireTurnText}), threshold ${tempoShare}%. ${buySampleText}.`;
       }
-      return `Finisher: avg buy turn ${avgBuyTurnText} >= late threshold ${lateTurnText}.`;
+      return `Finisher: avg acquire turn ${avgAcquireTurnText} (1-12) >= late threshold ${lateTurnText}. ${buySampleText}.`;
     default:
       return "Classification derived from win rate added, pick rate, and acquisition timing.";
   }
@@ -254,6 +309,7 @@ const BalanceLabPage = () => {
 
   const [resultsLibrary, setResultsLibrary] = useState([]);
   const [libraryError, setLibraryError] = useState("");
+  const [isResultsLibraryLoading, setIsResultsLibraryLoading] = useState(false);
 
   const [analysisDeckType, setAnalysisDeckType] = useState("weapons");
   const [analysisDeckName, setAnalysisDeckName] = useState("default");
@@ -264,6 +320,7 @@ const BalanceLabPage = () => {
   const [simResultId, setSimResultId] = useState("");
   const [simResultSource, setSimResultSource] = useState("none");
   const [simUploadError, setSimUploadError] = useState("");
+  const [isSimResultLoading, setIsSimResultLoading] = useState(false);
   const [hoveredPoint, setHoveredPoint] = useState(null);
   const [hoveredPointPos, setHoveredPointPos] = useState(null);
   const [deltaHoveredPoint, setDeltaHoveredPoint] = useState(null);
@@ -378,6 +435,7 @@ const BalanceLabPage = () => {
 
   useEffect(() => {
     let cancelled = false;
+    setIsResultsLibraryLoading(true);
     fetchResultsLibrary()
       .then((data) => {
         if (cancelled) return;
@@ -387,6 +445,10 @@ const BalanceLabPage = () => {
       .catch((err) => {
         if (cancelled) return;
         setLibraryError(err?.message || "Failed to load saved results.");
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setIsResultsLibraryLoading(false);
       });
     return () => {
       cancelled = true;
@@ -595,6 +657,7 @@ const BalanceLabPage = () => {
       setSimResultSource("none");
       return;
     }
+    setIsSimResultLoading(true);
     try {
       const data = await fetchResultById(resultId);
       setSimResult(data);
@@ -603,6 +666,8 @@ const BalanceLabPage = () => {
       setSimUploadError("");
     } catch (err) {
       setSimUploadError(err?.message || "Failed to load stored result.");
+    } finally {
+      setIsSimResultLoading(false);
     }
   };
 
@@ -878,6 +943,8 @@ const BalanceLabPage = () => {
       const totalEraBuys = dayBuys + nightBuys;
       const dayShare = totalEraBuys ? dayBuys / totalEraBuys : null;
       const nightShare = totalEraBuys ? nightBuys / totalEraBuys : null;
+      const avgDayTurn = computeAvgTurn(buyTurnHistogramDay, 0);
+      const avgNightTurn = computeAvgTurn(buyTurnHistogramNight, 6);
       const eraStats = simEraStats.get(name);
       const eraDayWra = Number.isFinite(eraStats?.day?.wra) ? eraStats.day.wra : null;
       const eraNightWra = Number.isFinite(eraStats?.night?.wra) ? eraStats.night.wra : null;
@@ -977,6 +1044,8 @@ const BalanceLabPage = () => {
         nightBuys,
         dayShare,
         nightShare,
+        avgDayTurn,
+        avgNightTurn,
         eraDayWra,
         eraNightWra,
         eraDayBuyers,
@@ -984,6 +1053,7 @@ const BalanceLabPage = () => {
         pickRate,
         activationEfficiency,
         deltaVPAvg,
+        deltaVPSamples,
         deltaVPNormAvg,
         deltaVPEarlyAvg,
         deltaVPMidAvg,
@@ -1023,50 +1093,19 @@ const BalanceLabPage = () => {
       const pickRateMedian = medianValue(pickRates);
       const wraStrong = 0.05;
       const wraWeak = 0.02;
+      const wraSevere = wraStrong * 1.6;
       const earlyTurn = Math.max(3, settings.gameLength * 0.35);
       const lateTurn = Math.max(6, settings.gameLength * 0.7);
       const tempoShare = 0.6;
-      rows.forEach((row) => {
-        const tags = [];
-        const pickRate = row.pickRate ?? 0;
-        if (row.winRateAdded >= wraStrong) {
-          tags.push(pickRate >= pickRateMedian ? "Overpowered" : "Sleeper");
-        } else if (row.winRateAdded <= -wraStrong) {
-          tags.push(pickRate >= pickRateMedian ? "Trap" : "Trash");
-        } else if (Math.abs(row.winRateAdded) <= wraWeak) {
-          tags.push("Balanced");
-        } else {
-          tags.push("Swingy");
-        }
-        if (pickRate < pickRateMedian * 0.6 && Math.abs(row.winRateAdded) <= wraWeak) {
-          tags.push("Situational");
-        }
-        if (row.dayShare !== null && row.nightShare !== null) {
-          if (row.dayShare >= tempoShare) tags.push("Tempo");
-          if (row.nightShare >= tempoShare) tags.push("Finisher");
-        } else if (row.avgBuyTurn !== null) {
-          if (row.avgBuyTurn <= earlyTurn) tags.push("Tempo");
-          if (row.avgBuyTurn >= lateTurn) tags.push("Finisher");
-        }
-        row.tags = tags;
-        row.trap = tags.includes("Trap");
-        row.tagContext = {
-          pickRate,
-          pickRateMedian,
-          wraStrong,
-          wraWeak,
-          earlyTurn,
-          lateTurn,
-          tempoShare,
-        };
-      });
-
+      const mathScores = rows.map((row) => row.mathScore).filter((value) => Number.isFinite(value));
+      const mathMedian = medianValue(mathScores);
       const deltaAbs = rows
         .map((row) => (Number.isFinite(row.deltaVPAvg) ? Math.abs(row.deltaVPAvg) : null))
         .filter((value) => value !== null);
       const deltaMedianAbs = medianValue(deltaAbs);
       const deltaStrong = Math.max(1, deltaMedianAbs || 0);
       const deltaWeak = Math.max(0.5, deltaStrong * 0.5);
+      const minDeltaSamples = 5;
 
       rows.forEach((row) => {
         const early = row.deltaVPEarlyAvg;
@@ -1090,6 +1129,75 @@ const BalanceLabPage = () => {
         }
         row.deltaVPDiagnosis = diagnosis;
         row.deltaVPContext = { deltaStrong, deltaWeak };
+      });
+
+      rows.forEach((row) => {
+        const tags = [];
+        const pickRate = row.pickRate ?? 0;
+        const costSum = row.details?.costSum ?? getResourceSum(row.cost || {});
+        const flex = row.details?.flex ?? 0;
+        const output = row.details?.output ?? 0;
+        const isUtility =
+          analysisDeckType === "weapons" && costSum <= 2 && flex >= 0.9 && output <= 3;
+        const wraValue = Number.isFinite(row.winRateAdded) ? row.winRateAdded : 0;
+        const deltaSamples = Number.isFinite(row.deltaVPSamples)
+          ? row.deltaVPSamples
+          : (row.deltaVPEarlySamples || 0) + (row.deltaVPMidSamples || 0) + (row.deltaVPLateSamples || 0);
+        const deltaImpact = Number.isFinite(row.deltaVPAvg) ? row.deltaVPAvg : null;
+        const deltaUsed = deltaImpact !== null && deltaSamples >= minDeltaSamples;
+        const deltaPositive = deltaUsed && deltaImpact >= deltaStrong;
+        const deltaNegative = deltaUsed && deltaImpact <= -deltaStrong;
+        const deltaNeutral = deltaUsed && Math.abs(deltaImpact) <= deltaWeak;
+        const positiveSignal = wraValue >= wraStrong || (deltaPositive && wraValue > -wraWeak);
+        const negativeSignal = wraValue <= -wraStrong || (deltaNegative && wraValue < wraWeak);
+
+        if (positiveSignal) {
+          tags.push(pickRate >= pickRateMedian ? "Overpowered" : "Sleeper");
+        } else if (negativeSignal) {
+          if (pickRate >= pickRateMedian) {
+            tags.push("Trap");
+          } else if (isUtility && wraValue > -wraSevere) {
+            tags.push("Utility");
+          } else {
+            tags.push("Underpowered");
+          }
+        } else if (Math.abs(wraValue) <= wraWeak && (!deltaUsed || deltaNeutral)) {
+          tags.push("Balanced");
+        } else {
+          tags.push("Swingy");
+        }
+        if (pickRate < pickRateMedian * 0.6 && Math.abs(wraValue) <= wraWeak) {
+          tags.push("Situational");
+        }
+        if (row.dayShare !== null && row.nightShare !== null) {
+          if (row.dayShare >= tempoShare) tags.push("Tempo");
+          if (row.nightShare >= tempoShare) tags.push("Finisher");
+        } else if (row.avgAcquireTurn !== null) {
+          if (row.avgAcquireTurn <= earlyTurn) tags.push("Tempo");
+          if (row.avgAcquireTurn >= lateTurn) tags.push("Finisher");
+        }
+        if (isUtility && !tags.includes("Utility")) tags.push("Utility");
+        if (row.deltaVPDiagnosis) tags.push(`VP ${row.deltaVPDiagnosis}`);
+        row.tags = tags;
+        row.trap = tags.includes("Trap");
+        row.tagContext = {
+          pickRate,
+          pickRateMedian,
+          wraStrong,
+          wraWeak,
+          wraSevere,
+          mathMedian,
+          earlyTurn,
+          lateTurn,
+          tempoShare,
+          deltaStrong,
+          deltaWeak,
+          deltaImpact,
+          deltaSamples,
+          deltaUsed,
+          deltaNeutral,
+          totalBuys: (row.dayBuys || 0) + (row.nightBuys || 0),
+        };
       });
     }
 
@@ -1292,12 +1400,19 @@ const BalanceLabPage = () => {
     Overpowered: "bg-orange-500/20 text-orange-200 border-orange-500/40",
     Sleeper: "bg-emerald-500/20 text-emerald-200 border-emerald-500/40",
     Trap: "bg-yellow-500/20 text-yellow-200 border-yellow-500/40",
-    Trash: "bg-slate-500/20 text-slate-200 border-slate-500/40",
+    Underpowered: "bg-slate-500/20 text-slate-200 border-slate-500/40",
+    Utility: "bg-blue-500/20 text-blue-200 border-blue-500/40",
     Balanced: "bg-sky-500/20 text-sky-200 border-sky-500/40",
     Tempo: "bg-purple-500/20 text-purple-200 border-purple-500/40",
     Finisher: "bg-fuchsia-500/20 text-fuchsia-200 border-fuchsia-500/40",
     Situational: "bg-teal-500/20 text-teal-200 border-teal-500/40",
     Swingy: "bg-rose-500/20 text-rose-200 border-rose-500/40",
+  };
+  const getTagStyle = (tag) => {
+    if (tag.startsWith("VP ")) {
+      return "bg-indigo-500/20 text-indigo-200 border-indigo-500/40";
+    }
+    return tagStyles[tag] || "bg-slate-700/40 text-slate-200 border-slate-600/40";
   };
 
   return (
@@ -1371,7 +1486,7 @@ const BalanceLabPage = () => {
                 >
                   {(deckLists.threats || []).map((deck) => (
                     <option key={deck.name} value={deck.name}>
-                      {deck.name}
+                      {deck.label || deck.name}
                     </option>
                   ))}
                 </select>
@@ -1385,7 +1500,7 @@ const BalanceLabPage = () => {
                 >
                   {(deckLists.bosses || []).map((deck) => (
                     <option key={deck.name} value={deck.name}>
-                      {deck.name}
+                      {deck.label || deck.name}
                     </option>
                   ))}
                 </select>
@@ -1399,7 +1514,7 @@ const BalanceLabPage = () => {
                 >
                   {(deckLists.upgrades || []).map((deck) => (
                     <option key={deck.name} value={deck.name}>
-                      {deck.name}
+                      {deck.label || deck.name}
                     </option>
                   ))}
                 </select>
@@ -1413,7 +1528,7 @@ const BalanceLabPage = () => {
                 >
                   {(deckLists.weapons || []).map((deck) => (
                     <option key={deck.name} value={deck.name}>
-                      {deck.name}
+                      {deck.label || deck.name}
                     </option>
                   ))}
                 </select>
@@ -1587,7 +1702,7 @@ const BalanceLabPage = () => {
                 >
                   {(analysisDeckOptions || []).map((deck) => (
                     <option key={deck.name} value={deck.name}>
-                      {deck.name}
+                      {deck.label || deck.name}
                     </option>
                   ))}
                 </select>
@@ -1637,6 +1752,8 @@ const BalanceLabPage = () => {
                     ? `Stored ${simResultId}`
                     : "None"}
               </span>
+              {isResultsLibraryLoading && <LoadingIndicator label="Loading results..." />}
+              {isSimResultLoading && <LoadingIndicator label="Loading simulation..." />}
               {libraryError && <span className="text-rose-300">{libraryError}</span>}
               {simUploadError && <span className="text-rose-300">{simUploadError}</span>}
               {analysisError && <span className="text-rose-300">{analysisError}</span>}
@@ -1777,8 +1894,12 @@ const BalanceLabPage = () => {
                       {hoveredPoint.pickRate !== null ? formatPercent(hoveredPoint.pickRate) : "--"}
                     </div>
                     <div className="text-slate-400">
-                      Avg Buy Turn:{" "}
-                      {hoveredPoint.avgBuyTurn !== null ? hoveredPoint.avgBuyTurn.toFixed(1) : "--"}
+                      Avg Acquire Turn:{" "}
+                      {Number.isFinite(hoveredPoint.avgAcquireTurn)
+                        ? hoveredPoint.avgAcquireTurn.toFixed(1)
+                        : hoveredPoint.avgBuyTurn !== null
+                          ? hoveredPoint.avgBuyTurn.toFixed(1)
+                          : "--"}
                     </div>
                     {hoveredPoint.tags?.length ? (
                       <div className="text-slate-400">
@@ -2095,7 +2216,7 @@ const BalanceLabPage = () => {
                               <button
                                 type="button"
                                 key={`${row.name}-${tag}`}
-                                className={`px-2 py-0.5 rounded-full border text-[10px] uppercase tracking-wide ${tagStyles[tag] || "bg-slate-700/40 text-slate-200 border-slate-600/40"}`}
+                                className={`px-2 py-0.5 rounded-full border text-[10px] uppercase tracking-wide ${getTagStyle(tag)}`}
                                 onMouseEnter={(event) => showInfoPanel(event, buildTagDescription(tag, row))}
                                 onMouseLeave={hideInfoPanel}
                                 onFocus={(event) => showInfoPanel(event, buildTagDescription(tag, row))}

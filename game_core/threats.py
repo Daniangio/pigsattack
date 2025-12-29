@@ -256,8 +256,9 @@ class ThreatDeckBuilder:
         self.player_count = player_count
         self.rng = rng or random.Random()
         self.phase = "day"
-        self.day_deck = self._build_deck(data.day_threats, player_count * 4)
-        self.night_deck = self._build_deck(data.night_threats, player_count * 4)
+        rounds_per_era = 6
+        self.day_deck = self._build_deck(data.day_threats, player_count * rounds_per_era)
+        self.night_deck = self._build_deck(data.night_threats, player_count * rounds_per_era)
 
     def _build_deck(self, cards: List[ThreatCard], required_size: int) -> List[ThreatCard]:
         expanded: List[ThreatCard] = []

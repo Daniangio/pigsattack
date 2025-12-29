@@ -4,6 +4,7 @@ from typing import List, Dict, Any
 from fastapi import APIRouter, UploadFile, File, HTTPException, status
 from fastapi.responses import FileResponse
 from .routers import fake_users_db
+from game_core.data_loader import EMPTY_DECK_NAME
 
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "..", "game_core", "data")
@@ -21,6 +22,7 @@ DEFAULT_MARKET_PATH = os.path.join(DATA_DIR, "market.json")
 CUSTOM_MARKET_DIR = os.path.join(DATA_DIR, "custom_market")
 CUSTOM_UPGRADES_DIR = os.path.join(DATA_DIR, "custom_upgrades")
 CUSTOM_WEAPONS_DIR = os.path.join(DATA_DIR, "custom_weapons")
+EMPTY_DECK_LABEL = "None (empty)"
 
 
 def ensure_dirs():
@@ -255,6 +257,7 @@ def list_upgrade_decks():
     for filename in list_json_files(CUSTOM_UPGRADES_DIR):
         name = os.path.splitext(filename)[0]
         decks.append({"name": name, "editable": True})
+    decks.append({"name": EMPTY_DECK_NAME, "editable": False, "label": EMPTY_DECK_LABEL, "empty": True})
     return {"decks": decks}
 
 
@@ -263,6 +266,8 @@ def get_upgrade_deck(name: str):
     ensure_dirs()
     if name == "default":
         return load_json(DEFAULT_UPGRADES_PATH)
+    if name == EMPTY_DECK_NAME:
+        return {"name": EMPTY_DECK_NAME, "upgrades": []}
     path = os.path.join(CUSTOM_UPGRADES_DIR, f"{name}.json")
     if not os.path.isfile(path):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Deck not found")
@@ -272,8 +277,8 @@ def get_upgrade_deck(name: str):
 @router.post("/upgrade-decks/{name}")
 def save_upgrade_deck(name: str, deck: Dict[str, Any]):
     ensure_dirs()
-    if name == "default":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Default deck is read-only")
+    if name in {"default", EMPTY_DECK_NAME}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Default and empty decks are read-only")
     path = os.path.join(CUSTOM_UPGRADES_DIR, f"{name}.json")
     save_json(path, deck)
     return {"status": "ok", "name": name}
@@ -282,8 +287,8 @@ def save_upgrade_deck(name: str, deck: Dict[str, Any]):
 @router.delete("/upgrade-decks/{name}")
 def delete_upgrade_deck(name: str):
     ensure_dirs()
-    if name == "default":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete default deck")
+    if name in {"default", EMPTY_DECK_NAME}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete default or empty deck")
     path = os.path.join(CUSTOM_UPGRADES_DIR, f"{name}.json")
     if os.path.isfile(path):
         os.remove(path)
@@ -297,8 +302,10 @@ def clone_upgrade_deck(name: str, payload: Dict[str, Any]):
     target = payload.get("target")
     if not target:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Target name required")
-    if target == "default":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot overwrite default")
+    if target in {"default", EMPTY_DECK_NAME}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot overwrite default or empty deck")
+    if name == EMPTY_DECK_NAME:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot clone empty deck")
 
     if name == "default":
         source_path = DEFAULT_UPGRADES_PATH
@@ -319,6 +326,8 @@ def clone_upgrade_deck(name: str, payload: Dict[str, Any]):
 def rename_upgrade_deck(name: str, payload: Dict[str, Any]):
     ensure_dirs()
     target = payload.get("target")
+    if name == EMPTY_DECK_NAME or target == EMPTY_DECK_NAME:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot rename empty deck")
     rename_deck_file(CUSTOM_UPGRADES_DIR, name, target)
     return {"status": "ok", "name": target}
 
@@ -331,6 +340,7 @@ def list_weapon_decks():
     for filename in list_json_files(CUSTOM_WEAPONS_DIR):
         name = os.path.splitext(filename)[0]
         decks.append({"name": name, "editable": True})
+    decks.append({"name": EMPTY_DECK_NAME, "editable": False, "label": EMPTY_DECK_LABEL, "empty": True})
     return {"decks": decks}
 
 
@@ -339,6 +349,8 @@ def get_weapon_deck(name: str):
     ensure_dirs()
     if name == "default":
         return load_json(DEFAULT_WEAPONS_PATH)
+    if name == EMPTY_DECK_NAME:
+        return {"name": EMPTY_DECK_NAME, "weapons": []}
     path = os.path.join(CUSTOM_WEAPONS_DIR, f"{name}.json")
     if not os.path.isfile(path):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Deck not found")
@@ -348,8 +360,8 @@ def get_weapon_deck(name: str):
 @router.post("/weapon-decks/{name}")
 def save_weapon_deck(name: str, deck: Dict[str, Any]):
     ensure_dirs()
-    if name == "default":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Default deck is read-only")
+    if name in {"default", EMPTY_DECK_NAME}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Default and empty decks are read-only")
     path = os.path.join(CUSTOM_WEAPONS_DIR, f"{name}.json")
     save_json(path, deck)
     return {"status": "ok", "name": name}
@@ -358,8 +370,8 @@ def save_weapon_deck(name: str, deck: Dict[str, Any]):
 @router.delete("/weapon-decks/{name}")
 def delete_weapon_deck(name: str):
     ensure_dirs()
-    if name == "default":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete default deck")
+    if name in {"default", EMPTY_DECK_NAME}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete default or empty deck")
     path = os.path.join(CUSTOM_WEAPONS_DIR, f"{name}.json")
     if os.path.isfile(path):
         os.remove(path)
@@ -373,8 +385,10 @@ def clone_weapon_deck(name: str, payload: Dict[str, Any]):
     target = payload.get("target")
     if not target:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Target name required")
-    if target == "default":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot overwrite default")
+    if target in {"default", EMPTY_DECK_NAME}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot overwrite default or empty deck")
+    if name == EMPTY_DECK_NAME:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot clone empty deck")
 
     if name == "default":
         source_path = DEFAULT_WEAPONS_PATH
@@ -395,6 +409,8 @@ def clone_weapon_deck(name: str, payload: Dict[str, Any]):
 def rename_weapon_deck(name: str, payload: Dict[str, Any]):
     ensure_dirs()
     target = payload.get("target")
+    if name == EMPTY_DECK_NAME or target == EMPTY_DECK_NAME:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot rename empty deck")
     rename_deck_file(CUSTOM_WEAPONS_DIR, name, target)
     return {"status": "ok", "name": target}
 

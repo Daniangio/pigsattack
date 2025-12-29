@@ -94,15 +94,15 @@
       "type": "Weapon",
       "name": "Inferno Cannon",
       "cost": {
-        "R": 5,
-        "B": 1,
+        "R": 4,
+        "B": 0,
         "G": 0
       },
       "vp": 0,
       "uses": 2,
-      "effect": "In a fight: reduce cost by G8",
+      "effect": "In a fight: reduce cost by G6",
       "tags": [
-        "fight:cost_reduction:G8",
+        "fight:cost_reduction:G6",
         "spec:red"
       ],
       "copies": 2
@@ -183,6 +183,167 @@
         "spec:green"
       ],
       "copies": 2
+    },
+    {
+      "type": "Weapon",
+      "name": "Crimson Adapter",
+      "cost": {
+        "R": 1,
+        "B": 0,
+        "G": 0
+      },
+      "vp": 0,
+      "uses": 1,
+      "effect": "In a fight: reduce cost by B2",
+      "tags": [
+        "fight:cost_reduction:B2",
+        "spec:red"
+      ],
+      "copies": 2
+    },
+    {
+      "type": "Weapon",
+      "name": "Crimson Splitter",
+      "cost": {
+        "R": 1,
+        "B": 0,
+        "G": 0
+      },
+      "vp": 0,
+      "uses": 1,
+      "effect": "In a fight: reduce cost by B1/G1",
+      "tags": [
+        "fight:cost_reduction:B1",
+        "fight:cost_reduction:G1",
+        "spec:red"
+      ],
+      "copies": 2
+    },
+    {
+      "type": "Weapon",
+      "name": "Azure Adapter",
+      "cost": {
+        "R": 0,
+        "B": 1,
+        "G": 0
+      },
+      "vp": 0,
+      "uses": 1,
+      "effect": "In a fight: reduce cost by R2. You can attack any threat, regardless of position.",
+      "tags": [
+        "fight:cost_reduction:R2",
+        "fight:range:any",
+        "spec:blue"
+      ],
+      "copies": 2
+    },
+    {
+      "type": "Weapon",
+      "name": "Azure Splitter",
+      "cost": {
+        "R": 0,
+        "B": 1,
+        "G": 0
+      },
+      "vp": 0,
+      "uses": 1,
+      "effect": "In a fight: reduce cost by R1/G1",
+      "tags": [
+        "fight:cost_reduction:R1",
+        "fight:cost_reduction:G1",
+        "spec:blue"
+      ],
+      "copies": 2
+    },
+    {
+      "type": "Weapon",
+      "name": "Verdant Adapter",
+      "cost": {
+        "R": 0,
+        "B": 0,
+        "G": 1
+      },
+      "vp": 0,
+      "uses": 1,
+      "effect": "In a fight: reduce cost by R2",
+      "tags": [
+        "fight:cost_reduction:R2",
+        "spec:green"
+      ],
+      "copies": 2
+    },
+    {
+      "type": "Weapon",
+      "name": "Verdant Splitter",
+      "cost": {
+        "R": 0,
+        "B": 0,
+        "G": 1
+      },
+      "vp": 0,
+      "uses": 1,
+      "effect": "In a fight: reduce cost by R1/B1",
+      "tags": [
+        "fight:cost_reduction:R1",
+        "fight:cost_reduction:B1",
+        "spec:green"
+      ],
+      "copies": 2
+    },
+    {
+      "type": "Weapon",
+      "name": "Reclaimer Pike",
+      "cost": {
+        "R": 3,
+        "B": 0,
+        "G": 0
+      },
+      "vp": 0,
+      "uses": 1,
+      "effect": "In a fight: reduce cost by G4. On kill: gain 1R.",
+      "tags": [
+        "fight:cost_reduction:G4",
+        "on_kill:resource:R1",
+        "spec:red"
+      ],
+      "copies": 1
+    },
+    {
+      "type": "Weapon",
+      "name": "Tidal Repeater",
+      "cost": {
+        "R": 0,
+        "B": 3,
+        "G": 0
+      },
+      "vp": 0,
+      "uses": 1,
+      "effect": "In a fight: reduce cost by R4. You can attack any threat, regardless of position. On kill: gain 1B.",
+      "tags": [
+        "fight:cost_reduction:R4",
+        "fight:range:any",
+        "on_kill:resource:B1",
+        "spec:blue"
+      ],
+      "copies": 1
+    },
+    {
+      "type": "Weapon",
+      "name": "Verdant Harvester",
+      "cost": {
+        "R": 0,
+        "B": 0,
+        "G": 3
+      },
+      "vp": 0,
+      "uses": 1,
+      "effect": "In a fight: reduce cost by B4. On kill: gain 1G.",
+      "tags": [
+        "fight:cost_reduction:B4",
+        "on_kill:resource:G1",
+        "spec:green"
+      ],
+      "copies": 1
     }
   ]
 }

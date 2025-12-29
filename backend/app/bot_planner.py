@@ -136,12 +136,38 @@ class BotPlanner:
                         break
                 if not steps:
                     continue
+                branch_entries = [(sim, plan, steps)]
                 if sim.state.get_active_player_id() == player_id and sim.state.phase != GamePhase.GAME_OVER:
-                    try:
-                        await sim.player_action(player_id, "end_turn", {}, None)
-                    except Exception:
-                        continue
-                scored_plans.append((steps[-1]["score"], plan, sim, steps))
+                    player_after = sim.state.players.get(player_id)
+                    free_changes = getattr(player_after, "free_stance_changes", 0) if player_after else 0
+                    if free_changes > 0:
+                        branch_entries = [(sim, plan, steps)]
+                        for stance in Stance:
+                            if not player_after or stance == player_after.stance:
+                                continue
+                            sim_clone = self._clone_quiet(sim)
+                            action = {"type": "realign", "payload": {"stance": stance.value}}
+                            try:
+                                await sim_clone.player_action(player_id, "realign", {"stance": stance.value}, None)
+                            except Exception:
+                                continue
+                            steps_clone = list(steps)
+                            steps_clone.append(
+                                {
+                                    "action": action,
+                                    "score": self._score_state_cached(sim_clone, player_id, score_cache),
+                                    "round": getattr(sim_clone.state, "round", base_round),
+                                    "era": getattr(sim_clone.state, "era", base_era),
+                                }
+                            )
+                            branch_entries.append((sim_clone, plan + [action], steps_clone))
+                for sim_branch, plan_branch, steps_branch in branch_entries:
+                    if sim_branch.state.get_active_player_id() == player_id and sim_branch.state.phase != GamePhase.GAME_OVER:
+                        try:
+                            await sim_branch.player_action(player_id, "end_turn", {}, None)
+                        except Exception:
+                            continue
+                    scored_plans.append((steps_branch[-1]["score"], plan_branch, sim_branch, steps_branch))
 
             if not scored_plans:
                 return

@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 from .server_models import User, Room, GameParticipant, PlayerReport, PlayerStatus as ServerPlayerStatus
 from game_core import GameSession, GamePhase, PlayerStatus
 from game_core.session import InvalidActionError
-from game_core.data_loader import GameDataLoader
+from game_core.data_loader import GameDataLoader, EMPTY_DECK_NAME
 from .routers import fake_games_db 
 from .custom_content import CUSTOM_THREATS_DIR, CUSTOM_BOSS_DIR, CUSTOM_UPGRADES_DIR, CUSTOM_WEAPONS_DIR
 from .bot_planner import BotPlanner
@@ -131,10 +131,14 @@ class GameManager:
                 bosses_file = str(candidate)
             upgrade_file = None
             weapon_file = None
-            if active_upgrade != "default":
+            if active_upgrade == EMPTY_DECK_NAME:
+                upgrade_file = EMPTY_DECK_NAME
+            elif active_upgrade != "default":
                 candidate = Path(CUSTOM_UPGRADES_DIR) / f"{active_upgrade}.json"
                 upgrade_file = str(candidate)
-            if active_weapon != "default":
+            if active_weapon == EMPTY_DECK_NAME:
+                weapon_file = EMPTY_DECK_NAME
+            elif active_weapon != "default":
                 candidate = Path(CUSTOM_WEAPONS_DIR) / f"{active_weapon}.json"
                 weapon_file = str(candidate)
             loader = GameDataLoader(

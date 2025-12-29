@@ -22,7 +22,7 @@ export default function UpgradeForgePage() {
       setLoading(true);
       const deckRes = await fetch(`${apiBase}/api/custom/upgrade-decks`, { headers });
       const deckJson = await deckRes.json();
-      setDecks(deckJson.decks || []);
+      setDecks((deckJson.decks || []).filter((deck) => !deck.empty));
     } catch (e) {
       setError("Failed to load decks");
     } finally {
@@ -125,7 +125,7 @@ export default function UpgradeForgePage() {
               className="flex items-center justify-between bg-slate-800/60 border border-slate-700 rounded-lg px-3 py-2"
             >
               <div className="flex items-center gap-2">
-                <span className="text-slate-100 font-semibold">{deck.name}</span>
+                <span className="text-slate-100 font-semibold">{deck.label || deck.name}</span>
                 {!deck.editable && <span className="text-[10px] uppercase text-slate-400">Default</span>}
               </div>
               <div className="flex items-center gap-2">

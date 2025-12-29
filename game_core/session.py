@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Callable
 from types import SimpleNamespace
 
 import random
@@ -24,6 +24,7 @@ class GameSession:
         self.state = GameState(game_id=game_id, verbose=verbose)
         self.threat_manager: Optional[ThreatManager] = None
         self.rng = random.Random()
+        self.round_end_hook: Optional[Callable[[int, str], None]] = None
         for p in players:
             board = PlayerBoard(
                 user_id=p["id"],
@@ -269,6 +270,8 @@ class GameSession:
 
     async def _complete_boss_phase(self):
         stage = self.state.boss_stage or "day"
+        if self.round_end_hook:
+            self.round_end_hook(self.state.round, stage)
         self.state.boss_mode = False
         self.state.phase = GamePhase.ROUND_START
         self.state.boss_thresholds_state = []
@@ -306,8 +309,13 @@ class GameSession:
         self.state.phase = GamePhase.ROUND_END
         self.state.add_log(f"Round {self.state.round} ended.")
         current_round = self.state.round
+        current_era = self.state.era
 
-        if self.threat_manager:
+        boss_next = not self.state.boss_mode and (
+            (self.state.era == "day" and current_round >= 6)
+            or (self.state.era == "night" and current_round >= 6)
+        )
+        if self.threat_manager and not boss_next:
             logs = self.threat_manager.advance_and_spawn()
             for log in logs:
                 self.state.add_log(log)
@@ -319,6 +327,9 @@ class GameSession:
         if last_player_id and last_player_id in self.state.turn_order:
             remaining = [pid for pid in self.state.turn_order if pid != last_player_id]
             self.state.turn_order = [last_player_id] + remaining
+
+        if self.round_end_hook:
+            self.round_end_hook(current_round, current_era)
 
         self.state.round += 1
         await self._check_game_over(force=False)
@@ -519,6 +530,12 @@ class GameSession:
                     if gained:
                         player.free_stance_changes = max(0, player.free_stance_changes + gained)
                         self.state.add_log(f"{player.username} gained {gained} free stance change(s) from {source_name}.")
+                if eff.kind == "on_kill_resource" and eff.amount and eff.value:
+                    gained = max(0, eff.amount)
+                    if gained:
+                        res = parse_resource_key(eff.value, InvalidActionError)
+                        player.resources[res] = player.resources.get(res, 0) + gained
+                        self.state.add_log(f"{player.username} gained {gained}{res.value} from {source_name}.")
 
             self._sync_threat_rows()
             total_vp = base_vp + bonus_vp

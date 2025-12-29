@@ -11,6 +11,7 @@ from .custom_content import (
     CUSTOM_UPGRADES_DIR,
     CUSTOM_WEAPONS_DIR,
 )
+from game_core.data_loader import EMPTY_DECK_NAME
 
 # --- NEW GAME CORE IMPORTS ---
 from typing import TYPE_CHECKING
@@ -402,9 +403,9 @@ class RoomManager:
             updates["threat_deck"] = threat_deck or "default"
         if boss_deck is not None and self._deck_exists(boss_deck, CUSTOM_BOSS_DIR):
             updates["boss_deck"] = boss_deck or "default"
-        if upgrade_deck is not None and self._deck_exists(upgrade_deck, CUSTOM_UPGRADES_DIR):
+        if upgrade_deck is not None and (upgrade_deck == EMPTY_DECK_NAME or self._deck_exists(upgrade_deck, CUSTOM_UPGRADES_DIR)):
             updates["upgrade_deck"] = upgrade_deck or "default"
-        if weapon_deck is not None and self._deck_exists(weapon_deck, CUSTOM_WEAPONS_DIR):
+        if weapon_deck is not None and (weapon_deck == EMPTY_DECK_NAME or self._deck_exists(weapon_deck, CUSTOM_WEAPONS_DIR)):
             updates["weapon_deck"] = weapon_deck or "default"
 
         if not updates:

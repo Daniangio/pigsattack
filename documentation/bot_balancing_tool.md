@@ -86,7 +86,33 @@ Power Score = (DeltaVP_early * 1.2) + (DeltaVP_mid * 1.0) + (DeltaVP_late * 0.8)
 - Panic Button: early weak, late positive.
 - Anchor: early negative, late near zero.
 
-## 3. Visualizations
+## 3. Tag Assignment (Balance Lab)
+
+Tags combine win-rate impact, pick rate, and Delta VP signals to avoid over-indexing on a single metric.
+
+1. Compute medians and thresholds:
+   - `pick_rate_median` across the deck.
+   - `wra_strong = 0.05`, `wra_weak = 0.02`.
+   - `delta_strong` from median `|avg_delta_vp|`, `delta_weak = delta_strong * 0.5`.
+2. A Delta VP signal is considered only when `delta_vp_samples >= 5`.
+3. Positive signal if:
+   - `win_rate_added >= wra_strong`, or
+   - `avg_delta_vp >= delta_strong` and `win_rate_added > -wra_weak`.
+4. Negative signal if:
+   - `win_rate_added <= -wra_strong`, or
+   - `avg_delta_vp <= -delta_strong` and `win_rate_added < wra_weak`.
+5. Tag resolution:
+   - Positive signal → `Overpowered` (high pick) or `Sleeper` (low pick).
+   - Negative signal → `Trap` (high pick) or `Underpowered` (low pick).
+   - If `|win_rate_added| <= wra_weak` and Delta VP is neutral/absent → `Balanced`.
+   - Otherwise → `Swingy`.
+6. Additional tags:
+   - `Utility`: low-cost, highly flexible weapons (cost sum <= 2, flex >= 0.9, output <= 3) unless severely negative.
+   - `Situational`: pick rate below 60% of median with weak WRA.
+   - `Tempo` / `Finisher`: buy timing skewed to day/night or by average acquire turn.
+   - `VP <Pattern>` tags (Snowball, Finisher, Delta Trap, Panic Button, Anchor) derived from early/mid/late Delta VP.
+
+## 4. Visualizations
 
 ### Simulation Results: Balance Matrix
 
@@ -104,7 +130,7 @@ Power Score = (DeltaVP_early * 1.2) + (DeltaVP_mid * 1.0) + (DeltaVP_late * 0.8)
 - Delta VP profile modal:
   - Early/Mid/Late bar chart, counts, power score, and diagnosis label.
 
-## 4. Result Schema Highlights
+## 5. Result Schema Highlights
 
 `card_balance_data` includes:
 

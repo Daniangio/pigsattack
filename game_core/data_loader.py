@@ -6,6 +6,8 @@ from typing import Any, Dict, List, Optional
 from .models import BossCard, BossThreshold, CardType, MarketCard, MarketState, ThreatCard, Reward, TokenType, ResourceType, resource_from_json
 from .threats import ThreatDeckData
 
+EMPTY_DECK_NAME = "__empty__"
+
 
 def parse_reward_text(raw: str) -> List[Reward]:
     if not raw:
@@ -183,20 +185,26 @@ class GameDataLoader:
             upgrades_raw = combined.get("upgrades", []) if isinstance(combined, dict) else []
             weapons_raw = combined.get("weapons", []) if isinstance(combined, dict) else []
         else:
-            upgrades_payload = self._load_optional_json("upgrades.json", self.upgrade_file)
-            weapons_payload = self._load_optional_json("weapons.json", self.weapon_file)
-            if isinstance(upgrades_payload, dict):
-                upgrades_raw = upgrades_payload.get("upgrades", [])
-            elif isinstance(upgrades_payload, list):
-                upgrades_raw = upgrades_payload
-            else:
+            if self.upgrade_file == EMPTY_DECK_NAME:
                 upgrades_raw = []
-            if isinstance(weapons_payload, dict):
-                weapons_raw = weapons_payload.get("weapons", [])
-            elif isinstance(weapons_payload, list):
-                weapons_raw = weapons_payload
             else:
+                upgrades_payload = self._load_optional_json("upgrades.json", self.upgrade_file)
+                if isinstance(upgrades_payload, dict):
+                    upgrades_raw = upgrades_payload.get("upgrades", [])
+                elif isinstance(upgrades_payload, list):
+                    upgrades_raw = upgrades_payload
+                else:
+                    upgrades_raw = []
+            if self.weapon_file == EMPTY_DECK_NAME:
                 weapons_raw = []
+            else:
+                weapons_payload = self._load_optional_json("weapons.json", self.weapon_file)
+                if isinstance(weapons_payload, dict):
+                    weapons_raw = weapons_payload.get("weapons", [])
+                elif isinstance(weapons_payload, list):
+                    weapons_raw = weapons_payload
+                else:
+                    weapons_raw = []
 
         def build_cards(raw_items, card_type: CardType, id_counter: itertools.count) -> List[MarketCard]:
             cards: List[MarketCard] = []
