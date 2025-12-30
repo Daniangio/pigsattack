@@ -7,7 +7,8 @@ these helpers to derive modifiers without embedding string parsing in the
 session logic.
 """
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from functools import lru_cache
+from typing import Dict, List, Optional, Tuple
 
 from .models import ResourceType
 
@@ -163,6 +164,23 @@ def parse_effect_tags(card: Dict) -> List[CardEffect]:
                     continue
                 parsed.append(CardEffect(kind="production", value=res.value, amount=amt_val, context=era, source_id=source_id, source_name=source_name))
     return parsed
+
+
+@lru_cache(maxsize=4096)
+def _parse_effect_tags_cached(
+    tags_key: Tuple[str, ...], card_id: Optional[str], card_name: Optional[str]
+) -> Tuple[CardEffect, ...]:
+    if not tags_key:
+        return tuple()
+    parsed = parse_effect_tags({"tags": list(tags_key), "id": card_id, "name": card_name})
+    return tuple(parsed)
+
+
+def parse_effect_tags_cached(tags: List, card_id: Optional[str], card_name: Optional[str]) -> List[CardEffect]:
+    tags_key = tuple(tag for tag in tags if isinstance(tag, str))
+    if not tags_key:
+        return []
+    return list(_parse_effect_tags_cached(tags_key, card_id, card_name))
 
 
 def effect_to_wire(effect: CardEffect) -> Dict[str, Optional[str]]:

@@ -9,7 +9,7 @@
         "B": 0,
         "G": 1
       },
-      "vp": 2,
+      "vp": 3,
       "reward": "",
       "copies": 2,
       "image": "threat-wary-boar.jpg",
@@ -18,11 +18,6 @@
           "kind": "token",
           "amount": 1,
           "token": "ATTACK"
-        },
-        {
-          "kind": "token",
-          "amount": 1,
-          "token": "CONVERSION"
         }
       ]
     },
@@ -42,12 +37,8 @@
       "spoils": [
         {
           "kind": "token",
-          "amount": 2,
+          "amount": 1,
           "token": "ATTACK"
-        },
-        {
-          "kind": "stance_change",
-          "amount": 1
         }
       ]
     },
@@ -60,21 +51,15 @@
         "B": 2,
         "G": 0
       },
-      "vp": 2,
+      "vp": 3,
       "reward": "",
       "copies": 2,
       "image": "threat-territorial-sow-fallen-fruit.jpg",
       "spoils": [
         {
           "kind": "token",
-          "amount": 2,
-          "token": "WILD"
-        },
-        {
-          "kind": "resource",
-          "resources": {
-            "R": 1
-          }
+          "amount": 1,
+          "token": "ATTACK"
         }
       ]
     },
@@ -93,15 +78,9 @@
       "image": "threat-scrabbling-piglet-fallen-fruit.jpg",
       "spoils": [
         {
-          "kind": "token",
-          "amount": 1,
-          "token": "WILD"
-        },
-        {
           "kind": "resource",
           "resources": {
-            "B": 1,
-            "G": 1
+            "R": 1
           }
         }
       ]
@@ -120,11 +99,6 @@
       "copies": 1,
       "image": "threat-wary-boar.jpg",
       "spoils": [
-        {
-          "kind": "token",
-          "amount": 1,
-          "token": "ATTACK"
-        },
         {
           "kind": "resource",
           "resources": {
@@ -151,11 +125,6 @@
           "kind": "token",
           "amount": 1,
           "token": "ATTACK"
-        },
-        {
-          "kind": "token",
-          "amount": 1,
-          "token": "WILD"
         }
       ]
     },
@@ -168,14 +137,14 @@
         "B": 1,
         "G": 0
       },
-      "vp": 2,
+      "vp": 3,
       "reward": "",
       "copies": 1,
       "image": "threat-wary-boar.jpg",
       "spoils": [
         {
           "kind": "token",
-          "amount": 2,
+          "amount": 1,
           "token": "ATTACK"
         }
       ]
@@ -189,14 +158,14 @@
         "B": 0,
         "G": 1
       },
-      "vp": 3,
+      "vp": 2,
       "reward": "",
       "copies": 1,
       "image": "threat-wary-boar.jpg",
       "spoils": [
         {
           "kind": "token",
-          "amount": 2,
+          "amount": 1,
           "token": "ATTACK"
         },
         {
@@ -221,7 +190,7 @@
       "spoils": [
         {
           "kind": "token",
-          "amount": 2,
+          "amount": 1,
           "token": "CONVERSION"
         }
       ]
@@ -244,11 +213,6 @@
           "kind": "token",
           "amount": 1,
           "token": "CONVERSION"
-        },
-        {
-          "kind": "token",
-          "amount": 1,
-          "token": "WILD"
         }
       ]
     },
@@ -270,12 +234,6 @@
           "kind": "token",
           "amount": 1,
           "token": "CONVERSION"
-        },
-        {
-          "kind": "resource",
-          "resources": {
-            "R": 1
-          }
         }
       ]
     },
@@ -295,12 +253,8 @@
       "spoils": [
         {
           "kind": "token",
-          "amount": 2,
+          "amount": 1,
           "token": "CONVERSION"
-        },
-        {
-          "kind": "stance_change",
-          "amount": 1
         }
       ]
     },
@@ -318,11 +272,6 @@
       "copies": 2,
       "image": "threat-clever-piglet.jpg",
       "spoils": [
-        {
-          "kind": "token",
-          "amount": 1,
-          "token": "CONVERSION"
-        },
         {
           "kind": "resource",
           "resources": {
@@ -351,9 +300,10 @@
           "token": "CONVERSION"
         },
         {
-          "kind": "token",
-          "amount": 1,
-          "token": "WILD"
+          "kind": "resource",
+          "resources": {
+            "B": 1
+          }
         }
       ]
     },
@@ -366,19 +316,16 @@
         "B": 5,
         "G": 1
       },
-      "vp": 2,
+      "vp": 1,
       "reward": "",
       "copies": 1,
       "image": "threat-clever-piglet.jpg",
       "spoils": [
         {
-          "kind": "token",
-          "amount": 1,
-          "token": "CONVERSION"
-        },
-        {
-          "kind": "stance_change",
-          "amount": 1
+          "kind": "resource",
+          "resources": {
+            "B": 1
+          }
         }
       ]
     },
@@ -391,7 +338,7 @@
         "B": 6,
         "G": 0
       },
-      "vp": 2,
+      "vp": 3,
       "reward": "",
       "copies": 1,
       "image": "threat-clever-piglet.jpg",
@@ -400,12 +347,6 @@
           "kind": "token",
           "amount": 1,
           "token": "CONVERSION"
-        },
-        {
-          "kind": "resource",
-          "resources": {
-            "G": 1
-          }
         }
       ]
     },
@@ -427,11 +368,6 @@
           "kind": "token",
           "amount": 1,
           "token": "MASS"
-        },
-        {
-          "kind": "token",
-          "amount": 1,
-          "token": "WILD"
         }
       ]
     },
@@ -453,12 +389,6 @@
           "kind": "token",
           "amount": 1,
           "token": "MASS"
-        },
-        {
-          "kind": "resource",
-          "resources": {
-            "G": 1
-          }
         }
       ]
     },
@@ -471,7 +401,7 @@
         "B": 2,
         "G": 8
       },
-      "vp": 3,
+      "vp": 2,
       "reward": "",
       "copies": 1,
       "image": "threat-sturdy-swine.jpg",
@@ -501,10 +431,6 @@
           "kind": "token",
           "amount": 1,
           "token": "MASS"
-        },
-        {
-          "kind": "stance_change",
-          "amount": 1
         }
       ]
     },
@@ -517,7 +443,7 @@
         "B": 1,
         "G": 7
       },
-      "vp": 2,
+      "vp": 3,
       "reward": "",
       "copies": 1,
       "image": "threat-sturdy-swine.jpg",
@@ -525,13 +451,7 @@
         {
           "kind": "token",
           "amount": 1,
-          "token": "WILD"
-        },
-        {
-          "kind": "resource",
-          "resources": {
-            "G": 1
-          }
+          "token": "MASS"
         }
       ]
     },
@@ -555,9 +475,10 @@
           "token": "MASS"
         },
         {
-          "kind": "token",
-          "amount": 1,
-          "token": "WILD"
+          "kind": "resource",
+          "resources": {
+            "G": 1
+          }
         }
       ]
     },
@@ -583,7 +504,7 @@
         {
           "kind": "resource",
           "resources": {
-            "B": 1
+            "G": 1
           }
         }
       ]
@@ -606,16 +527,6 @@
           "kind": "token",
           "amount": 1,
           "token": "MASS"
-        },
-        {
-          "kind": "resource",
-          "resources": {
-            "G": 1
-          }
-        },
-        {
-          "kind": "stance_change",
-          "amount": 1
         }
       ]
     },
@@ -636,12 +547,13 @@
         {
           "kind": "token",
           "amount": 1,
-          "token": "CONVERSION"
+          "token": "WILD"
         },
         {
-          "kind": "token",
-          "amount": 1,
-          "token": "WILD"
+          "kind": "resource",
+          "resources": {
+            "B": 1
+          }
         }
       ]
     },
@@ -654,7 +566,7 @@
         "B": 3,
         "G": 2
       },
-      "vp": 3,
+      "vp": 2,
       "reward": "",
       "copies": 1,
       "image": "threat-elusive-forager.jpg",
@@ -665,10 +577,9 @@
           "token": "WILD"
         },
         {
-          "kind": "resource",
-          "resources": {
-            "R": 1
-          }
+          "kind": "token",
+          "amount": 1,
+          "token": "CONVERSION"
         }
       ]
     },
@@ -689,12 +600,7 @@
         {
           "kind": "token",
           "amount": 1,
-          "token": "CONVERSION"
-        },
-        {
-          "kind": "token",
-          "amount": 1,
-          "token": "MASS"
+          "token": "WILD"
         }
       ]
     },
@@ -707,7 +613,7 @@
         "B": 2,
         "G": 4
       },
-      "vp": 2,
+      "vp": 3,
       "reward": "",
       "copies": 1,
       "image": "threat-elusive-forager.jpg",
@@ -716,10 +622,6 @@
           "kind": "token",
           "amount": 1,
           "token": "WILD"
-        },
-        {
-          "kind": "stance_change",
-          "amount": 1
         }
       ]
     },
@@ -740,13 +642,7 @@
         {
           "kind": "token",
           "amount": 1,
-          "token": "CONVERSION"
-        },
-        {
-          "kind": "resource",
-          "resources": {
-            "G": 1
-          }
+          "token": "WILD"
         }
       ]
     },
@@ -767,11 +663,6 @@
         {
           "kind": "token",
           "amount": 1,
-          "token": "ATTACK"
-        },
-        {
-          "kind": "token",
-          "amount": 1,
           "token": "WILD"
         }
       ]
@@ -787,19 +678,15 @@
         "B": 0,
         "G": 2
       },
-      "vp": 7,
+      "vp": 4,
       "reward": "",
       "copies": 3,
       "image": "threat-aggressive-boar.jpg",
       "spoils": [
         {
           "kind": "token",
-          "amount": 3,
-          "token": "WILD"
-        },
-        {
-          "kind": "stance_change",
-          "amount": 1
+          "amount": 2,
+          "token": "ATTACK"
         }
       ]
     },
@@ -819,13 +706,14 @@
       "spoils": [
         {
           "kind": "token",
-          "amount": 2,
+          "amount": 1,
           "token": "ATTACK"
         },
         {
-          "kind": "token",
-          "amount": 1,
-          "token": "WILD"
+          "kind": "resource",
+          "resources": {
+            "R": 1
+          }
         }
       ]
     },
@@ -838,19 +726,21 @@
         "B": 0,
         "G": 3
       },
-      "vp": 6,
+      "vp": 5,
       "reward": "",
       "copies": 2,
       "image": "threat-aggressive-boar.jpg",
       "spoils": [
         {
           "kind": "token",
-          "amount": 2,
+          "amount": 1,
           "token": "ATTACK"
         },
         {
-          "kind": "stance_change",
-          "amount": 1
+          "kind": "resource",
+          "resources": {
+            "R": 1
+          }
         }
       ]
     },
@@ -874,9 +764,10 @@
           "token": "ATTACK"
         },
         {
-          "kind": "token",
-          "amount": 2,
-          "token": "WILD"
+          "kind": "resource",
+          "resources": {
+            "R": 1
+          }
         }
       ]
     },
@@ -898,12 +789,6 @@
           "kind": "token",
           "amount": 1,
           "token": "ATTACK"
-        },
-        {
-          "kind": "resource",
-          "resources": {
-            "R": 2
-          }
         }
       ]
     },
@@ -916,14 +801,14 @@
         "B": 1,
         "G": 1
       },
-      "vp": 5,
+      "vp": 4,
       "reward": "",
       "copies": 1,
       "image": "threat-aggressive-boar.jpg",
       "spoils": [
         {
           "kind": "token",
-          "amount": 2,
+          "amount": 1,
           "token": "ATTACK"
         }
       ]
@@ -937,19 +822,21 @@
         "B": 0,
         "G": 1
       },
-      "vp": 7,
+      "vp": 5,
       "reward": "",
       "copies": 1,
       "image": "threat-aggressive-boar.jpg",
       "spoils": [
         {
           "kind": "token",
-          "amount": 3,
+          "amount": 1,
           "token": "ATTACK"
         },
         {
-          "kind": "stance_change",
-          "amount": 1
+          "kind": "resource",
+          "resources": {
+            "R": 1
+          }
         }
       ]
     },
@@ -973,9 +860,10 @@
           "token": "ATTACK"
         },
         {
-          "kind": "token",
-          "amount": 1,
-          "token": "WILD"
+          "kind": "resource",
+          "resources": {
+            "R": 1
+          }
         }
       ]
     },
@@ -988,19 +876,15 @@
         "B": 10,
         "G": 0
       },
-      "vp": 5,
+      "vp": 4,
       "reward": "",
       "copies": 3,
       "image": "threat-cunning-matriarch.jpg",
       "spoils": [
         {
           "kind": "token",
-          "amount": 2,
+          "amount": 1,
           "token": "CONVERSION"
-        },
-        {
-          "kind": "stance_change",
-          "amount": 1
         }
       ]
     },
@@ -1013,21 +897,15 @@
         "B": 9,
         "G": 1
       },
-      "vp": 5,
+      "vp": 4,
       "reward": "",
       "copies": 2,
       "image": "threat-cunning-matriarch.jpg",
       "spoils": [
         {
           "kind": "token",
-          "amount": 2,
+          "amount": 1,
           "token": "CONVERSION"
-        },
-        {
-          "kind": "resource",
-          "resources": {
-            "B": 1
-          }
         }
       ]
     },
@@ -1049,11 +927,6 @@
           "kind": "token",
           "amount": 1,
           "token": "CONVERSION"
-        },
-        {
-          "kind": "token",
-          "amount": 1,
-          "token": "WILD"
         }
       ]
     },
@@ -1066,7 +939,7 @@
         "B": 8,
         "G": 2
       },
-      "vp": 4,
+      "vp": 3,
       "reward": "",
       "copies": 2,
       "image": "threat-cunning-matriarch.jpg",
@@ -1075,10 +948,6 @@
           "kind": "token",
           "amount": 1,
           "token": "CONVERSION"
-        },
-        {
-          "kind": "stance_change",
-          "amount": 1
         }
       ]
     },
@@ -1091,14 +960,14 @@
         "B": 10,
         "G": 0
       },
-      "vp": 5,
+      "vp": 4,
       "reward": "",
       "copies": 1,
       "image": "threat-cunning-matriarch.jpg",
       "spoils": [
         {
           "kind": "token",
-          "amount": 3,
+          "amount": 1,
           "token": "CONVERSION"
         }
       ]
@@ -1112,21 +981,15 @@
         "B": 9,
         "G": 0
       },
-      "vp": 5,
+      "vp": 4,
       "reward": "",
       "copies": 1,
       "image": "threat-cunning-matriarch.jpg",
       "spoils": [
         {
           "kind": "token",
-          "amount": 2,
+          "amount": 1,
           "token": "CONVERSION"
-        },
-        {
-          "kind": "resource",
-          "resources": {
-            "R": 1
-          }
         }
       ]
     },
@@ -1139,7 +1002,7 @@
         "B": 7,
         "G": 1
       },
-      "vp": 4,
+      "vp": 3,
       "reward": "",
       "copies": 1,
       "image": "threat-cunning-matriarch.jpg",
@@ -1148,17 +1011,6 @@
           "kind": "token",
           "amount": 1,
           "token": "CONVERSION"
-        },
-        {
-          "kind": "token",
-          "amount": 1,
-          "token": "WILD"
-        },
-        {
-          "kind": "resource",
-          "resources": {
-            "B": 1
-          }
         }
       ]
     },
@@ -1171,7 +1023,7 @@
         "B": 9,
         "G": 2
       },
-      "vp": 5,
+      "vp": 4,
       "reward": "",
       "copies": 1,
       "image": "threat-cunning-matriarch.jpg",
@@ -1184,12 +1036,6 @@
         {
           "kind": "stance_change",
           "amount": 1
-        },
-        {
-          "kind": "resource",
-          "resources": {
-            "G": 1
-          }
         }
       ]
     },
@@ -1202,19 +1048,21 @@
         "B": 4,
         "G": 11
       },
-      "vp": 6,
+      "vp": 5,
       "reward": "",
       "copies": 3,
       "image": "threat-plated-brute.jpg",
       "spoils": [
         {
           "kind": "token",
-          "amount": 2,
+          "amount": 1,
           "token": "MASS"
         },
         {
-          "kind": "stance_change",
-          "amount": 1
+          "kind": "resource",
+          "resources": {
+            "G": 1
+          }
         }
       ]
     },
@@ -1227,19 +1075,14 @@
         "B": 2,
         "G": 12
       },
-      "vp": 6,
+      "vp": 5,
       "reward": "",
       "copies": 3,
       "image": "threat-brute-boar.jpg",
       "spoils": [
         {
-          "kind": "slot",
-          "amount": 1,
-          "slot_type": "weapon"
-        },
-        {
           "kind": "token",
-          "amount": 1,
+          "amount": 2,
           "token": "MASS"
         }
       ]
@@ -1253,20 +1096,20 @@
         "B": 3,
         "G": 12
       },
-      "vp": 6,
+      "vp": 5,
       "reward": "",
       "copies": 2,
       "image": "threat-plated-brute.jpg",
       "spoils": [
         {
           "kind": "token",
-          "amount": 2,
+          "amount": 1,
           "token": "MASS"
         },
         {
           "kind": "resource",
           "resources": {
-            "G": 2
+            "G": 1
           }
         }
       ]
@@ -1280,15 +1123,21 @@
         "B": 2,
         "G": 13
       },
-      "vp": 7,
+      "vp": 6,
       "reward": "",
       "copies": 1,
       "image": "threat-plated-brute.jpg",
       "spoils": [
         {
           "kind": "token",
-          "amount": 3,
+          "amount": 1,
           "token": "MASS"
+        },
+        {
+          "kind": "resource",
+          "resources": {
+            "G": 1
+          }
         }
       ]
     },
@@ -1301,7 +1150,7 @@
         "B": 3,
         "G": 10
       },
-      "vp": 6,
+      "vp": 5,
       "reward": "",
       "copies": 1,
       "image": "threat-plated-brute.jpg",
@@ -1312,13 +1161,10 @@
           "token": "MASS"
         },
         {
-          "kind": "token",
-          "amount": 1,
-          "token": "WILD"
-        },
-        {
-          "kind": "stance_change",
-          "amount": 1
+          "kind": "resource",
+          "resources": {
+            "G": 1
+          }
         }
       ]
     },
@@ -1331,20 +1177,20 @@
         "B": 4,
         "G": 12
       },
-      "vp": 7,
+      "vp": 6,
       "reward": "",
       "copies": 1,
       "image": "threat-plated-brute.jpg",
       "spoils": [
         {
           "kind": "token",
-          "amount": 2,
+          "amount": 1,
           "token": "MASS"
         },
         {
           "kind": "resource",
           "resources": {
-            "B": 1
+            "G": 1
           }
         }
       ]
@@ -1358,19 +1204,21 @@
         "B": 2,
         "G": 14
       },
-      "vp": 7,
+      "vp": 6,
       "reward": "",
       "copies": 1,
       "image": "threat-plated-brute.jpg",
       "spoils": [
         {
           "kind": "token",
-          "amount": 3,
+          "amount": 1,
           "token": "MASS"
         },
         {
-          "kind": "stance_change",
-          "amount": 1
+          "kind": "resource",
+          "resources": {
+            "G": 1
+          }
         }
       ]
     },
@@ -1390,13 +1238,14 @@
       "spoils": [
         {
           "kind": "token",
-          "amount": 2,
+          "amount": 1,
           "token": "MASS"
         },
         {
-          "kind": "token",
-          "amount": 1,
-          "token": "WILD"
+          "kind": "resource",
+          "resources": {
+            "G": 1
+          }
         }
       ]
     },
@@ -1418,10 +1267,6 @@
           "kind": "token",
           "amount": 2,
           "token": "WILD"
-        },
-        {
-          "kind": "stance_change",
-          "amount": 1
         }
       ]
     },
@@ -1434,7 +1279,7 @@
         "B": 7,
         "G": 6
       },
-      "vp": 6,
+      "vp": 7,
       "reward": "",
       "copies": 2,
       "image": "threat-stalking-boar.jpg",
@@ -1445,9 +1290,10 @@
           "token": "WILD"
         },
         {
-          "kind": "token",
-          "amount": 1,
-          "token": "CONVERSION"
+          "kind": "resource",
+          "resources": {
+            "B": 1
+          }
         }
       ]
     },
@@ -1460,7 +1306,7 @@
         "B": 6,
         "G": 6
       },
-      "vp": 6,
+      "vp": 7,
       "reward": "",
       "copies": 2,
       "image": "threat-stalking-boar.jpg",
@@ -1468,12 +1314,13 @@
         {
           "kind": "token",
           "amount": 1,
-          "token": "ATTACK"
+          "token": "WILD"
         },
         {
-          "kind": "token",
-          "amount": 1,
-          "token": "WILD"
+          "kind": "resource",
+          "resources": {
+            "B": 1
+          }
         }
       ]
     },
@@ -1486,7 +1333,7 @@
         "B": 8,
         "G": 6
       },
-      "vp": 6,
+      "vp": 7,
       "reward": "",
       "copies": 1,
       "image": "threat-stalking-boar.jpg",
@@ -1494,16 +1341,13 @@
         {
           "kind": "token",
           "amount": 1,
-          "token": "CONVERSION"
+          "token": "WILD"
         },
         {
-          "kind": "token",
-          "amount": 1,
-          "token": "MASS"
-        },
-        {
-          "kind": "stance_change",
-          "amount": 1
+          "kind": "resource",
+          "resources": {
+            "B": 1
+          }
         }
       ]
     },
@@ -1516,20 +1360,21 @@
         "B": 9,
         "G": 4
       },
-      "vp": 6,
+      "vp": 7,
       "reward": "",
       "copies": 1,
       "image": "threat-stalking-boar.jpg",
       "spoils": [
         {
           "kind": "token",
-          "amount": 2,
-          "token": "CONVERSION"
-        },
-        {
-          "kind": "token",
           "amount": 1,
           "token": "WILD"
+        },
+        {
+          "kind": "resource",
+          "resources": {
+            "B": 1
+          }
         }
       ]
     },
@@ -1542,16 +1387,11 @@
         "B": 7,
         "G": 7
       },
-      "vp": 6,
+      "vp": 7,
       "reward": "",
       "copies": 1,
       "image": "threat-stalking-boar.jpg",
       "spoils": [
-        {
-          "kind": "token",
-          "amount": 1,
-          "token": "MASS"
-        },
         {
           "kind": "token",
           "amount": 1,
@@ -1560,7 +1400,7 @@
         {
           "kind": "resource",
           "resources": {
-            "G": 1
+            "B": 1
           }
         }
       ]

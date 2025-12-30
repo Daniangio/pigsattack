@@ -6,8 +6,10 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from game_core import GameSession, GamePhase, ResourceType, TokenType, Stance
 
+from .planner_sim import PlannerSim
 
-def score_state(session: GameSession, player_id: str) -> float:
+
+def score_state(session: Any, player_id: str) -> float:
     player = session.state.players.get(player_id)
     if not player:
         return -1e9
@@ -69,6 +71,7 @@ class BotPlanner:
         self.randomness = max(0.0, min(float(randomness or 0.0), 1.0))
         self._quiet = True  # disable logging in simulation clones
         self._score_cache: Dict[str, float] = {}
+        self._opponent_action_cache: Dict[str, Dict[str, Dict[str, Optional[Dict[str, Any]]]]] = {}
 
     async def plan(
         self,
@@ -77,9 +80,10 @@ class BotPlanner:
         personality: str = "greedy",
         planning_profile: Optional[str] = None,
     ) -> Dict[str, Any]:
-        base_round = getattr(game.state, "round", 0)
-        base_era = getattr(game.state, "era", "day")
-        start_score = self._score_state_cached(game, player_id)
+        sim = PlannerSim.from_session(game)
+        base_round = getattr(sim.state, "round", 0)
+        base_era = getattr(sim.state, "era", "day")
+        start_score = self._score_state_cached(sim, player_id)
         best_runs: List[Dict[str, Any]] = []
         best_runs: List[Dict[str, Any]] = []
         score_cache: Dict[str, float] = {}
@@ -87,19 +91,19 @@ class BotPlanner:
         opponent_profile = planning_profile
         if opponent_profile is None:
             opponent_profile = getattr(game.state.players.get(player_id), "planning_profile", None)
+        self._opponent_action_cache.clear()
 
         async def evaluate_turn(
-            session: GameSession,
             turn_index: int,
             accumulated_steps: List[Dict[str, Any]],
             root_actions: Optional[List[Dict[str, Any]]],
         ):
-            if turn_index >= self.max_depth or session.state.phase == GamePhase.GAME_OVER:
-                score = self._score_state_cached(session, player_id, score_cache)
+            if turn_index >= self.max_depth or sim.state.phase == GamePhase.GAME_OVER:
+                score = self._score_state_cached(sim, player_id, score_cache)
                 best_runs.append(
                     {
-                        "round": getattr(session.state, "round", base_round),
-                        "era": getattr(session.state, "era", base_era),
+                        "round": getattr(sim.state, "round", base_round),
+                        "era": getattr(sim.state, "era", base_era),
                         "start_score": start_score,
                         "score": score,
                         "actions": list(root_actions or []),
@@ -108,17 +112,17 @@ class BotPlanner:
                 )
                 return
 
-            turn_plans = await self._enumerate_turn_plans(session, player_id, active_profile)
+            turn_plans = await self._enumerate_turn_plans(sim, player_id, active_profile)
             if not turn_plans:
                 turn_plans = [[{"type": "end_turn", "payload": {}}]]
 
-            scored_plans: List[Tuple[float, List[Dict[str, Any]], GameSession, List[Dict[str, Any]]]] = []
+            scored_plans: List[Tuple[float, List[Dict[str, Any]], List[Dict[str, Any]]]] = []
             for plan in turn_plans:
-                sim = self._clone_quiet(session)
+                checkpoint = sim.checkpoint()
                 steps: List[Dict[str, Any]] = []
                 for action in plan:
                     try:
-                        await sim.player_action(player_id, action["type"], action.get("payload") or {}, None)
+                        sim.apply_action(player_id, action["type"], action.get("payload") or {})
                     except Exception:
                         steps = []
                         break
@@ -135,39 +139,49 @@ class BotPlanner:
                     if sim.state.get_active_player_id() != player_id:
                         break
                 if not steps:
+                    sim.rollback(checkpoint)
                     continue
-                branch_entries = [(sim, plan, steps)]
-                if sim.state.get_active_player_id() == player_id and sim.state.phase != GamePhase.GAME_OVER:
-                    player_after = sim.state.players.get(player_id)
-                    free_changes = getattr(player_after, "free_stance_changes", 0) if player_after else 0
-                    if free_changes > 0:
-                        branch_entries = [(sim, plan, steps)]
-                        for stance in Stance:
-                            if not player_after or stance == player_after.stance:
-                                continue
-                            sim_clone = self._clone_quiet(sim)
-                            action = {"type": "realign", "payload": {"stance": stance.value}}
-                            try:
-                                await sim_clone.player_action(player_id, "realign", {"stance": stance.value}, None)
-                            except Exception:
-                                continue
-                            steps_clone = list(steps)
-                            steps_clone.append(
-                                {
-                                    "action": action,
-                                    "score": self._score_state_cached(sim_clone, player_id, score_cache),
-                                    "round": getattr(sim_clone.state, "round", base_round),
-                                    "era": getattr(sim_clone.state, "era", base_era),
-                                }
-                            )
-                            branch_entries.append((sim_clone, plan + [action], steps_clone))
-                for sim_branch, plan_branch, steps_branch in branch_entries:
-                    if sim_branch.state.get_active_player_id() == player_id and sim_branch.state.phase != GamePhase.GAME_OVER:
+                player_after = sim.state.players.get(player_id)
+                free_changes = getattr(player_after, "free_stance_changes", 0) if player_after else 0
+                branch_checkpoint = sim.checkpoint()
+
+                def record_branch(plan_branch: List[Dict[str, Any]], steps_branch: List[Dict[str, Any]]) -> None:
+                    branch_apply_checkpoint = sim.checkpoint()
+                    if sim.state.get_active_player_id() == player_id and sim.state.phase != GamePhase.GAME_OVER:
                         try:
-                            await sim_branch.player_action(player_id, "end_turn", {}, None)
+                            sim.apply_action(player_id, "end_turn", {},)
                         except Exception:
+                            sim.rollback(branch_apply_checkpoint)
+                            return
+                    scored_plans.append((steps_branch[-1]["score"], plan_branch, list(steps_branch)))
+                    sim.rollback(branch_apply_checkpoint)
+
+                if sim.state.get_active_player_id() == player_id and sim.state.phase != GamePhase.GAME_OVER and free_changes > 0:
+                    for stance in Stance:
+                        if not player_after or stance == player_after.stance:
                             continue
-                    scored_plans.append((steps_branch[-1]["score"], plan_branch, sim_branch, steps_branch))
+                        stance_checkpoint = sim.checkpoint()
+                        action = {"type": "realign", "payload": {"stance": stance.value}}
+                        try:
+                            sim.apply_action(player_id, "realign", {"stance": stance.value})
+                        except Exception:
+                            sim.rollback(stance_checkpoint)
+                            continue
+                        steps_clone = list(steps)
+                        steps_clone.append(
+                            {
+                                "action": action,
+                                "score": self._score_state_cached(sim, player_id, score_cache),
+                                "round": getattr(sim.state, "round", base_round),
+                                "era": getattr(sim.state, "era", base_era),
+                            }
+                        )
+                        record_branch(plan + [action], steps_clone)
+                        sim.rollback(stance_checkpoint)
+
+                record_branch(plan, steps)
+                sim.rollback(branch_checkpoint)
+                sim.rollback(checkpoint)
 
             if not scored_plans:
                 return
@@ -175,17 +189,34 @@ class BotPlanner:
             scored_plans.sort(key=lambda t: t[0], reverse=True)
             scored_plans = scored_plans[: self.top_n]
 
-            for _, plan_actions, sim_after_plan, plan_steps in scored_plans:
+            for _, plan_actions, plan_steps in scored_plans:
                 next_root = root_actions if root_actions is not None else list(plan_actions)
-                advanced = await self._advance_to_next_bot_turn(
-                    sim_after_plan,
-                    player_id,
-                    personality=personality,
-                    opponent_profile=opponent_profile,
-                )
-                await evaluate_turn(advanced, turn_index + 1, accumulated_steps + plan_steps, next_root)
+                replay_checkpoint = sim.checkpoint()
+                ok = True
+                for action in plan_actions:
+                    try:
+                        sim.apply_action(player_id, action["type"], action.get("payload") or {})
+                    except Exception:
+                        ok = False
+                        break
+                    if sim.state.phase == GamePhase.GAME_OVER or sim.state.get_active_player_id() != player_id:
+                        break
+                if ok and sim.state.get_active_player_id() == player_id and sim.state.phase != GamePhase.GAME_OVER:
+                    try:
+                        sim.apply_action(player_id, "end_turn", {})
+                    except Exception:
+                        ok = False
+                if ok:
+                    await self._advance_to_next_bot_turn(
+                        sim,
+                        player_id,
+                        personality=personality,
+                        opponent_profile=opponent_profile,
+                    )
+                    await evaluate_turn(turn_index + 1, accumulated_steps + plan_steps, next_root)
+                sim.rollback(replay_checkpoint)
 
-        await evaluate_turn(self._clone_quiet(game), 0, [], None)
+        await evaluate_turn(0, [], None)
 
         best_runs = sorted(best_runs, key=lambda r: r.get("score", -1e9), reverse=True)
         for i, run in enumerate(best_runs, start=1):
@@ -310,7 +341,8 @@ class BotPlanner:
         main_actions: List[List[Dict[str, Any]]] = []
         fights: List[List[Dict[str, Any]]] = []
         if allow_fights:
-            fights = await self._generate_fight_actions(gs, player_id)
+            fight_cost_cache: Dict[Tuple[Any, ...], Dict[str, Any]] = {}
+            fights = await self._generate_fight_actions(gs, player_id, fight_cost_cache)
             if fights:
                 main_actions.extend(fights)
         if not player.action_used and allow_realign:
@@ -332,13 +364,20 @@ class BotPlanner:
             plans = plans[:80]
         return plans
 
-    async def _generate_fight_actions(self, gs: GameSession, player_id: str) -> List[List[Dict[str, Any]]]:
+    async def _generate_fight_actions(
+        self,
+        gs: GameSession,
+        player_id: str,
+        fight_cost_cache: Optional[Dict[Tuple[Any, ...], Dict[str, Any]]] = None,
+    ) -> List[List[Dict[str, Any]]]:
         player = gs.state.players.get(player_id)
         if not player:
             return []
         # Non-boss fights consume the main action
         if player.action_used and not (gs.state.boss_mode or gs.state.phase == GamePhase.BOSS):
             return []
+        if gs.state.boss_mode or gs.state.phase == GamePhase.BOSS:
+            return self._generate_boss_fight_actions(gs, player, fight_cost_cache)
         if not gs.threat_manager:
             return []
         has_range_any = self._has_range_any(gs, player)
@@ -351,7 +390,14 @@ class BotPlanner:
         best_by_target: Dict[Tuple[int, str], Tuple[int, int, List[Dict[str, Any]]]] = {}
         for row_index, threat in targets:
             for subset in weapon_sets:
-                built = self._build_fight_payload(gs, player, row_index, threat, subset)
+                built = self._build_fight_payload(
+                    gs,
+                    player,
+                    row_index,
+                    threat,
+                    subset,
+                    fight_cost_cache=fight_cost_cache,
+                )
                 if not built:
                     continue
                 payload, resource_cost, token_used, can_afford, adjusted_cost = built
@@ -374,6 +420,58 @@ class BotPlanner:
                     if not current or candidate[0] < current[0] or (candidate[0] == current[0] and candidate[1] < current[1]):
                         best_by_target[key] = candidate
         return [seq for _, _, seq in best_by_target.values()]
+
+    def _generate_boss_fight_actions(
+        self,
+        gs: GameSession,
+        player: Any,
+        fight_cost_cache: Optional[Dict[Tuple[Any, ...], Dict[str, Any]]] = None,
+    ) -> List[List[Dict[str, Any]]]:
+        thresholds = gs.state.boss_thresholds_state or []
+        if not thresholds:
+            return []
+        playable_weapons = self._playable_weapons(gs, player)
+        weapon_sets = list(self._weapon_subsets(playable_weapons))
+        best_by_threshold: Dict[int, Tuple[int, int, List[Dict[str, Any]]]] = {}
+        for entry in thresholds:
+            idx_raw = entry.get("index")
+            if idx_raw is None:
+                continue
+            try:
+                idx = int(idx_raw)
+            except Exception:
+                continue
+            if entry.get("defeated"):
+                continue
+            defeated_by = entry.get("defeated_by") or []
+            if player.user_id in defeated_by:
+                continue
+            for subset in weapon_sets:
+                built = self._build_boss_fight_payload(
+                    gs,
+                    player,
+                    idx,
+                    subset,
+                    fight_cost_cache=fight_cost_cache,
+                )
+                if not built:
+                    continue
+                payload, resource_cost, token_used, can_afford, adjusted_cost = built
+                fight_action = {"type": "fight", "payload": payload}
+                plans: List[List[Dict[str, Any]]] = []
+                if can_afford:
+                    plans.append([fight_action])
+                else:
+                    conversion_candidates = self._pick_conversion_for_fight(player, adjusted_cost)
+                    for conv_action in conversion_candidates:
+                        if self._can_afford_fight_with_conversion(gs, player, payload, conv_action):
+                            plans.append([conv_action, fight_action])
+                for seq in plans:
+                    candidate = (resource_cost, token_used, seq)
+                    current = best_by_threshold.get(idx)
+                    if not current or candidate[0] < current[0] or (candidate[0] == current[0] and candidate[1] < current[1]):
+                        best_by_threshold[idx] = candidate
+        return [seq for _, _, seq in best_by_threshold.values()]
 
     def _has_range_any(self, gs: GameSession, player: Any) -> bool:
         cards = (player.weapons or []) + (player.upgrades or [])
@@ -419,6 +517,40 @@ class BotPlanner:
             combos.extend(itertools.combinations(weapons, r))
         return combos[:12]
 
+    def _fight_cost_cache_key(self, payload: Dict[str, Any]) -> Tuple[Any, ...]:
+        use_tokens = payload.get("use_tokens") or {}
+        wild_allocation = use_tokens.get("wild_allocation") or {}
+        wild_key = tuple(sorted((str(k), int(v)) for k, v in wild_allocation.items()))
+        played_weapons = tuple(sorted(str(w) for w in (payload.get("played_weapons") or [])))
+        stance_choice = payload.get("stance_choice")
+        boss_threshold = payload.get("boss_threshold")
+        return (
+            int(boss_threshold) if boss_threshold is not None else None,
+            int(payload.get("row", 0)),
+            str(payload.get("threat_id") or ""),
+            played_weapons,
+            int(use_tokens.get("attack", 0) or 0),
+            wild_key,
+            str(stance_choice) if stance_choice is not None else None,
+        )
+
+    def _compute_fight_cost_cached(
+        self,
+        gs: GameSession,
+        player: Any,
+        payload: Dict[str, Any],
+        cache: Optional[Dict[Tuple[Any, ...], Dict[str, Any]]],
+    ) -> Dict[str, Any]:
+        if cache is None:
+            return gs._compute_fight_cost(player, payload)
+        key = self._fight_cost_cache_key(payload)
+        cached = cache.get(key)
+        if cached is not None:
+            return cached
+        result = gs._compute_fight_cost(player, payload)
+        cache[key] = result
+        return result
+
     def _build_fight_payload(
         self,
         gs: GameSession,
@@ -426,6 +558,7 @@ class BotPlanner:
         row_index: int,
         threat: Any,
         weapons: Sequence[Any],
+        fight_cost_cache: Optional[Dict[Tuple[Any, ...], Dict[str, Any]]] = None,
     ) -> Optional[Tuple[Dict[str, Any], int, int, bool, Dict[ResourceType, int]]]:
         threat_id = getattr(threat, "id", None)
         if threat_id is None:
@@ -440,7 +573,7 @@ class BotPlanner:
 
         payload: Dict[str, Any] = {"row": row_index, "threat_id": threat_id, "played_weapons": weapon_ids}
         try:
-            base = gs._compute_fight_cost(player, payload)
+            base = self._compute_fight_cost_cached(gs, player, payload, fight_cost_cache)
         except Exception:
             return None
         adjusted_cost: Dict[ResourceType, int] = base.get("adjusted_cost", {})
@@ -455,7 +588,47 @@ class BotPlanner:
             payload["use_tokens"] = use_tokens
 
         try:
-            result = gs._compute_fight_cost(player, payload)
+            result = self._compute_fight_cost_cached(gs, player, payload, fight_cost_cache)
+        except Exception:
+            return None
+        total_cost = sum(int(v or 0) for v in result.get("adjusted_cost", {}).values())
+        token_used = int(attack_used) + sum(int(v) for v in wild_alloc.values())
+        return payload, total_cost, token_used, bool(result.get("can_afford")), result.get("adjusted_cost", {})
+
+    def _build_boss_fight_payload(
+        self,
+        gs: GameSession,
+        player: Any,
+        boss_threshold: int,
+        weapons: Sequence[Any],
+        fight_cost_cache: Optional[Dict[Tuple[Any, ...], Dict[str, Any]]] = None,
+    ) -> Optional[Tuple[Dict[str, Any], int, int, bool, Dict[ResourceType, int]]]:
+        weapon_ids = []
+        for weapon in weapons:
+            wid = getattr(weapon, "id", None) or str(weapon)
+            uses = getattr(weapon, "uses", None)
+            if uses is not None and uses <= 0:
+                continue
+            weapon_ids.append(wid)
+
+        payload: Dict[str, Any] = {"boss_threshold": int(boss_threshold), "played_weapons": weapon_ids}
+        try:
+            base = self._compute_fight_cost_cached(gs, player, payload, fight_cost_cache)
+        except Exception:
+            return None
+        adjusted_cost: Dict[ResourceType, int] = base.get("adjusted_cost", {})
+        attack_used, wild_alloc = self._plan_tokens(player, adjusted_cost)
+
+        use_tokens: Dict[str, Any] = {}
+        if attack_used:
+            use_tokens["attack"] = attack_used
+        if wild_alloc:
+            use_tokens["wild_allocation"] = {res.value: amt for res, amt in wild_alloc.items() if amt > 0}
+        if use_tokens:
+            payload["use_tokens"] = use_tokens
+
+        try:
+            result = self._compute_fight_cost_cached(gs, player, payload, fight_cost_cache)
         except Exception:
             return None
         total_cost = sum(int(v or 0) for v in result.get("adjusted_cost", {}).values())
@@ -679,61 +852,308 @@ class BotPlanner:
                 pass
             return clone
 
-    async def _apply_plan_in_place(self, sim: GameSession, player_id: str, plan: List[Dict[str, Any]]) -> bool:
+    def _apply_plan_in_place(self, sim: PlannerSim, player_id: str, plan: List[Dict[str, Any]]) -> bool:
         for action in plan:
             try:
-                await sim.player_action(player_id, action["type"], action.get("payload") or {}, None)
+                sim.apply_action(player_id, action["type"], action.get("payload") or {})
             except Exception:
                 return False
             if sim.state.phase == GamePhase.GAME_OVER or sim.state.get_active_player_id() != player_id:
                 break
         if sim.state.get_active_player_id() == player_id and sim.state.phase != GamePhase.GAME_OVER:
             try:
-                await sim.player_action(player_id, "end_turn", {}, None)
+                sim.apply_action(player_id, "end_turn", {})
             except Exception:
                 return False
         return True
 
+    def _ensure_opponent_cache(self, bot_id: str) -> Dict[str, Dict[str, Optional[Dict[str, Any]]]]:
+        cache = self._opponent_action_cache.setdefault(bot_id, {})
+        cache.setdefault("buy", {"primary": None, "secondary": None})
+        cache.setdefault("fight", {"primary": None, "secondary": None})
+        return cache
+
+    def _has_cached_opponent_choices(self, cache: Dict[str, Dict[str, Optional[Dict[str, Any]]]]) -> bool:
+        return any(
+            (cache.get(key, {}) or {}).get(level)
+            for key in ("buy", "fight")
+            for level in ("primary", "secondary")
+        )
+
+    def _update_opponent_cache(
+        self,
+        bot_id: str,
+        key: str,
+        choice: Optional[Dict[str, Any]],
+        allow_secondary: bool = False,
+    ) -> None:
+        if not choice:
+            return
+        cache = self._ensure_opponent_cache(bot_id).get(key, {})
+        if cache.get("primary") is None:
+            cache["primary"] = choice
+        elif allow_secondary:
+            cache["secondary"] = choice
+        elif cache.get("secondary") is None:
+            cache["secondary"] = choice
+
+    def _extract_cached_choices(self, plan: List[Dict[str, Any]]) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
+        buy_choice = None
+        fight_choice = None
+        for action in plan:
+            action_type = action.get("type")
+            if action_type in {"buy_upgrade", "buy_weapon"} and not buy_choice:
+                payload = action.get("payload") or {}
+                buy_choice = {
+                    "type": action_type,
+                    "card_id": payload.get("card_id"),
+                    "card_name": payload.get("card_name"),
+                }
+            if action_type == "fight" and not fight_choice:
+                payload = action.get("payload") or {}
+                fight_choice = {"threat_id": payload.get("threat_id"), "row": payload.get("row")}
+            if buy_choice and fight_choice:
+                break
+        return buy_choice, fight_choice
+
+    def _find_market_card(self, gs: GameSession, choice: Dict[str, Any]) -> Optional[Any]:
+        if not choice:
+            return None
+        market = getattr(gs.state, "market", None)
+        if not market:
+            return None
+        action_type = choice.get("type")
+        card_id = str(choice.get("card_id")) if choice.get("card_id") is not None else None
+        card_name = choice.get("card_name")
+        if action_type == "buy_upgrade":
+            cards = (market.upgrades_top or []) + (market.upgrades_bottom or [])
+        elif action_type == "buy_weapon":
+            cards = (market.weapons_top or []) + (market.weapons_bottom or [])
+        else:
+            return None
+        for card in cards:
+            cid = str(getattr(card, "id", None) or getattr(card, "name", None) or "")
+            if card_id and cid == card_id:
+                return card
+            if card_name and getattr(card, "name", None) == card_name:
+                return card
+        return None
+
+    def _build_buy_for_choice(self, gs: GameSession, player_id: str, choice: Dict[str, Any]) -> Optional[List[Dict[str, Any]]]:
+        player = gs.state.players.get(player_id)
+        if not player:
+            return None
+        card = self._find_market_card(gs, choice)
+        if not card:
+            return None
+        action_type = choice.get("type")
+        is_upgrade = action_type == "buy_upgrade"
+        if not is_upgrade and action_type != "buy_weapon":
+            return None
+        needs_slot = len(player.upgrades) >= player.upgrade_slots if is_upgrade else len(player.weapons) >= player.weapon_slots
+        can_extend = (
+            not player.extend_used
+            and player.tokens.get(TokenType.WILD, 0) > 0
+            and ((player.upgrade_slots < 5) if is_upgrade else (player.weapon_slots < 5))
+        )
+        if needs_slot and not can_extend:
+            return None
+        extend_seq = [{"type": "extend_slot", "payload": {"slot_type": "upgrade" if is_upgrade else "weapon"}}] if needs_slot else []
+        action = {
+            "type": action_type,
+            "payload": {"card_id": card.id, "card_name": getattr(card, "name", card.id)},
+        }
+        if player.can_pay(card.cost):
+            return extend_seq + [action]
+        if not self._can_convert_to_cover_cost(player, card.cost):
+            return None
+        conv_action = self._pick_conversion_for_cost(player, card.cost)
+        if conv_action:
+            return extend_seq + [conv_action, action]
+        return None
+
+    def _build_cached_buy_sequence(
+        self, gs: GameSession, player_id: str, cache_entry: Dict[str, Optional[Dict[str, Any]]]
+    ) -> Tuple[Optional[List[Dict[str, Any]]], Dict[str, bool]]:
+        primary = cache_entry.get("primary") if cache_entry else None
+        secondary = cache_entry.get("secondary") if cache_entry else None
+        status = {"primary_invalid": False, "used_secondary": False, "has_primary": primary is not None}
+        if primary:
+            seq = self._build_buy_for_choice(gs, player_id, primary)
+            if seq:
+                return seq, status
+            status["primary_invalid"] = True
+        if secondary:
+            seq = self._build_buy_for_choice(gs, player_id, secondary)
+            if seq:
+                status["used_secondary"] = True
+                return seq, status
+        return None, status
+
+    def _locate_threat(self, gs: GameSession, threat_id: str, preferred_row: Optional[int]) -> Optional[Tuple[int, Any]]:
+        tm = gs.threat_manager
+        if not tm or not getattr(tm, "board", None):
+            return None
+        lanes = getattr(tm.board, "lanes", []) or []
+        if preferred_row is not None and 0 <= preferred_row < len(lanes):
+            lane = lanes[preferred_row]
+            for pos in ("front", "mid", "back"):
+                threat = getattr(lane, pos, None)
+                if threat and str(getattr(threat, "id", "")) == str(threat_id):
+                    threat.position = pos
+                    return preferred_row, threat
+        for row_index, lane in enumerate(lanes):
+            for pos in ("front", "mid", "back"):
+                threat = getattr(lane, pos, None)
+                if threat and str(getattr(threat, "id", "")) == str(threat_id):
+                    threat.position = pos
+                    return row_index, threat
+        return None
+
+    def _build_fight_for_choice(
+        self, gs: GameSession, player_id: str, choice: Dict[str, Any]
+    ) -> Optional[List[Dict[str, Any]]]:
+        player = gs.state.players.get(player_id)
+        if not player:
+            return None
+        if player.action_used and not (gs.state.boss_mode or gs.state.phase == GamePhase.BOSS):
+            return None
+        threat_id = choice.get("threat_id")
+        if not threat_id:
+            return None
+        located = self._locate_threat(gs, str(threat_id), choice.get("row"))
+        if not located:
+            return None
+        row_index, threat = located
+        has_range_any = self._has_range_any(gs, player)
+        if not has_range_any:
+            front = gs.threat_manager.front_threat(row_index) if gs.threat_manager else None
+            if not front or str(getattr(front, "id", "")) != str(threat_id):
+                return None
+        playable_weapons = self._playable_weapons(gs, player)
+        weapon_sets = list(self._weapon_subsets(playable_weapons))
+        fight_cost_cache: Dict[Tuple[Any, ...], Dict[str, Any]] = {}
+        best_seq: Optional[List[Dict[str, Any]]] = None
+        best_cost: Optional[Tuple[int, int]] = None
+        for subset in weapon_sets:
+            built = self._build_fight_payload(
+                gs,
+                player,
+                row_index,
+                threat,
+                subset,
+                fight_cost_cache=fight_cost_cache,
+            )
+            if not built:
+                continue
+            payload, resource_cost, token_used, can_afford, adjusted_cost = built
+            fight_action = {"type": "fight", "payload": payload}
+            sequences: List[List[Dict[str, Any]]] = []
+            if can_afford:
+                sequences.append([fight_action])
+            else:
+                conversion_candidates = self._pick_conversion_for_fight(player, adjusted_cost)
+                for conv_action in conversion_candidates:
+                    if self._can_afford_fight_with_conversion(gs, player, payload, conv_action):
+                        sequences.append([conv_action, fight_action])
+            for seq in sequences:
+                candidate = (resource_cost, token_used)
+                if best_cost is None or candidate < best_cost:
+                    best_cost = candidate
+                    best_seq = seq
+        return best_seq
+
+    def _build_cached_fight_sequence(
+        self, gs: GameSession, player_id: str, cache_entry: Dict[str, Optional[Dict[str, Any]]]
+    ) -> Tuple[Optional[List[Dict[str, Any]]], Dict[str, bool]]:
+        primary = cache_entry.get("primary") if cache_entry else None
+        secondary = cache_entry.get("secondary") if cache_entry else None
+        status = {"primary_invalid": False, "used_secondary": False, "has_primary": primary is not None}
+        if primary:
+            seq = self._build_fight_for_choice(gs, player_id, primary)
+            if seq:
+                return seq, status
+            status["primary_invalid"] = True
+        if secondary:
+            seq = self._build_fight_for_choice(gs, player_id, secondary)
+            if seq:
+                status["used_secondary"] = True
+                return seq, status
+        return None, status
+
     async def _advance_to_next_bot_turn(
         self,
-        sim: GameSession,
+        sim: PlannerSim,
         bot_id: str,
         personality: str = "greedy",
         score_cache: Optional[Dict[str, float]] = None,
         opponent_profile: Optional[str] = None,
-    ) -> GameSession:
+    ) -> PlannerSim:
         """Advance simulation through other players using the planning bot's choice policy."""
-        current = self._clone_quiet(sim)
         cache = score_cache if score_cache is not None else self._score_cache
         guard = 0
-        while current.state.phase != GamePhase.GAME_OVER:
-            active = current.state.get_active_player_id()
+        while sim.state.phase != GamePhase.GAME_OVER:
+            active = sim.state.get_active_player_id()
             if not active:
                 break
             if active == bot_id:
                 break
-            active_player = current.state.players.get(active)
+            active_player = sim.state.players.get(active)
             profile = opponent_profile or (getattr(active_player, "planning_profile", "full") if active_player else "full")
-            plans = await self._enumerate_turn_plans(current, active, profile)
+            opponent_cache = self._ensure_opponent_cache(active)
+            buy_seq, buy_status = self._build_cached_buy_sequence(sim, active, opponent_cache.get("buy", {}))
+            fight_seq, fight_status = self._build_cached_fight_sequence(sim, active, opponent_cache.get("fight", {}))
+            has_cached = self._has_cached_opponent_choices(opponent_cache)
+            needs_recompute = not has_cached
+            if buy_status["primary_invalid"] and not buy_status["used_secondary"]:
+                needs_recompute = True
+            if fight_status["primary_invalid"] and not fight_status["used_secondary"]:
+                needs_recompute = True
+            if has_cached and not (buy_seq or fight_seq):
+                needs_recompute = True
+
+            if not needs_recompute and (buy_seq or fight_seq):
+                cached_plan = (buy_seq or []) + (fight_seq or [])
+                checkpoint = sim.checkpoint()
+                if self._apply_plan_in_place(sim, active, cached_plan):
+                    guard += 1
+                    if guard > 50:
+                        break
+                    continue
+                sim.rollback(checkpoint)
+
+            plans = await self._enumerate_turn_plans(sim, active, profile)
             if not plans:
                 plans = [[{"type": "end_turn", "payload": {}}]]
             candidate_runs: List[Dict[str, Any]] = []
             for plan in plans:
-                trial = self._clone_quiet(current)
-                success = await self._apply_plan_in_place(trial, active, plan)
-                if not success:
-                    continue
-                score = self._score_state_cached(trial, active, cache)
-                candidate_runs.append({"score": score, "plan": plan, "sim": trial})
+                checkpoint = sim.checkpoint()
+                success = self._apply_plan_in_place(sim, active, plan)
+                if success:
+                    score = self._score_state_cached(sim, active, cache)
+                    candidate_runs.append({"score": score, "plan": plan})
+                sim.rollback(checkpoint)
             if not candidate_runs:
                 break
             candidate_runs.sort(key=lambda run: run.get("score", -1e9), reverse=True)
             chosen = self._choose_run_by_personality(candidate_runs, personality) or candidate_runs[0]
-            current = chosen["sim"]
+            plan_choice = chosen.get("plan") or []
+            buy_choice, fight_choice = self._extract_cached_choices(plan_choice)
+            self._update_opponent_cache(
+                active, "buy", buy_choice, allow_secondary=buy_status["primary_invalid"]
+            )
+            self._update_opponent_cache(
+                active, "fight", fight_choice, allow_secondary=fight_status["primary_invalid"]
+            )
+            if not self._apply_plan_in_place(sim, active, plan_choice):
+                try:
+                    sim.apply_action(active, "end_turn", {})
+                except Exception:
+                    break
             guard += 1
             if guard > 50:
                 break
-        return current
+        return sim
 
     def _score_state_cached(self, session: GameSession, player_id: str, cache: Optional[Dict[str, float]] = None) -> float:
         cache = cache if cache is not None else self._score_cache

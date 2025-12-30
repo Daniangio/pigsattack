@@ -154,7 +154,7 @@ Your **stance** determines:
 
 ### 3.3 Threat Board (Lanes & Rows)
 
-Number of **lanes = number of players**.
+Number of **lanes = number of players + 1**.
 
 Each lane has three visible positions:
 
@@ -195,12 +195,14 @@ Markets are **not** refilled immediately after purchases; availability only chan
 
 2. **Threat Decks**
 
-   * Build the **Day Threat Deck** with:
+   * Build the **Day Threat Deck** by sampling:
 
-     * `4 × N_players` Day threats
+     * `(N_players + 1) × 6` Day threats
+     * Sample from the full Day threat pool with a **balanced mix of all 4 types** (Feral, Cunning, Massive, Hybrid)
    * Build the **Night Threat Deck** similarly:
 
-     * `4 × N_players` Night threats
+     * `(N_players + 1) × 6` Night threats
+     * Sample from the full Night threat pool with a **balanced mix of all 4 types**
 
 3. **Boss Deck**
 
@@ -218,7 +220,7 @@ Markets are **not** refilled immediately after purchases; availability only chan
 
 5. **Threat Board**
 
-   * Reveal **N_players threats** from the **Day Threat Deck**, filling Back lane
+   * Reveal **N_players + 1 threats** from the **Day Threat Deck**, filling Back lane
 
 6. **Markets**
 
@@ -389,6 +391,46 @@ On success:
 
   * Place it in your **Trophies** area (some abilities may interact with trophies)
   * You will count threat’s **VP value** during end game VP count
+
+#### Threat Spoils & VP Balance
+
+Threat rewards are intentionally modest and follow simple tiers based on total cost (R + B + G).
+
+**Baseline spoils**
+
+* **Day threats**
+  * Cost ≤ 6 → **1 matching resource**
+  * Cost 7–10 → **1 matching token**
+  * Cost ≥ 11 → **1 matching token + 1 matching resource**
+* **Night threats**
+  * All costs → **1 matching token**
+  * Cost ≥ 14 → **+1 matching resource**
+
+**Baseline VP tiers**
+
+* **Day threats**
+  * Cost ≤ 6 → **1 VP**
+  * Cost 7–8 → **2 VP**
+  * Cost 9–10 → **3 VP**
+  * Cost ≥ 11 → **3 VP**
+* **Night threats**
+  * Cost ≤ 11 → **3 VP**
+  * Cost 12–13 → **4 VP**
+  * Cost 14–15 → **5 VP**
+  * Cost 16–17 → **6 VP**
+  * Cost ≥ 18 → **7 VP**
+
+**Matching tokens/resources by type**
+
+* **Feral** → Attack token, **R** resource
+* **Cunning** → Conversion token, **B** resource
+* **Massive** → Mass token, **G** resource
+* **Hybrid** → Wild token, **B** resource
+
+**Rare spoils (special drops)**
+
+* A small number of threats replace the baseline spoils with **special rewards** (e.g., **double tokens** or **stance change**).
+* These threats are **tuned by lowering VP by 1** to keep total value in line with the baseline.
 
 ---
 
@@ -591,7 +633,7 @@ The Boss does not occupy lanes and does not gain Weight or Enrage tokens.
 * After resolving the **Day Boss**:
 
   * Discard all remaining threats and reset the Threat board
-  * Set up the **Night Threat Deck** on Back lane (draw N_Players threats)
+  * Set up the **Night Threat Deck** on Back lane (draw N_players + 1 threats)
   * Reset the Round marker to **Night, Round 1**
 
 * After resolving the **Night Boss**:

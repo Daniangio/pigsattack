@@ -52,17 +52,32 @@ const getFlexibilityScore = (cost) => {
 
 const parseWeaponOutput = (tags = []) => {
   const list = Array.isArray(tags) ? tags : [];
-  let output = 0;
+  let baseTotal = 0;
+  let dayTotal = 0;
+  let nightTotal = 0;
+  let hasDay = false;
+  let hasNight = false;
   list.forEach((tag) => {
-    const match = String(tag).match(/cost_reduction:([RGB])?(\d+)/);
-    if (match) output = Math.max(output, parseInt(match[2], 10));
-    const dayMatch = String(tag).match(/cost_reduction:([RGB])?(\d+):day/);
-    const nightMatch = String(tag).match(/cost_reduction:([RGB])?(\d+):night/);
-    if (dayMatch && nightMatch) {
-      output = (parseInt(dayMatch[2], 10) + parseInt(nightMatch[2], 10)) / 2;
+    const tagText = String(tag);
+    const dayMatch = tagText.match(/cost_reduction:([RGB])?(\d+):day/);
+    if (dayMatch) {
+      hasDay = true;
+      dayTotal += parseInt(dayMatch[2], 10);
+      return;
     }
+    const nightMatch = tagText.match(/cost_reduction:([RGB])?(\d+):night/);
+    if (nightMatch) {
+      hasNight = true;
+      nightTotal += parseInt(nightMatch[2], 10);
+      return;
+    }
+    const match = tagText.match(/cost_reduction:([RGB])?(\d+)/);
+    if (match) baseTotal += parseInt(match[2], 10);
   });
-  return output;
+  if (hasDay && hasNight) return baseTotal + (dayTotal + nightTotal) / 2;
+  if (hasDay) return baseTotal + dayTotal;
+  if (hasNight) return baseTotal + nightTotal;
+  return baseTotal;
 };
 
 const parseProduction = (tags = []) => {
@@ -191,8 +206,10 @@ const buildTagDescription = (tag, row) => {
   const ctx = row.tagContext || {};
   const pickRateText = formatPercent(row.pickRate);
   const medianText = formatPercent(ctx.pickRateMedian);
-  const wraText = formatSignedPercent(row.winRateAdded);
-  const wraAbsText = formatPercent(Math.abs(row.winRateAdded || 0));
+  const wraValue = Number.isFinite(row.winRateAdded) ? row.winRateAdded : 0;
+  const wraAbs = Math.abs(wraValue);
+  const wraText = formatSignedPercent(wraValue);
+  const wraAbsText = formatPercent(wraAbs);
   const wraStrongText = formatPercent(ctx.wraStrong);
   const wraWeakText = formatPercent(ctx.wraWeak);
   const tempoShare = Math.round((ctx.tempoShare || 0) * 100);
@@ -243,10 +260,20 @@ const buildTagDescription = (tag, row) => {
       return `Overpowered: WRA ${wraText} >= ${wraStrongText} and pick rate ${pickRateText} >= median ${medianText}.${deltaNote}`;
     case "Sleeper":
       return `Sleeper: WRA ${wraText} >= ${wraStrongText} with pick rate ${pickRateText} below median ${medianText}.${deltaNote}`;
-    case "Trap":
+    case "Trap": {
+      const deltaDriven = ctx.deltaUsed && deltaImpact !== null && deltaImpact <= -ctx.deltaStrong;
+      if (deltaDriven && wraValue > -ctx.wraStrong) {
+        return `Trap: Delta VP ${formatSignedNumber(deltaImpact, 2)} <= -${deltaStrongText} and WRA ${wraText} <= -${wraWeakText} with pick rate ${pickRateText} >= median ${medianText}.${deltaNote}`;
+      }
       return `Trap: WRA ${wraText} <= -${wraStrongText} with pick rate ${pickRateText} >= median ${medianText}.${deltaNote}`;
-    case "Underpowered":
+    }
+    case "Underpowered": {
+      const deltaDriven = ctx.deltaUsed && deltaImpact !== null && deltaImpact <= -ctx.deltaStrong;
+      if (deltaDriven && wraValue > -ctx.wraStrong) {
+        return `Underpowered: Delta VP ${formatSignedNumber(deltaImpact, 2)} <= -${deltaStrongText} and WRA ${wraText} <= -${wraWeakText} with pick rate ${pickRateText} below median ${medianText}.${deltaNote}`;
+      }
       return `Underpowered: WRA ${wraText} <= -${wraStrongText} and pick rate ${pickRateText} below median ${medianText}.${deltaNote}`;
+    }
     case "Utility":
       return `Utility: low-cost flexible tool with pick rate ${pickRateText} and WRA ${wraText}.`;
     case "Balanced":
@@ -754,25 +781,38 @@ const BalanceLabPage = () => {
         }
       });
       const winnerId = run.winner_id;
-      (run.final_stats || []).forEach((player) => {
-        const owned = new Set();
-        (player.upgrades || []).forEach((name) => {
-          if (name) owned.add([String(name), "upgrade"].join("|"));
-        });
-        (player.weapons || []).forEach((weapon) => {
-          const name = weapon?.name || weapon?.id || weapon;
-          if (name) owned.add([String(name), "weapon"].join("|"));
-        });
-        owned.forEach((key) => {
-          const [name, kind] = key.split("|");
-          const entry = ensure(name, kind);
-          if (entry) {
-            entry.games_with_card += 1;
-            if (winnerId && player.user_id === winnerId) {
-              entry.wins_with_card += 1;
-            }
-          }
-        });
+      const buyers = new Map();
+      (run.actions || []).forEach((action) => {
+        if (action.type !== "buy_weapon" && action.type !== "buy_upgrade") return;
+        const kind = action.type === "buy_upgrade" ? "upgrade" : "weapon";
+        const buyerId = String(action.player_id || "");
+        const cards = action.cards || [];
+        if (cards.length) {
+          cards.forEach((card) => {
+            const name = card?.name;
+            if (!name) return;
+            const cardKind = card?.kind || kind;
+            const key = `${name}|${cardKind}`;
+            if (!buyers.has(key)) buyers.set(key, new Set());
+            buyers.get(key).add(buyerId);
+          });
+          return;
+        }
+        const fallbackName = action?.payload?.card_name;
+        if (fallbackName) {
+          const key = `${fallbackName}|${kind}`;
+          if (!buyers.has(key)) buyers.set(key, new Set());
+          buyers.get(key).add(buyerId);
+        }
+      });
+      buyers.forEach((buyerIds, key) => {
+        const [name, kind] = key.split("|");
+        const entry = ensure(name, kind);
+        if (!entry) return;
+        entry.games_with_card += buyerIds.size;
+        if (winnerId && buyerIds.has(String(winnerId))) {
+          entry.wins_with_card += 1;
+        }
       });
     });
 
@@ -1149,7 +1189,7 @@ const BalanceLabPage = () => {
         const deltaNegative = deltaUsed && deltaImpact <= -deltaStrong;
         const deltaNeutral = deltaUsed && Math.abs(deltaImpact) <= deltaWeak;
         const positiveSignal = wraValue >= wraStrong || (deltaPositive && wraValue > -wraWeak);
-        const negativeSignal = wraValue <= -wraStrong || (deltaNegative && wraValue < wraWeak);
+        const negativeSignal = wraValue <= -wraStrong || (deltaNegative && wraValue < -wraWeak);
 
         if (positiveSignal) {
           tags.push(pickRate >= pickRateMedian ? "Overpowered" : "Sleeper");
@@ -1970,7 +2010,7 @@ const BalanceLabPage = () => {
                     fill="rgba(156, 163, 175, 1)"
                     fontSize="12"
                   >
-                    Avg Turn Acquired ->
+                    Avg Turn Acquired -&gt;
                   </text>
                   <text
                     x={chartPadding.left - 36}

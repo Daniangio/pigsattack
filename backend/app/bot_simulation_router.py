@@ -42,7 +42,7 @@ class SimulationCancelled(Exception):
 
 
 class BotSimulationRequest(BaseModel):
-    simulations: int = Field(100, ge=1, le=300)
+    simulations: int = Field(100, ge=1, le=10000)
     bot_count: int = Field(4, ge=2, le=6)
     bot_depth: int = Field(2, ge=1, le=5)
     parallelism: int = Field(32, ge=1, le=64)
@@ -393,8 +393,11 @@ def _resolve_card_refs(
     player: Any,
     action_type: str,
     payload: Dict[str, Any],
+    card_map_override: Optional[Dict[str, Dict[str, Optional[str]]]] = None,
 ) -> List[CardRef]:
-    card_map = _collect_cards(session, player)
+    card_map = dict(card_map_override or {})
+    if not card_map:
+        card_map = _collect_cards(session, player)
     seen: set[Tuple[str, str]] = set()
     refs: List[CardRef] = []
 
@@ -611,6 +614,7 @@ async def _run_single_simulation(
         session.rng = random.Random(seed)
 
     await session.async_setup()
+    static_card_map = _collect_cards(session, None)
 
     planner_seed = seed if seed is not None else random.randint(0, 999999)
     planner = BotPlanner(
@@ -734,6 +738,12 @@ async def _run_single_simulation(
             payload = _sanitize_payload(payload_raw)
             round_num = getattr(session.state, "round", 0)
             era = getattr(session.state, "era", "")
+            current_card_map = _collect_cards(session, player)
+            merged_card_map = dict(static_card_map)
+            merged_card_map.update(current_card_map)
+            card_refs = _resolve_card_refs(
+                session, player, action_type, payload, card_map_override=merged_card_map
+            )
             status = "ok"
             error = None
             try:
@@ -744,7 +754,6 @@ async def _run_single_simulation(
             except Exception as exc:
                 status = "error"
                 error = str(exc)
-            card_refs = _resolve_card_refs(session, player, action_type, payload)
             if status == "ok":
                 if action_type in {"buy_upgrade", "buy_weapon"}:
                     kind = "upgrade" if action_type == "buy_upgrade" else "weapon"
@@ -1023,29 +1032,43 @@ async def _execute_simulations(
                 card_usage[name] = card_usage.get(name, 0) + usage
 
         winner_id = run.winner_id
-        for player_stat in run.final_stats or []:
-            owned: set[Tuple[str, str]] = set()
-            for upgrade in player_stat.upgrades or []:
-                owned.add((str(upgrade), "upgrade"))
-            for weapon in player_stat.weapons or []:
-                if isinstance(weapon, dict):
-                    name = weapon.get("name") or weapon.get("id")
-                else:
-                    name = str(weapon)
-                if name:
-                    owned.add((str(name), "weapon"))
-            for name, kind in owned:
-                existing = card_balance_data.get(name)
-                if not existing:
-                    existing = CardStats(name=name, kind=kind)
-                    card_balance_data[name] = existing
-                if kind and not existing.kind:
-                    existing.kind = kind
-                existing.games_with_card += 1
-                if winner_id and player_stat.user_id == winner_id:
-                    existing.wins_with_card += 1
-                if existing.kind:
-                    card_index.setdefault(name, existing.kind)
+        buyers_by_card: Dict[Tuple[str, str], set[str]] = {}
+        for action in run.actions or []:
+            if action.type not in {"buy_upgrade", "buy_weapon"}:
+                continue
+            kind = "upgrade" if action.type == "buy_upgrade" else "weapon"
+            buyer_id = str(action.player_id)
+            cards = action.cards or []
+            if cards:
+                for card in cards:
+                    if isinstance(card, dict):
+                        name = card.get("name")
+                        card_kind = card.get("kind") or kind
+                    else:
+                        name = getattr(card, "name", None)
+                        card_kind = getattr(card, "kind", None) or kind
+                    if not name:
+                        continue
+                    buyers_by_card.setdefault((str(name), str(card_kind)), set()).add(buyer_id)
+            else:
+                fallback_name = None
+                if isinstance(action.payload, dict):
+                    fallback_name = action.payload.get("card_name")
+                if fallback_name:
+                    buyers_by_card.setdefault((str(fallback_name), kind), set()).add(buyer_id)
+
+        for (name, kind), buyers in buyers_by_card.items():
+            existing = card_balance_data.get(name)
+            if not existing:
+                existing = CardStats(name=name, kind=kind)
+                card_balance_data[name] = existing
+            if kind and not existing.kind:
+                existing.kind = kind
+            existing.games_with_card += len(buyers)
+            if winner_id and str(winner_id) in buyers:
+                existing.wins_with_card += 1
+            if existing.kind:
+                card_index.setdefault(name, existing.kind)
         total_actions += run.total_actions
         if job is not None and not _cancel_requested(job):
             job["completed_runs"] = completed_runs

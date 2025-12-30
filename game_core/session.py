@@ -5,7 +5,7 @@ import random
 
 from .data_loader import GameDataLoader
 from .models import BossCard, BossThreshold, CardType, GamePhase, GameState, MarketCard, PlayerBoard, PlayerStatus, ResourceType, Reward, Stance, TokenType, clamp_cost, resource_to_wire
-from .effects import CardEffect, parse_effect_tags, effect_to_wire
+from .effects import CardEffect, parse_effect_tags_cached, effect_to_wire
 from .threats import ThreatManager
 from .utils import parse_resource_key
 
@@ -62,12 +62,10 @@ class GameSession:
         tags = getattr(card, "tags", None)
         if tags is None:
             return []
-        return parse_effect_tags(
-            {
-                "tags": tags,
-                "id": getattr(card, "id", None) or str(card),
-                "name": getattr(card, "name", None) or str(card),
-            }
+        return parse_effect_tags_cached(
+            tags,
+            getattr(card, "id", None) or str(card),
+            getattr(card, "name", None) or str(card),
         )
 
     def _card_name(self, card: Any) -> str:
@@ -294,9 +292,8 @@ class GameSession:
         if self.threat_manager and self.threat_manager.deck:
             self.threat_manager.board.reset()
             self.threat_manager.deck.phase = "night"
-            # Draw initial 3 threats into back slots
-            for _ in range(3):
-                self.threat_manager.board.spawn(self.threat_manager.deck.draw_next)
+            # Draw initial threats into back slots
+            self.threat_manager.board.spawn(self.threat_manager.deck.draw_next)
             self._sync_threat_rows()
             self._sync_era_from_deck()
         self.state.boss_stage = "night"
@@ -855,7 +852,7 @@ class GameSession:
                 discard.clear()
             if not deck:
                 break
-            drawn.append(deck.pop(0))
+            drawn.append(deck.pop())
         return drawn
 
     def _refill_market_top(self):
@@ -946,11 +943,12 @@ class GameSession:
         else:
             all_threats_defeated = all(not row for row in self.state.threat_rows)
         active_players = [p for p in self.state.players.values() if p.status == PlayerStatus.ACTIVE]
+        bosses_pending = bool(self.state.bosses) and self.state.boss_index < 2
 
         end_for_humans = (len(active_humans) == 0 and not active_bots) or (
             len(active_humans) == 1 and len(active_bots) == 0
         )
-        if force or all_threats_defeated or len(active_players) <= 1 or end_for_humans:
+        if force or len(active_players) <= 1 or end_for_humans or (all_threats_defeated and not bosses_pending):
             self.state.phase = GamePhase.GAME_OVER
             winner = None
             if len(active_humans) == 1:

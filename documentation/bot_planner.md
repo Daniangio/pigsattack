@@ -26,7 +26,20 @@ The score is a single number used to compare plans.
 - It keeps the top N plans at each depth to limit branching.
 - After each plan, it advances the game to the bot's next turn by simulating opponents.
 
-## 4. Action Enumeration (One Turn)
+## 4. Opponent Plan Caching
+
+To speed up lookahead, the planner caches **opponent** decisions without keying on full game state:
+
+- **Buy cache (per bot):** the first time an opponent chooses a buy, the chosen card is saved as the primary cache.
+- On later branches, the opponent will **try to buy the same card again**.
+- If the cached card is no longer available (already bought or cannot be purchased), the planner recomputes the opponent's plan and stores a **secondary** cached buy.
+- The secondary cache is used whenever the primary is unavailable.
+- The same logic applies to **fight targets** (cached by threat id + row).
+- The cache is cleared at the start of each `plan` call, so reuse happens across branches inside the same planning pass.
+
+This keeps opponent behavior consistent across branches while avoiding repeated full plan evaluation.
+
+## 5. Action Enumeration (One Turn)
 
 Plans are built by combining these blocks in order:
 
@@ -40,7 +53,7 @@ Plans are built by combining these blocks in order:
 
 Each plan is a flat list of actions executed in order.
 
-## 5. Fight Generation
+## 6. Fight Generation
 
 For each attackable threat:
 
@@ -54,7 +67,7 @@ This produces a set of fight sequences such as:
 - `[fight]`
 - `[convert, fight]`
 
-## 6. Free Stance Change Branching
+## 7. Free Stance Change Branching
 
 Some fights grant a free stance change (for example, Neural Spike on kill). When this happens during plan simulation:
 
@@ -65,18 +78,18 @@ Some fights grant a free stance change (for example, Neural Spike on kill). When
 
 This ensures free stance changes are explored whenever they become available after a planned event.
 
-## 7. Personality and Randomness
+## 8. Personality and Randomness
 
 - `personality` selects how the final plan is chosen among top candidates.
 - `randomness` adds noise to scores to reduce deterministic play and avoid local maxima.
 
-## 8. Limits and Practical Tradeoffs
+## 9. Limits and Practical Tradeoffs
 
 - Branching is capped by `top_n` and `max_depth`.
 - The planner evaluates its own turns, not full game trees.
 - Scores are heuristic, so specific card interactions may not be captured unless the scoring model is extended.
 
-## 9. Key Files
+## 10. Key Files
 
 - `backend/app/bot_planner.py`: planner, scoring, and action enumeration.
 - `game_core/session.py`: actual action rules and effects.

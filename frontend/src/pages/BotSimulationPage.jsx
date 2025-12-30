@@ -206,7 +206,7 @@ const BotSimulationPage = () => {
             <input
               type="number"
               min="1"
-              max="300"
+              max="10000"
               value={simulations}
               onChange={(event) => setSimulations(event.target.value)}
               className="px-3 py-2 rounded-md bg-gray-900 border border-gray-700 text-gray-100"

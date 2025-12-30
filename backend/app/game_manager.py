@@ -18,6 +18,7 @@ from game_core.data_loader import GameDataLoader, EMPTY_DECK_NAME
 from .routers import fake_games_db 
 from .custom_content import CUSTOM_THREATS_DIR, CUSTOM_BOSS_DIR, CUSTOM_UPGRADES_DIR, CUSTOM_WEAPONS_DIR
 from .bot_planner import BotPlanner
+from .game_reporter import GameReportTracker
 from asyncio import Task
 
 class GameManager:
@@ -31,6 +32,7 @@ class GameManager:
         self.bot_planner = BotPlanner()
         self._bot_running: bool = False
         self._disconnect_tasks: Dict[str, Task] = {}
+        self._game_reports: Dict[str, GameReportTracker] = {}
         print("GameManager initialized.")
         
     def set_room_manager(self, room_manager: 'RoomManager'):
@@ -150,6 +152,14 @@ class GameManager:
             game = GameSession(game_id, session_players, data_loader=loader)
             # 2. Perform async setup (draw resources, start first round)
             await game.async_setup()
+
+            tracker = GameReportTracker(game_id)
+            self._game_reports[game_id] = tracker
+
+            def capture_round_snapshot(round_number: int, era_label: str, tracker=tracker, game=game):
+                tracker.capture_round_snapshot(round_number, era_label, game)
+
+            game.round_end_hook = capture_round_snapshot
             
             self.active_games[game_id] = game
             self.bot_lookup[game_id] = [p.user.id for p in participants if getattr(p.user, "is_bot", False)]
@@ -198,7 +208,37 @@ class GameManager:
         """Removes a game from the active list."""
         if game_id in self.active_games:
             del self.active_games[game_id]
-            print(f"GameInstance {game_id} removed.")
+        if game_id in self._game_reports:
+            del self._game_reports[game_id]
+        print(f"GameInstance {game_id} removed.")
+
+    async def _recorded_player_action(
+        self,
+        game_id: str,
+        game: GameSession,
+        player_id: str,
+        action: str,
+        payload: Dict[str, Any],
+        forced: bool = False,
+    ) -> bool:
+        tracker = self._game_reports.get(game_id)
+        try:
+            state_changed = await game.player_action(player_id, action, payload, self.conn_manager)
+            if tracker:
+                tracker.record_action(game, player_id, action, payload, status="ok", forced=forced)
+            return state_changed
+        except InvalidActionError as exc:
+            if tracker:
+                tracker.record_action(
+                    game, player_id, action, payload, status="invalid", error=str(exc), forced=forced
+                )
+            raise
+        except Exception as exc:
+            if tracker:
+                tracker.record_action(
+                    game, player_id, action, payload, status="error", error=str(exc), forced=forced
+                )
+            raise
 
     async def player_action(
         self, game_id: str, player_id: str, action: str, payload: Dict[str, Any]
@@ -218,7 +258,7 @@ class GameManager:
             return
 
         try:
-            state_changed = await game.player_action(player_id, action, payload)
+            state_changed = await self._recorded_player_action(game_id, game, player_id, action, payload)
 
             if state_changed:
                 if action == "surrender":
@@ -390,6 +430,7 @@ class GameManager:
             return
 
         print(f"Game {game_id} is over. Winner: {final_state.winner_id or 'None'}")
+        game = self.active_games.get(game_id)
         
         # 1. Broadcast the final state to everyone
         await self.broadcast_game_state(game_id)
@@ -401,6 +442,21 @@ class GameManager:
             await self.remove_game(game_id)
             return
         record.final_stats = self._build_final_stats(final_state)
+        tracker = self._game_reports.get(game_id)
+        if tracker and game:
+            stats_payload: List[Dict[str, Any]] = []
+            for entry in record.final_stats:
+                if hasattr(entry, "model_dump"):
+                    stats_payload.append(entry.model_dump(mode="json"))
+                elif isinstance(entry, dict):
+                    stats_payload.append(entry)
+                else:
+                    stats_payload.append(vars(entry))
+            report = tracker.build_report(game, stats_payload, ended_reason="game_over")
+            try:
+                tracker.write_report(report)
+            except Exception as exc:
+                print(f"Warning: failed to write game report for {game_id}: {exc}")
 
         # 3. Find the Room
         # --- FIX: Use internal helper ---
@@ -439,10 +495,19 @@ class GameManager:
         if self._bot_running:
             return
         bot_ids = self.bot_lookup.get(game_id, [])
+        active_humans = [
+            p for p in game.state.players.values()
+            if p.status == PlayerStatus.ACTIVE and not getattr(p, "is_bot", False)
+        ]
+        active_bots = [
+            p for p in game.state.players.values()
+            if p.status == PlayerStatus.ACTIVE and getattr(p, "is_bot", False)
+        ]
+        max_guard = 20 if active_humans else max(100, len(active_bots) * 20)
         guard = 0
         while True:
             guard += 1
-            if guard > 20:
+            if guard > max_guard:
                 break
             active_id = game.state.get_active_player_id()
             if not active_id or active_id not in bot_ids:
@@ -479,8 +544,8 @@ class GameManager:
                 end_seen = any(a.get("type") == "end_turn" for a in actions)
                 for action in actions:
                     try:
-                        state_changed = await game.player_action(
-                            active_id, action["type"], action.get("payload") or {}, None
+                        state_changed = await self._recorded_player_action(
+                            game_id, game, active_id, action["type"], action.get("payload") or {}, forced=False
                         )
                     except InvalidActionError as e:
                         game.state.add_bot_log(active_id, f"[planner] Invalid {action['type']}: {e}")
@@ -498,7 +563,9 @@ class GameManager:
                         break
                 if not end_seen:
                     try:
-                        state_changed = await game.player_action(active_id, "end_turn", {}, None)
+                        state_changed = await self._recorded_player_action(
+                            game_id, game, active_id, "end_turn", {}, forced=True
+                        )
                         game.state.add_bot_log(active_id, "[planner] Forced end_turn fallback.")
                         if state_changed:
                             if game.state.phase == GamePhase.GAME_OVER:

@@ -251,14 +251,20 @@ class ThreatBoard:
 
 
 class ThreatDeckBuilder:
-    def __init__(self, data: ThreatDeckData, player_count: int, rng: Optional[random.Random] = None):
+    def __init__(self, data: ThreatDeckData, lane_count: int, rng: Optional[random.Random] = None):
         self.data = data
-        self.player_count = player_count
+        self.lane_count = max(1, int(lane_count))
         self.rng = rng or random.Random()
         self.phase = "day"
         rounds_per_era = 6
-        self.day_deck = self._build_deck(data.day_threats, player_count * rounds_per_era)
-        self.night_deck = self._build_deck(data.night_threats, player_count * rounds_per_era)
+        total_per_era = self.lane_count * rounds_per_era
+        self.day_deck = self._build_deck(data.day_threats, total_per_era)
+        self.night_deck = self._build_deck(data.night_threats, total_per_era)
+
+    def _sample_from_pool(self, pool: List[ThreatCard], count: int) -> List[ThreatCard]:
+        if count <= 0 or not pool:
+            return []
+        return [self.rng.choice(pool) for _ in range(count)]
 
     def _build_deck(self, cards: List[ThreatCard], required_size: int) -> List[ThreatCard]:
         expanded: List[ThreatCard] = []
@@ -266,18 +272,50 @@ class ThreatDeckBuilder:
             copies = getattr(card, "copies", 1)
             for _ in range(max(1, int(copies))):
                 expanded.append(card)
-        if not expanded:
+        if not expanded or required_size <= 0:
             return []
+        type_order = ["feral", "cunning", "massive", "hybrid"]
+        pools: Dict[str, List[ThreatCard]] = {key: [] for key in type_order}
+        other_pool: List[ThreatCard] = []
+        for card in expanded:
+            type_key = str(getattr(card, "type", "")).strip().lower()
+            if type_key in pools:
+                pools[type_key].append(card)
+            else:
+                other_pool.append(card)
+
+        available_types = [key for key in type_order if pools[key]]
+        if not available_types:
+            deck = self._sample_from_pool(expanded, required_size)
+            self.rng.shuffle(deck)
+            return deck[:required_size]
+
+        type_count = len(type_order)
+        per_type = required_size // type_count
+        remainder = required_size % type_count
+        extra_types = list(type_order)
+        self.rng.shuffle(extra_types)
+        counts = {key: per_type for key in type_order}
+        for key in extra_types[:remainder]:
+            counts[key] += 1
+
         deck: List[ThreatCard] = []
-        while len(deck) < required_size:
-            deck.extend(expanded)
+        missing = 0
+        for key in type_order:
+            if not pools[key]:
+                missing += counts[key]
+                continue
+            deck.extend(self._sample_from_pool(pools[key], counts[key]))
+        if missing:
+            fill_pool = other_pool or expanded
+            deck.extend(self._sample_from_pool(fill_pool, missing))
         self.rng.shuffle(deck)
         return deck[:required_size]
 
     def draw_next(self) -> Optional[ThreatInstance]:
         deck = self.day_deck if self.phase == "day" else self.night_deck
         if deck:
-            card = deck.pop(0)
+            card = deck.pop()
             return ThreatInstance(card=card, era=self.phase)
         if self.phase == "day":
             self.phase = "night"
@@ -290,8 +328,9 @@ class ThreatDeckBuilder:
 
 class ThreatManager:
     def __init__(self, deck_data: ThreatDeckData, player_count: int):
-        self.deck = ThreatDeckBuilder(deck_data, player_count)
-        self.board = ThreatBoard(max(1, player_count))
+        lane_count = max(1, int(player_count) + 1)
+        self.deck = ThreatDeckBuilder(deck_data, lane_count)
+        self.board = ThreatBoard(lane_count)
         self.bosses = deck_data.bosses
 
     def bootstrap(self) -> List[str]:

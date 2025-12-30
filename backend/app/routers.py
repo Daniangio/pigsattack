@@ -1,9 +1,12 @@
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from typing import Annotated
 from . import security
 from . import server_models
 from . import schemas
+from .game_reporter import REPORTS_DIR
 router = APIRouter()
 
 # In-memory "database" for registered users.
@@ -82,3 +85,17 @@ def get_game_result(game_id: str):
     if not record:
         raise HTTPException(status_code=404, detail="Game record not found")
     return record
+
+
+@router.get("/results/{game_id}/report")
+def get_game_report(game_id: str):
+    """
+    Retrieve the detailed gameplay report for a completed game.
+    """
+    report_path = REPORTS_DIR / f"{game_id}.json"
+    if not report_path.exists():
+        raise HTTPException(status_code=404, detail="Game report not found")
+    try:
+        return json.loads(report_path.read_text())
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to load game report: {exc}") from exc

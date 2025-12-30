@@ -7,13 +7,20 @@ transport/session/lobby concerns and call into this package for game logic.
 """
 
 from .models import (
+    BossCard,
+    BossThreshold,
+    CardType,
     GamePhase,
+    GameState,
+    MarketCard,
     PlayerStatus,
+    Reward,
     ResourceType,
     Stance,
     TokenType,
-    GameState,
     PlayerBoard,
+    clamp_cost,
+    resource_to_wire,
 )
 from .session import GameSession
 from .data_loader import GameDataLoader
@@ -27,6 +34,13 @@ __all__ = [
     "TokenType",
     "GameState",
     "PlayerBoard",
+    "BossCard",
+    "BossThreshold",
+    "CardType",
+    "MarketCard",
+    "Reward",
+    "clamp_cost",
+    "resource_to_wire",
     "GameSession",
     "GameDataLoader",
     "ThreatManager",

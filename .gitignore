@@ -227,3 +227,6 @@ __marimo__/
 
 # Bot simulation results
 backend/app/simulation_results/
+
+# Game reports
+backend/app/game_reports/

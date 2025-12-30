@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Crown } from "lucide-react";
 import { useStore } from "../store";
 import { buildApiUrl } from "../utils/connection";
+import BotSimulationResultsPanel from "../components/simulations/BotSimulationResultsPanel";
 
 const normalizeTokens = (tokens = {}) => ({
   attack: Number(tokens.attack ?? tokens.ATTACK ?? 0),
@@ -42,7 +43,11 @@ const PostGamePage = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [record, setRecord] = useState(null);
+  const [reportData, setReportData] = useState(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState("");
   const fetchedIdRef = useRef(null);
+  const reportFetchedIdRef = useRef(null);
   const user = useStore((state) => state.user);
   const gameRecord = useStore((state) => state.gameResult);
   const sendMessage = useStore((state) => state.sendMessage);
@@ -51,6 +56,7 @@ const PostGamePage = () => {
   const clearGameResult = useStore((state) => state.clearGameResult);
   const roomState = useStore((state) => state.roomState);
   const inFlightRef = useRef(false);
+  const reportInFlightRef = useRef(false);
 
   const fetchGameRecord = async (gameId, signal) => {
     const urls = [
@@ -76,11 +82,31 @@ const PostGamePage = () => {
     throw lastError || new Error("Failed to load game record.");
   };
 
+  const fetchGameReport = async (gameId, signal) => {
+    const res = await fetch(buildApiUrl(`/api/results/${gameId}/report`), { signal });
+    if (!res.ok) {
+      let detail = "Could not load gameplay report.";
+      try {
+        const err = await res.json();
+        detail = err?.detail || err?.message || detail;
+      } catch (parseError) {
+        detail = res.statusText || detail;
+      }
+      throw new Error(detail);
+    }
+    return res.json();
+  };
+
   useEffect(() => {
     if (!routeGameId) return;
     fetchedIdRef.current = null;
     setRecord(null);
     setError("");
+    reportFetchedIdRef.current = null;
+    setReportData(null);
+    setReportError("");
+    setReportLoading(false);
+    reportInFlightRef.current = false;
   }, [routeGameId]);
 
   // Sync store gameResult into local record when it matches
@@ -133,6 +159,38 @@ const PostGamePage = () => {
       clearTimeout(timeoutId);
     };
   }, [routeGameId, token, setGameResult, record]);
+
+  useEffect(() => {
+    if (!routeGameId) return;
+    if (reportInFlightRef.current) return;
+    if (reportFetchedIdRef.current === routeGameId && reportData) return;
+    let cancelled = false;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    reportInFlightRef.current = true;
+    setReportLoading(true);
+    setReportError("");
+    fetchGameReport(routeGameId, controller.signal)
+      .then((data) => {
+        if (cancelled) return;
+        reportFetchedIdRef.current = routeGameId;
+        setReportData(data);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setReportError(err?.message || "Failed to load gameplay report.");
+      })
+      .finally(() => {
+        if (!cancelled) setReportLoading(false);
+        reportInFlightRef.current = false;
+        clearTimeout(timeoutId);
+      });
+    return () => {
+      cancelled = true;
+      controller.abort();
+      clearTimeout(timeoutId);
+    };
+  }, [routeGameId]);
 
   const handleReturnToLobby = () => {
     if (clearGameResult) {
@@ -456,6 +514,33 @@ const PostGamePage = () => {
               </div>
             </div>
           ))}
+        </section>
+
+        <section className="mt-10">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <div>
+              <div className="text-xs uppercase tracking-[0.4em] text-slate-500">Gameplay Analytics</div>
+              <h2 className="text-2xl font-semibold text-slate-100 mt-2">Full Match Report</h2>
+              <p className="text-slate-400 text-sm mt-1">
+                {status === "completed"
+                  ? "Explore action timelines, round distributions, and card usage."
+                  : "Reports finalize once the match is completed."}
+              </p>
+            </div>
+            {reportLoading && (
+              <span className="inline-flex items-center gap-2 text-xs text-slate-400">
+                <span className="h-3 w-3 animate-spin rounded-full border-2 border-slate-400 border-t-transparent" />
+                Loading report...
+              </span>
+            )}
+          </div>
+          {reportData ? (
+            <BotSimulationResultsPanel externalResult={reportData} hideLibrary />
+          ) : (
+            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 text-sm text-slate-400">
+              {reportError || "No gameplay report is available for this match yet."}
+            </div>
+          )}
         </section>
       </div>
     </div>

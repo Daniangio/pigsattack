@@ -407,7 +407,12 @@ const buildResultFromCsv = (text, filename = "upload.csv") => {
   };
 };
 
-const BotSimulationResultsPanel = ({ autoLoadResultId = "", autoLoadWhenEmpty = true }) => {
+const BotSimulationResultsPanel = ({
+  autoLoadResultId = "",
+  autoLoadWhenEmpty = true,
+  externalResult = null,
+  hideLibrary = false,
+}) => {
   const token = useStore((state) => state.token);
   const [activeTab, setActiveTab] = useState("overview");
   const [activeResult, setActiveResult] = useState(null);
@@ -434,6 +439,18 @@ const BotSimulationResultsPanel = ({ autoLoadResultId = "", autoLoadWhenEmpty = 
     setCardFilter("");
     setThreatFilter("");
   };
+
+  useEffect(() => {
+    if (!externalResult) return;
+    setActiveResult(externalResult);
+    setActiveResultId(externalResult?.stored_result_id || externalResult?.id || "external");
+    setActiveResultSource("external");
+    setLibraryError("");
+    setUploadName("");
+    setUploadError("");
+    resetFilters();
+    setSelectedRunId(externalResult?.runs?.[0]?.id ?? null);
+  }, [externalResult]);
 
   useEffect(() => {
     setActiveTab("overview");
@@ -601,6 +618,7 @@ const BotSimulationResultsPanel = ({ autoLoadResultId = "", autoLoadWhenEmpty = 
   };
 
   useEffect(() => {
+    if (hideLibrary || externalResult) return;
     let cancelled = false;
     refreshResultsLibrary().catch((err) => {
       if (cancelled) return;
@@ -609,9 +627,10 @@ const BotSimulationResultsPanel = ({ autoLoadResultId = "", autoLoadWhenEmpty = 
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, externalResult, hideLibrary]);
 
   useEffect(() => {
+    if (externalResult || hideLibrary) return;
     if (!autoLoadResultId) return;
     if (autoLoadWhenEmpty && activeResultId) return;
     if (lastAutoLoadRef.current === autoLoadResultId) return;
@@ -624,7 +643,18 @@ const BotSimulationResultsPanel = ({ autoLoadResultId = "", autoLoadWhenEmpty = 
         setLibraryError(err?.message || "Failed to load saved result.");
       }
     })();
-  }, [autoLoadResultId, autoLoadWhenEmpty, activeResultId]);
+  }, [autoLoadResultId, autoLoadWhenEmpty, activeResultId, externalResult, hideLibrary]);
+
+  const playerCount = useMemo(() => {
+    if (!activeResult) return 0;
+    const configCount = Number(activeResult?.config?.player_count || 0);
+    if (configCount) return configCount;
+    return Number(activeResult?.bot_count || activeResult?.players?.length || 0);
+  }, [activeResult]);
+  const botCountLabel =
+    activeResult?.config?.source === "live_game" ? "Players" : "Bots";
+  const baselineCount = playerCount || Number(activeResult?.bot_count || 0);
+  const baselineRate = baselineCount ? 1 / baselineCount : 0;
 
   const actionOptions = useMemo(() => {
     if (!activeResult?.action_counts) return [];
@@ -678,7 +708,8 @@ const BotSimulationResultsPanel = ({ autoLoadResultId = "", autoLoadWhenEmpty = 
   const balanceCards = useMemo(() => {
     const balance = activeResult?.card_balance_data || {};
     const kindIndex = activeResult?.card_index || {};
-    const baseline = activeResult?.bot_count ? 1 / activeResult.bot_count : 0;
+    const baselineDenom = playerCount || activeResult?.bot_count || 0;
+    const baseline = baselineDenom ? 1 / baselineDenom : 0;
     return Object.entries(balance)
       .map(([key, stats]) => {
         const name = stats?.name || key;
@@ -739,7 +770,7 @@ const BotSimulationResultsPanel = ({ autoLoadResultId = "", autoLoadWhenEmpty = 
         };
       })
       .sort((a, b) => b.winRateAdded - a.winRateAdded);
-  }, [activeResult]);
+  }, [activeResult, playerCount]);
 
   const filteredBalanceCards = useMemo(() => {
     if (!balanceCards.length) return [];
@@ -1159,105 +1190,107 @@ const BotSimulationResultsPanel = ({ autoLoadResultId = "", autoLoadWhenEmpty = 
 
   return (
     <div className="space-y-6">
-      <div className="bg-gray-800 border border-gray-700 rounded-lg p-5 space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-100">Results Library</h2>
-          <div className="flex items-center gap-3">
-            {isLibraryLoading && <LoadingIndicator label="Loading..." />}
-            <span className="text-xs text-gray-400">Saved: {resultsLibrary.length}</span>
+      {!hideLibrary && (
+        <div className="bg-gray-800 border border-gray-700 rounded-lg p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-gray-100">Results Library</h2>
+            <div className="flex items-center gap-3">
+              {isLibraryLoading && <LoadingIndicator label="Loading..." />}
+              <span className="text-xs text-gray-400">Saved: {resultsLibrary.length}</span>
+            </div>
           </div>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-300">
-          <label className="flex flex-col gap-2">
-            Saved results
-            <select
-              value={activeResultSource === "stored" ? activeResultId : ""}
-              onChange={(event) => {
-                const value = event.target.value;
-                if (!value) {
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-300">
+            <label className="flex flex-col gap-2">
+              Saved results
+              <select
+                value={activeResultSource === "stored" ? activeResultId : ""}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  if (!value) {
+                    setActiveResult(null);
+                    setActiveResultId("");
+                    setActiveResultSource("none");
+                    return;
+                  }
                   setActiveResult(null);
-                  setActiveResultId("");
-                  setActiveResultSource("none");
-                  return;
-                }
-                setActiveResult(null);
-                setActiveResultId(value);
-                setActiveResultSource("stored");
-                loadStoredResult(value, "stored").catch((err) =>
-                  setLibraryError(err?.message || "Failed to load saved result.")
-                );
-              }}
-              className="px-3 py-2 rounded-md bg-gray-900 border border-gray-700 text-gray-100"
-            >
-              <option value="">Select a saved run</option>
-              {resultsLibrary.map((entry) => (
-                <option key={entry.id} value={entry.id}>
-                  {entry.created_at} - {entry.label || entry.id}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="flex items-end gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                refreshResultsLibrary().catch((err) => {
-                  setLibraryError(err?.message || "Failed to refresh saved results.");
-                });
-              }}
-              className="px-3 py-2 rounded-md border border-gray-600 text-gray-200 hover:border-orange-400 text-sm"
-            >
-              Refresh
-            </button>
-            <button
-              type="button"
-              disabled={!activeResult || activeResultSource !== "stored"}
-              onClick={handleDownloadStored}
-              className="px-3 py-2 rounded-md border border-gray-600 text-gray-200 hover:border-orange-400 text-sm disabled:opacity-60"
-            >
-              Download JSON
-            </button>
-            <button
-              type="button"
-              disabled={!activeResult || activeResultSource !== "stored"}
-              onClick={handleDeleteStoredResult}
-              className="px-3 py-2 rounded-md border border-rose-500/70 text-rose-200 hover:border-rose-400 text-sm disabled:opacity-60"
-            >
-              Delete
-            </button>
-            <button
-              type="button"
-              disabled={!activeResult}
-              onClick={handleExportCsv}
-              className="px-3 py-2 rounded-md border border-gray-600 text-gray-200 hover:border-orange-400 text-sm disabled:opacity-60"
-            >
-              Export CSV
-            </button>
+                  setActiveResultId(value);
+                  setActiveResultSource("stored");
+                  loadStoredResult(value, "stored").catch((err) =>
+                    setLibraryError(err?.message || "Failed to load saved result.")
+                  );
+                }}
+                className="px-3 py-2 rounded-md bg-gray-900 border border-gray-700 text-gray-100"
+              >
+                <option value="">Select a saved run</option>
+                {resultsLibrary.map((entry) => (
+                  <option key={entry.id} value={entry.id}>
+                    {entry.created_at} - {entry.label || entry.id}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="flex items-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  refreshResultsLibrary().catch((err) => {
+                    setLibraryError(err?.message || "Failed to refresh saved results.");
+                  });
+                }}
+                className="px-3 py-2 rounded-md border border-gray-600 text-gray-200 hover:border-orange-400 text-sm"
+              >
+                Refresh
+              </button>
+              <button
+                type="button"
+                disabled={!activeResult || activeResultSource !== "stored"}
+                onClick={handleDownloadStored}
+                className="px-3 py-2 rounded-md border border-gray-600 text-gray-200 hover:border-orange-400 text-sm disabled:opacity-60"
+              >
+                Download JSON
+              </button>
+              <button
+                type="button"
+                disabled={!activeResult || activeResultSource !== "stored"}
+                onClick={handleDeleteStoredResult}
+                className="px-3 py-2 rounded-md border border-rose-500/70 text-rose-200 hover:border-rose-400 text-sm disabled:opacity-60"
+              >
+                Delete
+              </button>
+              <button
+                type="button"
+                disabled={!activeResult}
+                onClick={handleExportCsv}
+                className="px-3 py-2 rounded-md border border-gray-600 text-gray-200 hover:border-orange-400 text-sm disabled:opacity-60"
+              >
+                Export CSV
+              </button>
+            </div>
+            <label className="flex flex-col gap-2">
+              Upload CSV
+              <input
+                type="file"
+                accept=".csv"
+                onChange={handleCsvUpload}
+                className="px-3 py-2 rounded-md bg-gray-900 border border-gray-700 text-gray-100"
+              />
+            </label>
           </div>
-          <label className="flex flex-col gap-2">
-            Upload CSV
-            <input
-              type="file"
-              accept=".csv"
-              onChange={handleCsvUpload}
-              className="px-3 py-2 rounded-md bg-gray-900 border border-gray-700 text-gray-100"
-            />
-          </label>
+          <div className="flex flex-wrap items-center gap-4 text-xs text-gray-400">
+            <span>
+              Active:{" "}
+              {activeResultSource === "upload"
+                ? `CSV (${uploadName || "uploaded"})`
+                : activeResultSource === "stored"
+                  ? `Saved result ${activeStoredMeta?.label || activeResultId}`
+                  : "None"}
+            </span>
+            {isResultLoading && <LoadingIndicator label="Loading simulation..." />}
+            {libraryError && <span className="text-rose-300">{libraryError}</span>}
+            {uploadError && <span className="text-rose-300">{uploadError}</span>}
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-4 text-xs text-gray-400">
-          <span>
-            Active:{" "}
-            {activeResultSource === "upload"
-              ? `CSV (${uploadName || "uploaded"})`
-              : activeResultSource === "stored"
-                ? `Saved result ${activeStoredMeta?.label || activeResultId}`
-                : "None"}
-          </span>
-          {isResultLoading && <LoadingIndicator label="Loading simulation..." />}
-          {libraryError && <span className="text-rose-300">{libraryError}</span>}
-          {uploadError && <span className="text-rose-300">{uploadError}</span>}
-        </div>
-      </div>
+      )}
 
       {activeResult && (
         <div className="space-y-6">
@@ -1285,7 +1318,7 @@ const BotSimulationResultsPanel = ({ autoLoadResultId = "", autoLoadWhenEmpty = 
               Balance Matrix
             </button>
             <span className="text-xs text-gray-500">
-              Baseline win rate: {formatPercent(activeResult.bot_count ? 1 / activeResult.bot_count : 0)}
+              Baseline win rate: {formatPercent(baselineRate)}
             </span>
           </div>
 
@@ -1303,7 +1336,9 @@ const BotSimulationResultsPanel = ({ autoLoadResultId = "", autoLoadWhenEmpty = 
                   <div className="text-sm text-gray-300 space-y-1">
                     <div>Runs: {activeResult.simulations}</div>
                     <div>Filtered: {filteredRunCount}</div>
-                    <div>Bots: {activeResult.bot_count}</div>
+                    <div>
+                      {botCountLabel}: {playerCount || activeResult.bot_count}
+                    </div>
                   </div>
                 </div>
 
