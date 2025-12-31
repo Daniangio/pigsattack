@@ -236,6 +236,12 @@ async def websocket_endpoint(websocket: WebSocket):
                 )
             elif action == "set_room_decks":
                 await room_manager.set_room_decks(user, payload, connection_manager)
+            elif action == "send_lobby_chat":
+                await room_manager.add_lobby_chat_message(
+                    user,
+                    payload.get("message"),
+                    connection_manager,
+                )
             
             # 'request_view' is gone.
                 

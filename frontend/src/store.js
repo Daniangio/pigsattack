@@ -11,6 +11,7 @@ export const useStore = create((set, get) => ({
   isConnected: false,
   gameResult: null,
   lobbyState: { users: [], rooms: [] },
+  lobbyChat: [],
   roomState: null,
   gameState: null,
   sendMessage: null,
@@ -48,6 +49,7 @@ export const useStore = create((set, get) => ({
       // 'view' is removed
       roomState: null,
       lobbyState: { users: [], rooms: [] },
+      lobbyChat: [],
       gameResult: null,
       gameState: null,
     });
@@ -96,6 +98,28 @@ export const useStore = create((set, get) => ({
       // If we ARE in a room, just update the lobby data in the background.
       set({ lobbyState: payload });
     }
+  },
+
+  handleLobbyChatHistory: (payload) => {
+    if (!Array.isArray(payload)) {
+      set({ lobbyChat: [] });
+      return;
+    }
+    set({ lobbyChat: payload });
+  },
+
+  handleLobbyChatMessage: (payload) => {
+    if (!payload || !payload.id) {
+      return;
+    }
+    set((state) => {
+      const exists = state.lobbyChat.some((message) => message.id === payload.id);
+      if (exists) {
+        return {};
+      }
+      const updated = [...state.lobbyChat, payload].slice(-200);
+      return { lobbyChat: updated };
+    });
   },
 
   handleRoomState: (payload) => {

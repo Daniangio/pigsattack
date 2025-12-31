@@ -63,6 +63,13 @@ class LobbyState(BaseModel):
     users: List[dict]
     rooms: List[dict]
 
+class LobbyChatMessage(BaseModel):
+    id: str
+    user_id: str
+    username: str
+    content: str
+    timestamp: str
+
 class GameRecord(BaseModel):
     """Represents the persistent state of a single game instance."""
     id: str

@@ -2,7 +2,7 @@ import uuid
 import os
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
-from .server_models import User, Room, LobbyState, GameRecord, GameParticipant, PlayerStatus
+from .server_models import User, Room, LobbyState, LobbyChatMessage, GameRecord, GameParticipant, PlayerStatus
 from .connection_manager import ConnectionManager
 from .routers import fake_games_db, fake_users_db
 from .custom_content import (
@@ -24,6 +24,8 @@ class RoomManager:
     def __init__(self):
         self.rooms: Dict[str, Room] = {}
         self.lobby_users: Dict[str, User] = {}
+        self.lobby_chat_messages: List[dict] = []
+        self.lobby_chat_limit = int(os.getenv("LOBBY_CHAT_LIMIT", "200"))
         self.game_manager: Optional['GameManager'] = None
 
     def set_game_manager(self, game_manager: 'GameManager'):
@@ -57,6 +59,50 @@ class RoomManager:
         self.lobby_users[user.id] = user
         print(f"User {user.username} ({user.id}) entered lobby.")
         await self.broadcast_lobby_state(manager)
+        await self.send_lobby_chat_history(user, manager)
+
+    async def send_lobby_chat_history(self, user: User, manager: ConnectionManager):
+        """Sends the current lobby chat history to a specific user."""
+        await manager.send_to_user(user.id, {
+            "type": "lobby_chat_history",
+            "payload": list(self.lobby_chat_messages),
+        })
+
+    async def add_lobby_chat_message(self, user: User, content: Optional[str], manager: ConnectionManager):
+        """Adds a lobby chat message and broadcasts it to lobby users."""
+        if user.id not in self.lobby_users:
+            await manager.send_to_user(user.id, {
+                "type": "error",
+                "payload": {"message": "You must be in the lobby to chat."},
+            })
+            return
+
+        if content is None:
+            return
+
+        trimmed = str(content).strip()
+        if not trimmed:
+            return
+
+        if len(trimmed) > 300:
+            trimmed = trimmed[:300]
+
+        message = LobbyChatMessage(
+            id=uuid.uuid4().hex,
+            user_id=user.id,
+            username=user.username,
+            content=trimmed,
+            timestamp=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        ).model_dump()
+
+        self.lobby_chat_messages.append(message)
+        if len(self.lobby_chat_messages) > self.lobby_chat_limit:
+            self.lobby_chat_messages = self.lobby_chat_messages[-self.lobby_chat_limit:]
+
+        await manager.broadcast_to_users(list(self.lobby_users.keys()), {
+            "type": "lobby_chat_message",
+            "payload": message,
+        })
     
     def _remove_player_from_room(self, user_id: str):
         """Internal helper to remove a player from a room's player list."""

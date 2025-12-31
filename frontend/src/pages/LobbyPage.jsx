@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useStore } from "../store.js";
 import { useNavigate, Link } from "react-router-dom";
 import { playerIcons as defaultPlayerIcons } from "./game/GameConstants";
@@ -29,16 +29,21 @@ const CurrentRoomBanner = () => {
 };
 
 const LobbyPage = ({ onLogout }) => { // --- REFACTOR: Added roomState ---
-  const { user, lobbyState, roomState, avatarChoice } = useStore();
+  const { user, lobbyState, roomState, avatarChoice, lobbyChat, isConnected } = useStore();
   const sendMessage = useStore((state) => state.sendMessage);
   const [newRoomName, setNewRoomName] = useState("");
+  const [chatMessage, setChatMessage] = useState("");
   const navigate = useNavigate();
+  const chatScrollRef = useRef(null);
 
   if (!lobbyState) {
     return <div>Loading lobby...</div>;
   }
 
   const isInRoom = !!roomState;
+  const isInLobby = lobbyState?.users?.some((lobbyUser) => lobbyUser.id === user?.id);
+  const canChat = isConnected && sendMessage && isInLobby;
+  const maxChatLength = 300;
 
   const handleCreateRoom = (e) => {
     e.preventDefault();
@@ -71,6 +76,31 @@ const LobbyPage = ({ onLogout }) => { // --- REFACTOR: Added roomState ---
   const handleViewProfile = () => {
     navigate(`/profile/${user.id}`);
   };
+
+  const handleSendChat = (e) => {
+    e.preventDefault();
+    const trimmed = chatMessage.trim();
+    if (!trimmed || !sendMessage || !canChat) {
+      return;
+    }
+    sendMessage({
+      action: "send_lobby_chat",
+      payload: { message: trimmed },
+    });
+    setChatMessage("");
+  };
+
+  const formatChatTimestamp = (timestamp) => {
+    if (!timestamp) return "";
+    const parsed = new Date(timestamp);
+    if (Number.isNaN(parsed.getTime())) return "";
+    return parsed.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  };
+
+  useEffect(() => {
+    if (!chatScrollRef.current) return;
+    chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+  }, [lobbyChat]);
 
   const btn = "py-2 px-4 font-semibold rounded-md shadow-md transition duration-200 ease-in-out disabled:opacity-50";
   const btnPrimary = `${btn} bg-orange-600 hover:bg-orange-700 text-white`;
@@ -208,31 +238,92 @@ const LobbyPage = ({ onLogout }) => { // --- REFACTOR: Added roomState ---
           </div>
         </div>
 
-        {/* Players in Lobby List */}
-        <div className="p-6 bg-gray-800 rounded-lg border border-gray-700">
-          <h2 className="text-2xl font-semibold mb-4 text-gray-100">Players in Lobby</h2>
-          <ul className="space-y-2 max-h-[28rem] overflow-y-auto pr-2">
-            {lobbyState.users.map((lobbyUser, idx) => (
-              <li
-                key={lobbyUser.id}
-                className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-gray-300 flex items-center gap-2"
+        <div className="md:col-span-1 space-y-6">
+          {/* Players in Lobby List */}
+          <div className="p-6 bg-gray-800 rounded-lg border border-gray-700">
+            <h2 className="text-2xl font-semibold mb-4 text-gray-100">Players in Lobby</h2>
+            <ul className="space-y-2 max-h-[20rem] overflow-y-auto pr-2">
+              {lobbyState.users.map((lobbyUser, idx) => (
+                <li
+                  key={lobbyUser.id}
+                  className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-gray-300 flex items-center gap-2"
+                >
+                  <div className="w-9 h-9 rounded-full overflow-hidden border border-gray-500 shrink-0">
+                    <img
+                      src={resolveIcon(lobbyUser, idx)}
+                      alt={`${lobbyUser.username} avatar`}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <Link to={`/profile/${lobbyUser.id}`} className="hover:text-orange-400 flex-1">
+                    {lobbyUser.username}
+                  </Link>
+                  {lobbyUser.id === user.id && (
+                    <span className="text-orange-400 font-medium"> (You)</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Global Chat */}
+          <div className="p-6 bg-gray-800 rounded-lg border border-gray-700 flex flex-col min-h-[18rem] max-h-[calc(100vh-18rem)]">
+            <h2 className="text-2xl font-semibold mb-4 text-gray-100">Global Chat</h2>
+            <div ref={chatScrollRef} className="flex-1 min-h-0 overflow-y-auto pr-2 space-y-2">
+              {lobbyChat.length > 0 ? (
+                lobbyChat.map((message) => {
+                  const isMe = message.user_id === user?.id;
+                  const timeLabel = formatChatTimestamp(message.timestamp);
+                  return (
+                    <div
+                      key={message.id}
+                      className={`rounded-md border px-2 py-1.5 ${
+                        isMe
+                          ? "border-orange-500/40 bg-gray-700/70"
+                          : "border-gray-700 bg-gray-700/40"
+                      }`}
+                    >
+                      <div className="flex items-baseline gap-2">
+                        <span className={`text-xs font-semibold ${isMe ? "text-orange-300" : "text-gray-200"}`}>
+                          {message.username}
+                          {isMe ? " (You)" : ""}
+                        </span>
+                        {timeLabel && <span className="text-[10px] text-gray-400">{timeLabel}</span>}
+                      </div>
+                      <p className="text-xs text-gray-100 break-words">{message.content}</p>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="text-sm text-gray-400">No messages yet. Say hello!</p>
+              )}
+            </div>
+            <form onSubmit={handleSendChat} className="mt-4 flex gap-2">
+              <input
+                type="text"
+                name="lobby_chat"
+                id="lobby_chat"
+                value={chatMessage}
+                onChange={(e) => setChatMessage(e.target.value)}
+                placeholder={canChat ? "Type a message..." : "Join the lobby to chat..."}
+                className="flex-grow px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent disabled:opacity-60"
+                maxLength={maxChatLength}
+                disabled={!canChat}
+              />
+              <button
+                type="submit"
+                className={btnPrimary}
+                disabled={!canChat || !chatMessage.trim()}
               >
-                <div className="w-9 h-9 rounded-full overflow-hidden border border-gray-500 shrink-0">
-                  <img
-                    src={resolveIcon(lobbyUser, idx)}
-                    alt={`${lobbyUser.username} avatar`}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <Link to={`/profile/${lobbyUser.id}`} className="hover:text-orange-400 flex-1">
-                  {lobbyUser.username}
-                </Link>
-                {lobbyUser.id === user.id && (
-                  <span className="text-orange-400 font-medium"> (You)</span>
-                )}
-              </li>
-            ))}
-          </ul>
+                Send
+              </button>
+            </form>
+            {!isInLobby && (
+              <p className="text-xs text-amber-400 mt-2">
+                You must be in the lobby to chat.
+              </p>
+            )}
+          </div>
         </div>
       </div>
     </div>
